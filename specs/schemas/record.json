@@ -11,7 +11,7 @@
         "feat!",
         "fix!"
       ],
-      "description": "The Conventional Commits flavor: feat, fix, feat!, fix!. Determines the Bump."
+      "description": "The Change Type: feat, fix, feat!, fix!. Vocabulary borrowed from Conventional Commits; dv does not parse commit messages. Determines the Bump."
     },
     "packages": {
       "minItems": 1,

@@ -15,7 +15,7 @@ export const rawRecordFrontmatterSchema = z
     type: z
       .enum(CHANGE_TYPES)
       .describe(
-        "The Conventional Commits flavor: feat, fix, feat!, fix!. Determines the Bump.",
+        "The Change Type: feat, fix, feat!, fix!. Vocabulary borrowed from Conventional Commits; dv does not parse commit messages. Determines the Bump.",
       ),
     packages: z
       .array(z.string().min(1))

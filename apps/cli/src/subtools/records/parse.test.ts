@@ -66,7 +66,7 @@ Deno.test("parseRecord rejects a file with no frontmatter block", () => {
 });
 
 Deno.test("parseRecord rejects an unknown Change Type", () => {
-  // Given a Record using a Conventional Commits type dv doesn't accept
+  // Given a Record whose `type` is outside dv's Change Type vocabulary
   const recordWithBadType = `---
 type: chore
 packages: [core]

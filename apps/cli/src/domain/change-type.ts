@@ -1,8 +1,10 @@
-// The Change Type union from specs/language.md § Lexicon: the four
-// Conventional Commits flavors dv accepts. The `!` denotes a breaking
-// change. No other CC types (`chore`, `docs`, etc.) are accepted in
-// Records — they live in git history, not CHANGELOG
-// (.claude/CLAUDE.md § Strong opinions).
+// The Change Type union from specs/language.md § Lexicon. Vocabulary
+// borrowed from Conventional Commits, but dv never parses commit
+// messages — these flavors come from Record frontmatter. The `!` denotes
+// a breaking change. Other CC types (`chore`, `docs`, etc.) are not
+// accepted in Records: they live in git history, not CHANGELOG
+// (.claude/CLAUDE.md § Strong opinions; specs/design.md § Records over
+// commit messages).
 
 export const CHANGE_TYPES = ["feat", "fix", "feat!", "fix!"] as const;
 
