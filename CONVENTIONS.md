@@ -32,19 +32,21 @@ the last.
 
 From the repo root:
 
-| Task                     | What it does                                              |
-| ------------------------ | --------------------------------------------------------- |
-| `deno task dv -- <args>` | Run the in-tree `dv` CLI (one-off).                       |
-| `deno task install`      | `deno install -g -A -f --name dv …` — puts `dv` on PATH.  |
-| `deno task uninstall`    | Removes the installed `dv` shim.                          |
-| `deno task fmt`          | Biome format (write).                                     |
-| `deno task fmt:check`    | Biome format (check only, for CI).                        |
-| `deno task lint`         | Biome lint **and** `deno lint` — both must pass.          |
-| `deno task lint:biome`   | Biome-only lint (debug helper).                           |
-| `deno task lint:deno`    | `deno lint`-only (debug helper).                          |
-| `deno task lint:fix`     | Apply Biome's safe fixes, then run `deno lint`.           |
-| `deno task check`        | Per-workspace `deno check`.                               |
-| `deno task test`         | Run the whole test suite (`deno test -A`).                |
+| Task                          | What it does                                              |
+| ----------------------------- | --------------------------------------------------------- |
+| `deno task dv -- <args>`      | Run the in-tree `dv` CLI (one-off).                       |
+| `deno task install`           | `deno install -g -A -f --name dv …` — puts `dv` on PATH.  |
+| `deno task uninstall`         | Removes the installed `dv` shim.                          |
+| `deno task fmt`               | Biome format (write).                                     |
+| `deno task fmt:check`         | Biome format (check only, for CI).                        |
+| `deno task lint`              | Biome lint **and** `deno lint` — both must pass.          |
+| `deno task lint:biome`        | Biome-only lint (debug helper).                           |
+| `deno task lint:deno`         | `deno lint`-only (debug helper).                          |
+| `deno task lint:fix`          | Apply Biome's safe fixes, then run `deno lint`.           |
+| `deno task check`             | Per-workspace `deno check`.                               |
+| `deno task test`              | Run the whole test suite (`deno test -A`).                |
+| `deno task schemas:generate`  | Emit `specs/schemas/*.json` from the Zod source.          |
+| `deno task schemas:check`     | CI gate: re-generate in memory; fail if diff vs disk.     |
 
 The `install` task is what to use when iterating on TTY output — colors,
 prompts, banners. The installed shim runs the in-tree source, so edits
@@ -124,12 +126,22 @@ land immediately on the next `dv …` invocation.
 ## Schemas and the docs/code lockstep
 
 - Every contract surface (`.changelog/config.yaml`, plugin stdio JSON,
-  the Plan emitted by `--json`) is documented in
-  [specs/schemas/](specs/schemas/) as JSON Schema *and* described by a
-  Zod schema in the source.
-- When they diverge, the issue is in whichever drifted — update both
-  in the same change, including
-  [specs/language.md](specs/language.md) if the vocabulary moves.
+  the Plan emitted by `--json`) is described by a **Zod schema in
+  source**. That schema is the single source of truth.
+- JSON Schema files under [specs/schemas/](specs/schemas/) are
+  **generated**, never hand-edited. Run `deno task schemas:generate`
+  after touching a Zod schema; `deno task schemas:check` is the CI
+  gate that fails on drift.
+- Pure-shape vs parser-shape split: each Zod schema file exports a
+  `raw…Schema` (no `.transform()`, suitable for `z.toJSONSchema()`)
+  **and** a parser-shaped schema piped through a transform that maps
+  kebab-case YAML keys to camelCase. The raw form drives the editor
+  schema; the parser-shaped form runs at load time. Tests live in
+  each subtool to verify both.
+- When the JSON Schema and the docs prose disagree, the issue is in
+  the docs (the Zod source is canonical). Update
+  [specs/language.md](specs/language.md) in the same change if the
+  vocabulary moves.
 - Plugins are tested with `dv plugin verify` against the JSON Schema;
   in-process callers validate through Zod. Same shape, two consumers.
 

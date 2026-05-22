@@ -50,7 +50,13 @@ per capability; commands compose them and hold no domain logic of their own.
   `Stability`, `ChangeType` — so the compiler enforces the lexicon.
 - **Zod** validates every contract boundary: `.changelog/config.yaml`, plugin
   stdio JSON, the Plan emitted by `--json`. Hand-rolled validation is a
-  regression. Schemas mirror `specs/schemas/*.json` and stay in lockstep.
+  regression. JSON Schemas under `specs/schemas/` are **generated** from the
+  Zod source via `deno task schemas:generate`; `deno task schemas:check`
+  is the drift gate. Never hand-edit a generated JSON Schema.
+- Each Zod schema file exports both a `raw…Schema` (pure shape, fed to
+  `z.toJSONSchema()`) and a parser-shaped schema piped through a
+  kebab→camel transform (used by loaders). Keep transforms out of the
+  raw schema — `toJSONSchema` can't represent them.
 - **Biome** (via `npm:@biomejs/biome`) is the formatter and _one of two_
   linters. Do not run `deno fmt` against TS — Biome owns formatting.
   But `deno lint` runs alongside Biome's linter and is required to
