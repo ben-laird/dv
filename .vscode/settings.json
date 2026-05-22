@@ -1,12 +1,20 @@
 {
   // YAML schemas for editor autocomplete. The Red Hat YAML extension
-  // (`redhat.vscode-yaml`) picks these up; the in-file `# yaml-language-server:`
-  // modeline does the same job for editors that don't read this map (and
-  // for ad-hoc viewers).
+  // (`redhat.vscode-yaml`) picks these up; each file also carries a
+  // `# yaml-language-server:` modeline for editors that read those.
+  //
+  // Record files (.changelog/records/*.md) are markdown-with-YAML-
+  // frontmatter, which is awkward for the YAML extension to schema-
+  // validate directly. The Zod-driven validator in `dv validate`
+  // covers that gap.
   "yaml.schemas": {
     "./specs/schemas/config.json": [
       ".changelog/config.yaml",
       "**/.changelog/config.yaml"
+    ],
+    "./specs/schemas/rename-ledger.json": [
+      ".changelog/renames.yaml",
+      "**/.changelog/renames.yaml"
     ]
   }
 }
