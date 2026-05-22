@@ -3,6 +3,7 @@
 // specs, get a `Cli` that routes argv. No TTY, no prompts, no error
 // machinery beyond a single reportError hook. Future work layers atop.
 
+export { defineCommand } from "./command-spec.ts";
 export type {
   Cli,
   CliConfig,

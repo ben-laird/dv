@@ -1,7 +1,7 @@
-// dv entry point. Dispatches argv to the per-command runner in
-// src/cli/. v1 implementation order: see specs/v1-scope.md.
+// dv entry point. Subcommands are CommandSpec objects passed to
+// `defineCli` from @seshat/cli; this file is glue, not dispatch.
 
-import { parseArgs } from "@std/cli/parse-args";
+import { defineCli, defineCommand } from "@seshat/cli";
 import { relative } from "@std/path";
 import { runAdd } from "./cli/add.ts";
 import { runInit } from "./cli/init.ts";
@@ -26,232 +26,164 @@ Usage:
 Milestones 1–3 are landing; the rest of v1 follows specs/v1-scope.md.
 `;
 
-const DV_VERSION = "0.0.0";
+const DV_VERSION = "0.1.0";
 
-export async function main(argv: string[]): Promise<number> {
-  if (argv.length === 0 || argv[0] === "--help" || argv[0] === "-h") {
-    console.log(USAGE_TEXT);
-    return 0;
-  }
-  if (argv[0] === "--version" || argv[0] === "-V") {
-    console.log(DV_VERSION);
-    return 0;
-  }
-
-  const [subcommandName, ...subcommandArgv] = argv;
-  try {
-    switch (subcommandName) {
-      case "init":
-        return await runInitCommand(subcommandArgv);
-      case "status":
-        return await runStatusCommand(subcommandArgv);
-      case "add":
-        return await runAddCommand(subcommandArgv);
-      case "validate":
-        return await runValidateCommand(subcommandArgv);
-      case "version":
-        return await runVersionCommand(subcommandArgv);
-      default:
-        console.error(`dv: unknown command '${subcommandName}'`);
-        console.error(`run 'dv --help' for usage`);
-        return 2;
+const initCommand = defineCommand({
+  flags: {},
+  usage: "Usage: dv init",
+  run: async ({ argv }) => {
+    if (argv.length > 0) {
+      console.error(`dv init: unexpected arguments: ${argv.join(" ")}`);
+      return 2;
     }
-  } catch (caughtError) {
-    return reportError(caughtError);
-  }
-}
-
-async function runInitCommand(subcommandArgv: string[]): Promise<number> {
-  if (subcommandArgv.length > 0) {
-    console.error(`dv init: unexpected arguments: ${subcommandArgv.join(" ")}`);
-    return 2;
-  }
-  const initResult = await runInit();
-  if (!initResult.configCreated && !initResult.recordsDirCreated) {
-    console.log("dv: already initialized");
+    const initResult = await runInit();
+    if (!initResult.configCreated && !initResult.recordsDirCreated) {
+      console.log("dv: already initialized");
+      return 0;
+    }
+    if (initResult.configCreated) {
+      console.log(
+        `created ${relative(
+          initResult.repoRoot,
+          configPath(initResult.repoRoot),
+        )}`,
+      );
+    }
+    if (initResult.recordsDirCreated) {
+      console.log(
+        `created ${relative(
+          initResult.repoRoot,
+          recordsPath(initResult.repoRoot),
+        )}/`,
+      );
+    }
     return 0;
-  }
-  if (initResult.configCreated) {
+  },
+});
+
+const statusCommand = defineCommand({
+  flags: {
+    json: { kind: "boolean" },
+    color: { kind: "boolean" },
+    "no-color": { kind: "boolean" },
+  },
+  usage: "Usage: dv status [--json] [--no-color]",
+  run: async ({ flags }) => {
+    const colorEnabled = resolveColorEnabled({
+      forceColor: flags.color === true,
+      suppressColor: flags["no-color"] === true,
+      emitJson: flags.json === true,
+    });
+    await runStatus({ emitJson: flags.json === true, colorEnabled });
+    return 0;
+  },
+});
+
+const addCommand = defineCommand({
+  flags: {
+    type: { kind: "string" },
+    message: { kind: "string" },
+    notes: { kind: "string" },
+    packages: { kind: "collect" },
+    links: { kind: "collect" },
+    stage: { kind: "boolean" },
+    "no-stage": { kind: "boolean" },
+  },
+  usage:
+    "Usage: dv add [--type <t>] [--packages <p>...] [--message <m>] [--links <url>...] [--notes <text>] [--stage | --no-stage]",
+  run: async ({ flags }) => {
+    const rawChangeType = flags.type;
+    if (rawChangeType !== undefined && !isChangeType(rawChangeType)) {
+      console.error(
+        `dv add: --type must be one of ${CHANGE_TYPES.join(", ")} (got '${rawChangeType}')`,
+      );
+      return 2;
+    }
+    const packageNames = expandCommaSeparated(flags.packages);
+    const links = expandCommaSeparated(flags.links);
+    const stageOverride =
+      flags["no-stage"] === true
+        ? false
+        : flags.stage === true
+          ? true
+          : undefined;
+
+    const addResult = await runAdd({
+      changeType: rawChangeType,
+      packageNames,
+      message: flags.message,
+      links,
+      notes: flags.notes,
+      stageOverride,
+    });
+    const relativeRecordPath = relative(
+      addResult.repoRootPath,
+      addResult.recordPath,
+    );
     console.log(
-      `created ${relative(
-        initResult.repoRoot,
-        configPath(initResult.repoRoot),
-      )}`,
-    );
-  }
-  if (initResult.recordsDirCreated) {
-    console.log(
-      `created ${relative(
-        initResult.repoRoot,
-        recordsPath(initResult.repoRoot),
-      )}/`,
-    );
-  }
-  return 0;
-}
-
-async function runStatusCommand(subcommandArgv: string[]): Promise<number> {
-  const parsedFlags = parseArgs(subcommandArgv, {
-    boolean: ["json", "help", "color", "no-color"],
-    alias: { h: "help" },
-    unknown: (flagName) => {
-      if (flagName.startsWith("-")) {
-        console.error(`dv status: unknown flag '${flagName}'`);
-        Deno.exit(2);
-      }
-      return true;
-    },
-  });
-  if (parsedFlags.help) {
-    console.log("Usage: dv status [--json] [--no-color]");
-    return 0;
-  }
-  const colorEnabled = resolveColorEnabled({
-    forceColor: parsedFlags.color === true,
-    suppressColor: parsedFlags["no-color"] === true,
-    emitJson: parsedFlags.json === true,
-  });
-  await runStatus({ emitJson: parsedFlags.json, colorEnabled });
-  return 0;
-}
-
-async function runAddCommand(subcommandArgv: string[]): Promise<number> {
-  const parsedFlags = parseArgs(subcommandArgv, {
-    string: ["type", "message", "notes"],
-    collect: ["packages", "links"],
-    boolean: ["stage", "no-stage", "help"],
-    alias: { h: "help" },
-    unknown: (flagName) => {
-      if (flagName.startsWith("-")) {
-        console.error(`dv add: unknown flag '${flagName}'`);
-        Deno.exit(2);
-      }
-      return true;
-    },
-  });
-  if (parsedFlags.help) {
-    console.log(
-      "Usage: dv add [--type <t>] [--packages <p>...] [--message <m>] [--links <url>...] [--notes <text>] [--stage | --no-stage]",
+      `created ${relativeRecordPath}${addResult.staged ? " (staged)" : ""}`,
     );
     return 0;
-  }
+  },
+});
 
-  const rawChangeType = parsedFlags.type;
-  if (rawChangeType !== undefined && !isChangeType(rawChangeType)) {
-    console.error(
-      `dv add: --type must be one of ${CHANGE_TYPES.join(", ")} (got '${rawChangeType}')`,
-    );
-    return 2;
-  }
+const validateCommand = defineCommand({
+  flags: {
+    json: { kind: "boolean" },
+    color: { kind: "boolean" },
+    "no-color": { kind: "boolean" },
+  },
+  usage: "Usage: dv validate [--json] [--no-color]",
+  run: async ({ flags }) => {
+    const colorEnabled = resolveColorEnabled({
+      forceColor: flags.color === true,
+      suppressColor: flags["no-color"] === true,
+      emitJson: flags.json === true,
+    });
+    const validateResult = await runValidate({
+      emitJson: flags.json === true,
+      colorEnabled,
+    });
+    return validateResult.exitCode;
+  },
+});
 
-  const packageNames = expandCommaSeparated(
-    parsedFlags.packages as string[] | undefined,
-  );
-  const links = expandCommaSeparated(parsedFlags.links as string[] | undefined);
-
-  const stageOverride =
-    parsedFlags["no-stage"] === true
-      ? false
-      : parsedFlags.stage === true
-        ? true
-        : undefined;
-
-  const addResult = await runAdd({
-    changeType: rawChangeType,
-    packageNames,
-    message: parsedFlags.message,
-    links,
-    notes: parsedFlags.notes,
-    stageOverride,
-  });
-
-  const relativeRecordPath = relative(
-    addResult.repoRootPath,
-    addResult.recordPath,
-  );
-  console.log(
-    `created ${relativeRecordPath}${addResult.staged ? " (staged)" : ""}`,
-  );
-  return 0;
-}
-
-async function runValidateCommand(subcommandArgv: string[]): Promise<number> {
-  const parsedFlags = parseArgs(subcommandArgv, {
-    boolean: ["json", "help", "color", "no-color"],
-    alias: { h: "help" },
-    unknown: (flagName) => {
-      if (flagName.startsWith("-")) {
-        console.error(`dv validate: unknown flag '${flagName}'`);
-        Deno.exit(2);
-      }
-      return true;
-    },
-  });
-  if (parsedFlags.help) {
-    console.log("Usage: dv validate [--json] [--no-color]");
+const versionCommand = defineCommand({
+  flags: {
+    "dry-run": { kind: "boolean" },
+    "no-dry-run": { kind: "boolean" },
+    "no-commit": { kind: "boolean" },
+    prune: { kind: "boolean" },
+    yes: { kind: "boolean", alias: "y" },
+    json: { kind: "boolean" },
+    color: { kind: "boolean" },
+    "no-color": { kind: "boolean" },
+  },
+  usage:
+    "Usage: dv version [--dry-run] [--no-commit] [--prune] [--yes] [--json]",
+  run: async ({ flags }) => {
+    const dryRunOverride =
+      flags["no-dry-run"] === true
+        ? false
+        : flags["dry-run"] === true
+          ? true
+          : undefined;
+    const colorEnabled = resolveColorEnabled({
+      forceColor: flags.color === true,
+      suppressColor: flags["no-color"] === true,
+      emitJson: flags.json === true,
+    });
+    await runVersion({
+      dryRun: dryRunOverride,
+      noCommit: flags["no-commit"] === true,
+      prune: flags.prune === true,
+      emitJson: flags.json === true,
+      colorEnabled,
+      yes: flags.yes === true,
+    });
     return 0;
-  }
-  const colorEnabled = resolveColorEnabled({
-    forceColor: parsedFlags.color === true,
-    suppressColor: parsedFlags["no-color"] === true,
-    emitJson: parsedFlags.json === true,
-  });
-  const validateResult = await runValidate({
-    emitJson: parsedFlags.json,
-    colorEnabled,
-  });
-  return validateResult.exitCode;
-}
-
-async function runVersionCommand(subcommandArgv: string[]): Promise<number> {
-  const parsedFlags = parseArgs(subcommandArgv, {
-    boolean: [
-      "dry-run",
-      "no-dry-run",
-      "no-commit",
-      "prune",
-      "yes",
-      "json",
-      "color",
-      "no-color",
-      "help",
-    ],
-    alias: { h: "help", y: "yes" },
-    unknown: (flagName) => {
-      if (flagName.startsWith("-")) {
-        console.error(`dv version: unknown flag '${flagName}'`);
-        Deno.exit(2);
-      }
-      return true;
-    },
-  });
-  if (parsedFlags.help) {
-    console.log(
-      "Usage: dv version [--dry-run] [--no-commit] [--prune] [--yes] [--json]",
-    );
-    return 0;
-  }
-  const dryRunOverride =
-    parsedFlags["no-dry-run"] === true
-      ? false
-      : parsedFlags["dry-run"] === true
-        ? true
-        : undefined;
-  const colorEnabled = resolveColorEnabled({
-    forceColor: parsedFlags.color === true,
-    suppressColor: parsedFlags["no-color"] === true,
-    emitJson: parsedFlags.json === true,
-  });
-  await runVersion({
-    dryRun: dryRunOverride,
-    noCommit: parsedFlags["no-commit"] === true,
-    prune: parsedFlags.prune === true,
-    emitJson: parsedFlags.json === true,
-    colorEnabled,
-    yes: parsedFlags.yes === true,
-  });
-  return 0;
-}
+  },
+});
 
 function expandCommaSeparated(
   rawValues: string[] | undefined,
@@ -281,17 +213,34 @@ function resolveColorEnabled(args: ResolveColorEnabledArgs): boolean {
   return Deno.stdout.isTerminal();
 }
 
-function reportError(caughtError: unknown): number {
+function reportDvError(caughtError: unknown): void {
   if (caughtError instanceof DvError) {
     console.error(`dv: ${caughtError.message}`);
-    return 1;
+    return;
   }
   if (caughtError instanceof Error) {
     console.error(`dv: ${caughtError.message}`);
-    return 1;
+    return;
   }
   console.error(`dv: ${String(caughtError)}`);
-  return 1;
+}
+
+const cli = defineCli({
+  name: "dv",
+  version: DV_VERSION,
+  usage: USAGE_TEXT,
+  commands: {
+    init: initCommand,
+    status: statusCommand,
+    add: addCommand,
+    validate: validateCommand,
+    version: versionCommand,
+  },
+  reportError: reportDvError,
+});
+
+export function main(argv: string[]): Promise<number> {
+  return cli.run(argv);
 }
 
 if (import.meta.main) {

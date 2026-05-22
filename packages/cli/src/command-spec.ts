@@ -60,3 +60,15 @@ export interface CliConfig {
 export interface Cli {
   run(argv: string[]): Promise<number>;
 }
+
+// Identity helper that captures the literal FlagSpec map type. Without
+// this, callers writing `const x: CommandSpec = { flags: {...}, ... }`
+// land on the default generic (Record<string, FlagSpec>), which widens
+// FlagsOf to the union of every kind's payload and breaks the runner's
+// flag typing. `defineCommand({...})` lets TS infer TFlagMap from the
+// literal so flags inside the runner carry their exact kind shapes.
+export function defineCommand<TFlagMap extends Record<string, FlagSpec>>(
+  spec: CommandSpec<TFlagMap>,
+): CommandSpec<TFlagMap> {
+  return spec;
+}
