@@ -1,0 +1,35 @@
+#!/usr/bin/env -S deno run --allow-read --allow-env
+// Example dv plugin Op for Deno workspaces — `discover`. JSON-over-stdio
+// per specs/plugin-contract.md. Copy and adapt — not a maintained dep.
+
+import { expandGlob } from "jsr:@std/fs@^1/expand-glob";
+import { dirname, relative } from "jsr:@std/path@^1";
+
+const repoRoot = Deno.env.get("DV_REPO_ROOT");
+const glob = Deno.env.get("DV_DISCOVER_GLOB");
+if (!repoRoot || !glob) {
+  console.error("DV_REPO_ROOT and DV_DISCOVER_GLOB are required");
+  Deno.exit(1);
+}
+
+const denoJsonGlob = `${glob.replace(/\/$/, "")}/deno.json`;
+const packages: { name: string; path: string }[] = [];
+
+for await (
+  const entry of expandGlob(denoJsonGlob, { root: repoRoot, includeDirs: false })
+) {
+  let parsed: { name?: string };
+  try {
+    parsed = JSON.parse(await Deno.readTextFile(entry.path));
+  } catch {
+    continue;
+  }
+  if (typeof parsed.name !== "string" || parsed.name.length === 0) continue;
+  packages.push({
+    name: parsed.name,
+    path: relative(repoRoot, dirname(entry.path)),
+  });
+}
+
+packages.sort((a, b) => a.path.localeCompare(b.path));
+console.log(JSON.stringify({ packages }));
