@@ -341,3 +341,90 @@ Deno.test("buildVersionPlan lists constraintUpdates for unbumped dependents too"
     { dependent: "c", newConstraint: "1.1.0" },
   ]);
 });
+
+Deno.test("buildVersionPlan populates `tracked` with every discovered Package and its version", () => {
+  // Given three discovered packages with known versions but no records
+  const discoveredPackages = [
+    buildPackage("b", "packages/b"),
+    buildPackage("a", "packages/a"),
+    buildPackage("c", "packages/c"),
+  ];
+  const packageCurrentVersions = [
+    packageVersion("a", "1.0.0"),
+    packageVersion("b", "0.4.2"),
+    packageVersion("c", "2.1.0"),
+  ];
+
+  // When the plan is built (no records)
+  const plan = buildVersionPlan({
+    command: "status",
+    discoveredPackages,
+    parsedRecords: [],
+    renameLedger: [],
+    packageCurrentVersions,
+  });
+
+  // Then every package appears in `tracked`, sorted by name, with its
+  // current version and path
+  assertEquals(plan.pending, []);
+  assertEquals(plan.tracked, [
+    { package: "a", currentVersion: "1.0.0", path: "packages/a" },
+    { package: "b", currentVersion: "0.4.2", path: "packages/b" },
+    { package: "c", currentVersion: "2.1.0", path: "packages/c" },
+  ]);
+});
+
+Deno.test("buildVersionPlan keeps `tracked` populated even when packages bump", () => {
+  // Given a package with a pending record alongside other packages that
+  // don't have records
+  const discoveredPackages = [
+    buildPackage("alpha", "packages/alpha"),
+    buildPackage("beta", "packages/beta"),
+  ];
+  const parsedRecords: DvRecord[] = [buildRecord("a.md", "feat", ["alpha"])];
+  const packageCurrentVersions = [
+    packageVersion("alpha", "1.0.0"),
+    packageVersion("beta", "2.0.0"),
+  ];
+
+  // When the plan is built
+  const plan = buildVersionPlan({
+    command: "version",
+    discoveredPackages,
+    parsedRecords,
+    renameLedger: [],
+    packageCurrentVersions,
+  });
+
+  // Then `tracked` lists both packages (independent of `pending`)
+  assertEquals(plan.pending.length, 1);
+  assertEquals(plan.pending[0]?.package, "alpha");
+  assertEquals(plan.tracked, [
+    { package: "alpha", currentVersion: "1.0.0", path: "packages/alpha" },
+    { package: "beta", currentVersion: "2.0.0", path: "packages/beta" },
+  ]);
+});
+
+Deno.test("buildVersionPlan omits packages from `tracked` when no current version was resolved", () => {
+  // Given a discovered package whose read-version was not run (no entry
+  // in packageCurrentVersions) — e.g. the plugin failed for that one
+  const discoveredPackages = [
+    buildPackage("ok", "packages/ok"),
+    buildPackage("missing", "packages/missing"),
+  ];
+  const packageCurrentVersions = [packageVersion("ok", "1.0.0")];
+
+  // When the plan is built
+  const plan = buildVersionPlan({
+    command: "status",
+    discoveredPackages,
+    parsedRecords: [],
+    renameLedger: [],
+    packageCurrentVersions,
+  });
+
+  // Then only the package with a known version appears in `tracked`
+  assertEquals(plan.tracked, [
+    { package: "ok", currentVersion: "1.0.0", path: "packages/ok" },
+  ]);
+});

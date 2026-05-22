@@ -177,6 +177,34 @@
         "description": "A Record references a Package that no discovery plugin claims and no rename ledger edge maps to. Halts `dv version` unless --prune."
       },
       "description": "Records pointing at no current Package (halt `dv version` unless --prune)."
+    },
+    "tracked": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "package": {
+            "type": "string"
+          },
+          "currentVersion": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$"
+          },
+          "path": {
+            "type": "string",
+            "description": "Directory relative to repo root."
+          }
+        },
+        "required": [
+          "package",
+          "currentVersion",
+          "path"
+        ],
+        "additionalProperties": false,
+        "title": "Tracked package",
+        "description": "A Package discovery resolved and whose current Version the read-version Op returned. Lists every Package dv is aware of, regardless of whether any Records are pending against it."
+      },
+      "description": "Every Package discovery resolved, with its current Version. Independent of `pending` — populated even when no Records are queued."
     }
   },
   "required": [
@@ -184,7 +212,8 @@
     "command",
     "pending",
     "awaitingRelease",
-    "unresolvedReferences"
+    "unresolvedReferences",
+    "tracked"
   ],
   "additionalProperties": false,
   "title": "dv Plan",

@@ -108,6 +108,19 @@ const planUnresolvedReferenceSchema = z
       "A Record references a Package that no discovery plugin claims and no rename ledger edge maps to. Halts `dv version` unless --prune.",
   });
 
+const planTrackedPackageSchema = z
+  .object({
+    package: z.string(),
+    currentVersion: semverStringSchema,
+    path: z.string().describe("Directory relative to repo root."),
+  })
+  .strict()
+  .meta({
+    title: "Tracked package",
+    description:
+      "A Package discovery resolved and whose current Version the read-version Op returned. Lists every Package dv is aware of, regardless of whether any Records are pending against it.",
+  });
+
 export const rawPlanSchema = z
   .object({
     schema: z.literal("urn:dv:schema:v1:plan").describe("Schema id."),
@@ -124,6 +137,11 @@ export const rawPlanSchema = z
       .array(planUnresolvedReferenceSchema)
       .describe(
         "Records pointing at no current Package (halt `dv version` unless --prune).",
+      ),
+    tracked: z
+      .array(planTrackedPackageSchema)
+      .describe(
+        "Every Package discovery resolved, with its current Version. Independent of `pending` — populated even when no Records are queued.",
       ),
   })
   .strict()
@@ -148,3 +166,4 @@ export type PlanPending = Plan["pending"][number];
 export type PlanAwaitingRelease = Plan["awaitingRelease"][number];
 export type PlanUnresolvedReference = Plan["unresolvedReferences"][number];
 export type PlanChangeCounts = Plan["pending"][number]["changeCounts"];
+export type PlanTracked = Plan["tracked"][number];

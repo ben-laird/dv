@@ -90,7 +90,7 @@ async function captureStdout<T>(
   }
 }
 
-Deno.test("runStatus shows an empty plan and tracked-package count when no records are pending", async () => {
+Deno.test("runStatus lists every tracked package with its current version when no records are pending", async () => {
   // Given a repo with one discovered package, a version 1.4.2, and no records
   const fixture = await setUpRepoWithPlugin({
     pluginScript: `case "\${DV_OPERATION:-$1}" in
@@ -109,11 +109,17 @@ esac`,
       runStatus({ emitJson: false, colorEnabled: false }),
     );
 
-    // Then pending is empty and the human output names the package count
+    // Then pending is empty, the Tracked packages table appears with the
+    // package name + current version, and Plan.tracked carries the data
     assertEquals(result.plan?.pending, []);
     assertEquals(result.plan?.unresolvedReferences, []);
+    assertEquals(result.plan?.tracked, [
+      { package: "core", currentVersion: "1.4.2", path: "packages/core" },
+    ]);
     assertEquals(capturedStdout.includes("no pending records"), true);
-    assertEquals(capturedStdout.includes("1 package tracked"), true);
+    assertEquals(capturedStdout.includes("Tracked packages"), true);
+    assertEquals(capturedStdout.includes("core"), true);
+    assertEquals(capturedStdout.includes("1.4.2"), true);
   } finally {
     await fixture.cleanup();
   }

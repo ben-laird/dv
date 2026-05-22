@@ -25,6 +25,7 @@ export {
   type PlanAwaitingRelease,
   type PlanChangeCounts,
   type PlanPending,
+  type PlanTracked,
   type PlanUnresolvedReference,
   parsedPlanSchema,
   type RawPlan,

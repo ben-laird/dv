@@ -91,6 +91,28 @@ export function buildVersionPlan(args: BuildVersionPlanArgs): Plan {
     leftEntry.package.localeCompare(rightEntry.package),
   );
 
+  // Every discovered Package whose current Version we resolved becomes
+  // a `tracked` entry — independent of pending. Lets `dv status` answer
+  // "what's the current version of each Package?" without depending on
+  // there being any Records queued.
+  const trackedEntries = args.discoveredPackages
+    .flatMap((discoveredPackage) => {
+      const currentVersion = currentVersionsByPackage.get(
+        discoveredPackage.name,
+      );
+      if (currentVersion === undefined) return [];
+      return [
+        {
+          package: discoveredPackage.name,
+          currentVersion: formatVersion(currentVersion),
+          path: discoveredPackage.path,
+        },
+      ];
+    })
+    .sort((leftEntry, rightEntry) =>
+      leftEntry.package.localeCompare(rightEntry.package),
+    );
+
   return {
     schema: "urn:dv:schema:v1:plan",
     command: args.command,
@@ -102,6 +124,7 @@ export function buildVersionPlan(args: BuildVersionPlanArgs): Plan {
         reference: unresolvedEntry.reference,
       }),
     ),
+    tracked: trackedEntries,
   };
 }
 

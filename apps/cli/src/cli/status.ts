@@ -189,11 +189,11 @@ function renderHumanStatus(args: RenderHumanStatusArgs): void {
 
   if (plan.pending.length === 0 && plan.unresolvedReferences.length === 0) {
     console.log(styler.dim("no pending records"));
-    console.log(
-      `  ${discoveredPackages.length} package${
-        discoveredPackages.length === 1 ? "" : "s"
-      } tracked. File one with ${styler.cyan("`dv add`")}.`,
-    );
+    console.log(`  File one with ${styler.cyan("`dv add`")}.`);
+    if (plan.tracked.length > 0) {
+      console.log("");
+      renderTrackedTable({ tracked: plan.tracked, styler });
+    }
     if (recordsListing.failures.length > 0) {
       renderRecordFailureFooter({
         failureCount: recordsListing.failures.length,
@@ -263,11 +263,41 @@ function renderHumanStatus(args: RenderHumanStatusArgs): void {
     }
   }
 
+  if (plan.tracked.length > 0) {
+    console.log("");
+    renderTrackedTable({ tracked: plan.tracked, styler });
+  }
+
   if (recordsListing.failures.length > 0) {
     renderRecordFailureFooter({
       failureCount: recordsListing.failures.length,
       styler,
     });
+  }
+}
+
+interface RenderTrackedTableArgs {
+  tracked: Plan["tracked"];
+  styler: Styler;
+}
+
+function renderTrackedTable(args: RenderTrackedTableArgs): void {
+  const { tracked, styler } = args;
+  console.log(`${styler.bold("Tracked packages")} — ${tracked.length} total:`);
+  const nameColumnWidth = Math.max(
+    ...tracked.map((entry) => entry.package.length),
+    7,
+  );
+  const versionColumnWidth = Math.max(
+    ...tracked.map((entry) => entry.currentVersion.length),
+    5,
+  );
+  for (const entry of tracked) {
+    const paddedName = entry.package.padEnd(nameColumnWidth);
+    const paddedVersion = entry.currentVersion.padEnd(versionColumnWidth);
+    console.log(
+      `  ${styler.bold(paddedName)}  ${paddedVersion}  ${styler.dim(entry.path)}`,
+    );
   }
 }
 
