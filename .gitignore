@@ -10,3 +10,8 @@ apps/docs/.vitepress/dist/
 
 # Editor / OS
 .DS_Store
+
+# dv: in-progress record edit files (only present if the editor
+# subprocess was killed before dv could clean up — normally the temp
+# file is removed in a finally block before dv exits).
+.changelog/.dv-record-edit-*

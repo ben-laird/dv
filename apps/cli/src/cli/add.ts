@@ -69,6 +69,7 @@ export async function runAdd(options: RunAddOptions): Promise<RunAddResult> {
     options,
     knownPackageNames,
     discoveredPackages: discoveredPackages.map((pkg) => pkg.name),
+    repoRootPath,
   });
 
   validatePackageReferences({
@@ -105,6 +106,7 @@ interface CollectRecordInputsArgs {
   options: RunAddOptions;
   knownPackageNames: Set<string>;
   discoveredPackages: string[];
+  repoRootPath: string;
 }
 
 interface ResolvedRecordInputs {
@@ -158,6 +160,7 @@ async function collectRecordInputs(
     (await openEditorForRecordBody({
       changeType: interactiveAnswers.changeType,
       packageNames: interactiveAnswers.packageNames,
+      repoRootPath: args.repoRootPath,
       editorOverride: args.options.editorOverride,
     }));
 

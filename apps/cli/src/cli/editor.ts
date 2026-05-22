@@ -1,5 +1,7 @@
+import { join } from "@std/path";
 import type { ChangeType } from "../domain/change-type.ts";
 import { DvError } from "../domain/errors.ts";
+import { CONFIG_DIR } from "../subtools/config/mod.ts";
 import { parseEditorCommand } from "./parse-editor-command.ts";
 
 // Opens the user's editor on a contextual template for `dv add`'s
@@ -14,10 +16,35 @@ import { parseEditorCommand } from "./parse-editor-command.ts";
 // single-quoted args all behave the way `$EDITOR` does in any other
 // tool. Falls back to the platform default if EDITOR / VISUAL parse
 // fails or is empty.
+//
+// Temp file location: we write inside `<repoRoot>/.changelog/` (not
+// the OS temp dir) so editors like VSCode treat the file as part of
+// the trusted workspace and skip the "untrusted file" warning. This
+// matches git's pattern (it writes to `.git/COMMIT_EDITMSG`). A
+// .gitignore entry catches leftovers if the editor crashes.
+
+const RECORD_EDIT_FILE_PREFIX = ".dv-record-edit-";
+
+interface ResolveRecordEditDirectoryArgs {
+  repoRootPath: string;
+}
+
+// Pure helper: where dv writes the in-progress edit file. Exported for
+// the unit test; lives in this module so it stays close to its only
+// caller.
+export function resolveRecordEditDirectory(
+  args: ResolveRecordEditDirectoryArgs,
+): string {
+  return join(args.repoRootPath, CONFIG_DIR);
+}
 
 interface OpenEditorForRecordBodyArgs {
   changeType: ChangeType;
   packageNames: string[];
+  // Repo root — the temp file is created under
+  // `<repoRoot>/.changelog/` so VSCode (and similar editors) inherit
+  // workspace trust.
+  repoRootPath: string;
   // Overrides $EDITOR / $VISUAL for this invocation only. Passed via
   // `dv add --editor "<cmd>"` so the user can try a one-off editor
   // without touching their shell rc.
@@ -28,8 +55,13 @@ export async function openEditorForRecordBody(
   args: OpenEditorForRecordBodyArgs,
 ): Promise<string> {
   const editorTemplate = renderEditorTemplate(args);
+  const editDirectory = resolveRecordEditDirectory({
+    repoRootPath: args.repoRootPath,
+  });
+  await Deno.mkdir(editDirectory, { recursive: true });
   const temporaryFilePath = await Deno.makeTempFile({
-    prefix: "dv-record-",
+    dir: editDirectory,
+    prefix: RECORD_EDIT_FILE_PREFIX,
     suffix: ".md",
   });
   try {
