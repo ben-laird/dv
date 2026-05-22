@@ -1,169 +1,316 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:dv:schema:v1:config",
-  "title": "dv config (.changelog/config.yaml)",
-  "description": "v1 draft. Subtool-organized configuration for dv. Keys are kebab-case. See specs/config-format.md.",
   "type": "object",
-  "additionalProperties": false,
   "properties": {
+    "$schema": {
+      "description": "Pointer to the dv config schema for editor autocomplete (e.g. ./specs/schemas/config.json or a published URL).",
+      "type": "string"
+    },
     "extends": {
-      "description": "Local path(s) to base configs, merged first-to-last. Top-level only; no HTTPS sources in v1.",
-      "oneOf": [
-        { "type": "string" },
-        { "type": "array", "items": { "type": "string" } }
+      "description": "Local path(s) to base configs, merged first-to-last. Top-level only; HTTPS sources are not supported in v1.",
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
       ]
     },
     "discovery": {
       "type": "object",
-      "additionalProperties": false,
       "properties": {
         "plugins": {
-          "type": "array",
           "description": "Plugin assignments. The sole source of truth for which paths are Packages.",
+          "type": "array",
           "items": {
             "type": "object",
-            "additionalProperties": false,
-            "required": ["match", "use"],
             "properties": {
               "match": {
-                "description": "Glob or list of globs (gitignore-style negation with '!').",
-                "oneOf": [
-                  { "type": "string" },
-                  { "type": "array", "items": { "type": "string" } }
-                ]
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                ],
+                "description": "A glob or list of globs (gitignore-style negation with '!')."
               },
               "use": {
                 "type": "string",
-                "description": "Path to a plugin executable, or a builtin name."
+                "description": "Path to a plugin executable (./..., /..., ~/...) or a builtin name."
               },
               "timeout": {
-                "$ref": "#/$defs/duration",
-                "default": "60s",
-                "description": "Max wall-clock for this plugin's fast ops."
+                "description": "Max wall-clock for this plugin's fast ops (discover, read-version, write-version, update-dependency). Default 60s.",
+                "type": "string",
+                "pattern": "^\\d+(ms|s|m|h)$",
+                "title": "Duration",
+                "examples": [
+                  "60s",
+                  "5m",
+                  "500ms"
+                ]
               }
-            }
+            },
+            "required": [
+              "match",
+              "use"
+            ],
+            "additionalProperties": false,
+            "title": "Plugin assignment",
+            "description": "Binds a glob of paths to the plugin that manages them."
           }
         },
         "use-gitignore": {
-          "type": "boolean",
-          "default": true,
-          "description": "Honor .gitignore during discovery."
+          "description": "Honor .gitignore during discovery — ignored paths are skipped. Default true.",
+          "type": "boolean"
         }
-      }
+      },
+      "additionalProperties": false,
+      "title": "Discovery subtool",
+      "description": "Enumerates Packages and resolves which Plugin manages each (specs/config-format.md § discovery)."
     },
     "changesets": {
       "type": "object",
-      "additionalProperties": false,
-      "description": "The changesets subtool (authoring Records).",
       "properties": {
         "auto-stage": {
-          "type": "boolean",
-          "default": true,
-          "description": "git add the Record file created by `dv add`."
+          "description": "`git add` the Record file created by `dv add`. Default true.",
+          "type": "boolean"
         }
-      }
+      },
+      "additionalProperties": false,
+      "title": "Changesets subtool",
+      "description": "Authoring behavior for Records (specs/cli.md § dv add)."
     },
     "changelog": {
       "type": "object",
-      "additionalProperties": false,
       "properties": {
-        "format": { "type": "string", "default": "keep-a-changelog" },
+        "format": {
+          "description": "CHANGELOG output format. v1 supports only 'keep-a-changelog'.",
+          "type": "string"
+        },
         "location": {
-          "type": "string",
-          "default": "{package}/CHANGELOG.md",
-          "description": "Template for per-Package CHANGELOG path."
+          "description": "Template for each Package's CHANGELOG path. Supports {package}, {version}, {package-path}.",
+          "type": "string"
         }
-      }
+      },
+      "additionalProperties": false,
+      "title": "Changelog subtool",
+      "description": "How rendered CHANGELOG files are written (specs/config-format.md § changelog)."
     },
     "tagging": {
       "type": "object",
-      "additionalProperties": false,
       "properties": {
         "format": {
-          "type": "string",
-          "default": "{package}@{version}",
-          "description": "Template for per-Package git Tags."
+          "description": "Template for git tags. Default '{package}@{version}'. Supports {package}, {version}, {package-path}.",
+          "type": "string"
         }
-      }
+      },
+      "additionalProperties": false,
+      "title": "Tagging subtool",
+      "description": "How per-Package git Tags are formatted (specs/config-format.md § tagging)."
     },
     "publishing": {
       "type": "object",
-      "additionalProperties": false,
       "properties": {
         "plugin": {
-          "type": "string",
-          "description": "Executable invoked per Package after tagging (the release Op)."
+          "description": "Executable invoked per Package after tagging (the release Op).",
+          "type": "string"
         },
         "timeout": {
-          "oneOf": [
-            { "$ref": "#/$defs/duration" },
-            { "const": "none" }
-          ],
-          "default": "none",
-          "description": "Max wall-clock for the release Op. Default none — publishing is slow."
+          "description": "Max wall-clock for the release Op. Default 'none' — publishing is slow and variable.",
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^\\d+(ms|s|m|h)$",
+              "title": "Duration",
+              "description": "A duration like '60s', '5m', '500ms', '1h'.",
+              "examples": [
+                "60s",
+                "5m",
+                "500ms"
+              ]
+            },
+            {
+              "type": "string",
+              "const": "none"
+            }
+          ]
         }
-      }
+      },
+      "additionalProperties": false,
+      "title": "Publishing subtool",
+      "description": "How release plugins are invoked after tagging (specs/config-format.md § publishing)."
     },
     "git": {
       "type": "object",
-      "additionalProperties": false,
       "properties": {
-        "require-clean-tree": { "type": "boolean", "default": true },
+        "require-clean-tree": {
+          "description": "Refuse `dv version` / `dv release` with uncommitted changes. Default true.",
+          "type": "boolean"
+        },
         "sign": {
-          "enum": ["auto", true, false],
-          "default": "auto",
-          "description": "auto honors git's own signing config; true/false force or disable."
+          "anyOf": [
+            {
+              "type": "string",
+              "const": "auto"
+            },
+            {
+              "type": "boolean",
+              "const": true
+            },
+            {
+              "type": "boolean",
+              "const": false
+            }
+          ],
+          "description": "Commit/tag signing. 'auto' honors git's own config; true/false force or disable."
         },
-        "auto-commit": { "type": "boolean", "default": true },
+        "auto-commit": {
+          "description": "Commit the changes `dv version` produces. Default true; --no-commit overrides.",
+          "type": "boolean"
+        },
         "commit-message-template": {
-          "type": "string",
-          "description": "Supports {summary} and {details}."
+          "description": "Template for the auto-commit message. Supports {summary} and {details}.",
+          "type": "string"
         },
-        "auto-push": { "type": "boolean", "default": false },
+        "auto-push": {
+          "description": "Push minted tags during `dv release`. Default false; --push overrides.",
+          "type": "boolean"
+        },
         "push-sequence": {
-          "enum": ["publish-then-push", "push-then-publish"],
-          "default": "publish-then-push"
+          "description": "Order of operations when pushing is enabled. Default 'publish-then-push'.",
+          "anyOf": [
+            {
+              "type": "string",
+              "const": "publish-then-push"
+            },
+            {
+              "type": "string",
+              "const": "push-then-publish"
+            }
+          ]
         }
-      }
+      },
+      "additionalProperties": false,
+      "title": "Git substrate",
+      "description": "Shared git behavior used by every subtool (specs/config-format.md § git)."
     },
     "safety": {
       "type": "object",
-      "additionalProperties": false,
       "properties": {
         "dry-run-by-default": {
-          "type": "boolean",
-          "default": false,
-          "description": "Flip destructive commands to dry-run unless --no-dry-run."
+          "description": "Flip destructive commands to --dry-run unless --no-dry-run is passed. Default false.",
+          "type": "boolean"
         }
-      }
+      },
+      "additionalProperties": false,
+      "title": "Safety",
+      "description": "Repo-wide safety defaults (specs/config-format.md § safety)."
     },
     "overrides": {
+      "description": "Per-Package overrides. First match wins; order most-specific to least-specific.",
       "type": "array",
-      "description": "First-match-wins per-Package overrides of a subset of settings.",
       "items": {
         "type": "object",
-        "additionalProperties": false,
-        "required": ["match"],
         "properties": {
           "match": {
-            "oneOf": [
-              { "type": "string" },
-              { "type": "array", "items": { "type": "string" } }
-            ]
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            ],
+            "description": "A glob or list of globs (gitignore-style negation with '!')."
           },
-          "changelog": { "$ref": "#/properties/changelog" },
-          "tagging": { "$ref": "#/properties/tagging" },
-          "publishing": { "$ref": "#/properties/publishing" },
-          "plugin-use": { "type": "string" }
-        }
+          "changelog": {
+            "type": "object",
+            "properties": {
+              "format": {
+                "description": "CHANGELOG output format. v1 supports only 'keep-a-changelog'.",
+                "type": "string"
+              },
+              "location": {
+                "description": "Template for each Package's CHANGELOG path. Supports {package}, {version}, {package-path}.",
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "title": "Changelog subtool",
+            "description": "How rendered CHANGELOG files are written (specs/config-format.md § changelog)."
+          },
+          "tagging": {
+            "type": "object",
+            "properties": {
+              "format": {
+                "description": "Template for git tags. Default '{package}@{version}'. Supports {package}, {version}, {package-path}.",
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "title": "Tagging subtool",
+            "description": "How per-Package git Tags are formatted (specs/config-format.md § tagging)."
+          },
+          "publishing": {
+            "type": "object",
+            "properties": {
+              "plugin": {
+                "description": "Executable invoked per Package after tagging (the release Op).",
+                "type": "string"
+              },
+              "timeout": {
+                "description": "Max wall-clock for the release Op. Default 'none' — publishing is slow and variable.",
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^\\d+(ms|s|m|h)$",
+                    "title": "Duration",
+                    "description": "A duration like '60s', '5m', '500ms', '1h'.",
+                    "examples": [
+                      "60s",
+                      "5m",
+                      "500ms"
+                    ]
+                  },
+                  {
+                    "type": "string",
+                    "const": "none"
+                  }
+                ]
+              }
+            },
+            "additionalProperties": false,
+            "title": "Publishing subtool",
+            "description": "How release plugins are invoked after tagging (specs/config-format.md § publishing)."
+          },
+          "plugin-use": {
+            "description": "Override the plugin assignment for matched Packages.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "match"
+        ],
+        "additionalProperties": false,
+        "title": "Override entry",
+        "description": "First-match-wins per-Package override of a subset of settings."
       }
     }
   },
-  "$defs": {
-    "duration": {
-      "type": "string",
-      "pattern": "^[0-9]+(ms|s|m|h)$",
-      "description": "A duration like 60s, 5m, 500ms."
-    }
-  }
+  "additionalProperties": false,
+  "title": "dv config (.changelog/config.yaml)",
+  "description": "Subtool-organized configuration for dv. Keys are kebab-case. See specs/config-format.md."
 }
