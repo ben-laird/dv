@@ -133,11 +133,12 @@ etc.) based on what's already in the manifest.
 **Output:**
 
 ```json
-{ "ok": true, "updated": true }
+{ "ok": true, "changed": true }
 ```
 
-`updated: false` is valid — means no change was needed (e.g., the existing
-constraint already satisfies the new version).
+`changed: false` is valid — means no change was needed (e.g., the existing
+constraint already satisfies the new version, or the dependent does not
+carry the dependency at all).
 
 ### `release` (optional)
 

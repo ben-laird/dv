@@ -9,10 +9,13 @@ export {
   parseDiscoverResponse,
   parsePluginResponse,
   parseReadVersionResponse,
+  parseUpdateDependencyResponse,
   parseWriteVersionResponse,
   pluginErrorEnvelopeSchema,
   type ReadVersionResponse,
   readVersionResponseSchema,
+  type UpdateDependencyResponse,
+  updateDependencyResponseSchema,
   type WriteVersionResponse,
   writeVersionResponseSchema,
 } from "./response.ts";

@@ -31,4 +31,9 @@ export {
   rawPlanSchema,
 } from "./plan-schema.ts";
 export { invokeReadVersion } from "./read-version.ts";
+export {
+  type InvokeUpdateDependencyArgs,
+  type InvokeUpdateDependencyResult,
+  invokeUpdateDependency,
+} from "./update-dependency.ts";
 export { invokeWriteVersion } from "./write-version.ts";

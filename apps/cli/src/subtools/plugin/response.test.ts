@@ -3,6 +3,7 @@ import { PluginError } from "../../domain/errors.ts";
 import {
   parseDiscoverResponse,
   parseReadVersionResponse,
+  parseUpdateDependencyResponse,
   parseWriteVersionResponse,
 } from "./response.ts";
 
@@ -166,6 +167,70 @@ Deno.test("parseWriteVersionResponse rejects ok:false (use the error envelope in
   assertThrows(
     () =>
       parseWriteVersionResponse({
+        rawStdout: wrongOkStdout,
+        pluginPath: "/x",
+      }),
+    PluginError,
+  );
+});
+
+Deno.test("parseUpdateDependencyResponse accepts {ok:true, changed:true}", () => {
+  // Given a plugin that rewrote a real constraint
+  const validStdout = `{"ok":true,"changed":true}`;
+
+  // When parsed
+  const validatedResponse = parseUpdateDependencyResponse({
+    rawStdout: validStdout,
+    pluginPath: "/x",
+  });
+
+  // Then the parsed shape carries changed:true
+  assertEquals(validatedResponse, { ok: true, changed: true });
+});
+
+Deno.test("parseUpdateDependencyResponse accepts {ok:true, changed:false} as the no-op path", () => {
+  // Given a plugin reporting that the dependent doesn't carry this dep
+  const noOpStdout = `{"ok":true,"changed":false}`;
+
+  // When parsed
+  const validatedResponse = parseUpdateDependencyResponse({
+    rawStdout: noOpStdout,
+    pluginPath: "/x",
+  });
+
+  // Then changed:false is a normal success (constraint-only cascading
+  // per language.md Algebra §9 — dv's plan-builder reports the cross
+  // product; the plugin filters by actual manifest content)
+  assertEquals(validatedResponse, { ok: true, changed: false });
+});
+
+Deno.test("parseUpdateDependencyResponse rejects a response missing `changed`", () => {
+  // Given a plugin that returned only {ok:true} (the write-version shape)
+  const missingChangedStdout = `{"ok":true}`;
+
+  // When parsed
+  // Then PluginError flags the missing field
+  assertThrows(
+    () =>
+      parseUpdateDependencyResponse({
+        rawStdout: missingChangedStdout,
+        pluginPath: "/x",
+      }),
+    PluginError,
+    "update-dependency",
+  );
+});
+
+Deno.test("parseUpdateDependencyResponse rejects ok:false (failures go through the error envelope)", () => {
+  // Given a plugin that wrongly emits {ok:false, changed:false} without
+  // the error envelope's `error` field
+  const wrongOkStdout = `{"ok":false,"changed":false}`;
+
+  // When parsed
+  // Then PluginError surfaces — ok must be strict literal true
+  assertThrows(
+    () =>
+      parseUpdateDependencyResponse({
         rawStdout: wrongOkStdout,
         pluginPath: "/x",
       }),

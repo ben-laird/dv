@@ -55,6 +55,17 @@ export const writeVersionResponseSchema = z
 
 export type WriteVersionResponse = z.infer<typeof writeVersionResponseSchema>;
 
+export const updateDependencyResponseSchema = z
+  .object({
+    ok: z.literal(true),
+    changed: z.boolean(),
+  })
+  .strict();
+
+export type UpdateDependencyResponse = z.infer<
+  typeof updateDependencyResponseSchema
+>;
+
 interface ParseSingleOpResponseArgs {
   rawStdout: string;
   pluginPath: string;
@@ -90,6 +101,17 @@ export function parseWriteVersionResponse(
     pluginPath: args.pluginPath,
     opName: "write-version",
     responseSchema: writeVersionResponseSchema,
+  });
+}
+
+export function parseUpdateDependencyResponse(
+  args: ParseSingleOpResponseArgs,
+): UpdateDependencyResponse {
+  return parsePluginResponse({
+    rawStdout: args.rawStdout,
+    pluginPath: args.pluginPath,
+    opName: "update-dependency",
+    responseSchema: updateDependencyResponseSchema,
   });
 }
 
