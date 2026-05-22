@@ -74,7 +74,7 @@ const discoverySectionSchema = z
       "Enumerates Packages and resolves which Plugin manages each (specs/config-format.md § discovery).",
   });
 
-const changesetsSectionSchema = z
+const recordsSectionSchema = z
   .object({
     "auto-stage": z
       .boolean()
@@ -83,8 +83,9 @@ const changesetsSectionSchema = z
   })
   .strict()
   .meta({
-    title: "Changesets subtool",
-    description: "Authoring behavior for Records (specs/cli.md § dv add).",
+    title: "Records subtool",
+    description:
+      "Authoring, parsing, and validation of Records (specs/cli.md § dv add).",
   });
 
 const changelogSectionSchema = z
@@ -242,7 +243,7 @@ export const rawConfigLayerSchema = z
         "Local path(s) to base configs, merged first-to-last. Top-level only; HTTPS sources are not supported in v1.",
       ),
     discovery: discoverySectionSchema.optional(),
-    changesets: changesetsSectionSchema.optional(),
+    records: recordsSectionSchema.optional(),
     changelog: changelogSectionSchema.optional(),
     tagging: taggingSectionSchema.optional(),
     publishing: publishingSectionSchema.optional(),
@@ -281,8 +282,8 @@ export const parsedConfigLayerSchema = rawConfigLayerSchema.transform(
           useGitignore: rawLayer.discovery["use-gitignore"],
         }
       : undefined,
-    changesets: rawLayer.changesets
-      ? { autoStage: rawLayer.changesets["auto-stage"] }
+    records: rawLayer.records
+      ? { autoStage: rawLayer.records["auto-stage"] }
       : undefined,
     changelog: rawLayer.changelog,
     tagging: rawLayer.tagging,

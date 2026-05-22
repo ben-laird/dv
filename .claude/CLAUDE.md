@@ -80,7 +80,7 @@ These are not up for re-litigation without explicit conversation:
 - **Config is YAML only.** No TypeScript, JSON, or other config formats. See
   `specs/design.md` § Config format for the trade-offs.
 - **Capability decomposition.** `dv` is built as independent subtool
-  modules (discovery, changesets, versioning, changelog, tagging,
+  modules (discovery, records, versioning, changelog, tagging,
   publishing) with commands as thin orchestrations over them. Config is
   organized by subtool, with a `git` substrate section for cross-cutting
   git operations. Git is a substrate, not a capability. `versioning` has

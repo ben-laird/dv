@@ -4,7 +4,7 @@
 document is the canonical reference for that file.
 
 The config is organized by **subtool** — `dv` is built as a set of
-independent capability modules (discovery, changesets, versioning,
+independent capability modules (discovery, records, versioning,
 changelog, tagging, publishing), and each subtool with user-facing
 options owns a top-level config section. Git operations are the shared
 substrate every subtool persists through, so they get a dedicated `git`
@@ -25,7 +25,7 @@ extends: []
 
 # Subtools (capabilities)
 discovery: {}
-changesets: {}
+records: {}
 changelog: {}
 tagging: {}
 publishing: {}
@@ -159,12 +159,13 @@ slow and variable. Its timeout (default: none) lives under `publishing`.
 - If a package matches multiple plugin entries, `dv` errors at startup
   with the conflicting entries listed.
 
-## `changesets`
+## `records`
 
-Behavior of the changesets subtool (authoring, validation, consumption).
+Behavior of the records subtool (authoring, parsing, validation,
+consumption of Record files).
 
 ```yaml
-changesets:
+records:
   auto-stage: true                # git add the file created by `dv add`
 ```
 

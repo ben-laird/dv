@@ -187,19 +187,19 @@ independent capabilities that commands compose.
 The subtools:
 
 - **discovery** — enumerate packages and resolve which plugin manages each.
-- **changesets** — author, parse, validate, and consume records.
-- **versioning** — compute version bumps from records and apply them,
+- **records** — author, parse, validate, and consume Records.
+- **versioning** — compute version bumps from Records and apply them,
   including constraint cascade.
-- **changelog** — render CHANGELOG entries from consumed records.
+- **changelog** — render CHANGELOG entries from consumed Records.
 - **tagging** — mint git tags.
 - **publishing** — invoke release plugins.
 
 Commands are orchestrations:
 
-- `dv add` → discovery + changesets (create)
-- `dv status` → discovery + changesets (read) + versioning (preview)
-- `dv validate` → discovery + changesets (validate)
-- `dv version` → discovery + changesets (consume) + versioning + changelog + commit
+- `dv add` → discovery + records (create)
+- `dv status` → discovery + records (read) + versioning (preview)
+- `dv validate` → discovery + records (validate)
+- `dv version` → discovery + records (consume) + versioning + changelog + commit
 - `dv release` → discovery + tagging + publishing + push
 
 Git operations (stage, commit, push, tag, clean-tree checks) are the
@@ -207,8 +207,8 @@ Git operations (stage, commit, push, tag, clean-tree checks) are the
 own. They get a dedicated `git` config section rather than being
 scattered across subtools, because some git operations are inherently
 cross-subtool: the commit `dv version` produces bundles manifest changes
-(versioning), CHANGELOG edits (changelog), and deleted record files
-(changesets) into a single commit.
+(versioning), CHANGELOG edits (changelog), and deleted Record files
+(records subtool) into a single commit.
 
 Benefits:
 
@@ -264,7 +264,7 @@ The config's *structure* is modeled on Biome's `biome.json`: top-level
 sections, an `extends` mechanism for sharing config across repos, and an
 `overrides` array for per-package customization with first-match-wins
 semantics. The sections are organized by **subtool** (see Capability
-decomposition above): `discovery`, `changesets`, `changelog`, `tagging`,
+decomposition above): `discovery`, `records`, `changelog`, `tagging`,
 `publishing`, plus the `git` substrate section and a global `safety`
 section. Commands have no config sections of their own — they're
 orchestrations of subtools. Key conventions:
@@ -302,7 +302,7 @@ config-only. These are settings that describe what the repo IS, not how
 usefully run `dv version` while pretending the plugin assignments are
 different than they are.
 
-Everything else — `git.*`, `changesets.*`, `changelog.*`, `tagging.*`,
+Everything else — `git.*`, `records.*`, `changelog.*`, `tagging.*`,
 `publishing.*`, `safety.*` — follows the parity rule. Setting it in config
 establishes a default; passing the flag overrides for this invocation.
 Boolean options accept both `--no-foo` (Unix convention) and `--foo=false`

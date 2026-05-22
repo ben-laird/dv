@@ -58,8 +58,8 @@ decomposition). The mapping:
 | **versioning** | `read-version`, `write-version`, `update-dependency` |
 | **publishing** | `release`                                         |
 
-The `changesets`, `changelog`, and `tagging` subtools need no plugin
-delegation — record parsing and CHANGELOG rendering are format
+The `records`, `changelog`, and `tagging` subtools need no plugin
+delegation — Record parsing and CHANGELOG rendering are format
 operations `dv` handles internally, and tagging uses git directly. This
 is why the op list is short: plugins only exist to bridge the
 ecosystem-specific gaps (where is the version stored? how is a dependency

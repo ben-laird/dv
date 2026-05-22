@@ -6,7 +6,7 @@ import type { Config } from "../../domain/config.ts";
 export function defaults(): Config {
   return {
     discovery: { plugins: [], useGitignore: true },
-    changesets: { autoStage: true },
+    records: { autoStage: true },
     changelog: {
       format: "keep-a-changelog",
       location: "{package-path}/CHANGELOG.md",

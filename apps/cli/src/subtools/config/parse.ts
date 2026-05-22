@@ -165,9 +165,9 @@ function applyLayerOntoConfig(args: ApplyLayerOntoConfigArgs): void {
       mergedConfig.discovery.useGitignore = layer.discovery.useGitignore;
     }
   }
-  if (layer.changesets) {
-    if (layer.changesets.autoStage !== undefined) {
-      mergedConfig.changesets.autoStage = layer.changesets.autoStage;
+  if (layer.records) {
+    if (layer.records.autoStage !== undefined) {
+      mergedConfig.records.autoStage = layer.records.autoStage;
     }
   }
   if (layer.changelog) {

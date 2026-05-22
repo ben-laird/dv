@@ -16,7 +16,7 @@ export interface DiscoveryConfig {
   useGitignore: boolean;
 }
 
-export interface ChangesetsConfig {
+export interface RecordsConfig {
   autoStage: boolean;
 }
 
@@ -59,7 +59,7 @@ export interface OverrideEntry {
 
 export interface Config {
   discovery: DiscoveryConfig;
-  changesets: ChangesetsConfig;
+  records: RecordsConfig;
   changelog: ChangelogConfig;
   tagging: TaggingConfig;
   publishing: PublishingConfig;

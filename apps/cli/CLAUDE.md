@@ -13,7 +13,7 @@ tasks. The repo's shared imports, fmt, and lint live in the root `deno.json`.
 per capability; commands compose them and hold no domain logic of their own.
 
 - `src/subtools/discovery` — run discover plugins, resolve the Package set.
-- `src/subtools/changesets` — author, parse, and validate Records.
+- `src/subtools/records` — author, parse, and validate Records.
 - `src/subtools/versioning` — the **pure algebra**: `classify`, `apply`,
   `aggregate`, bump-join (`specs/language.md` § Operations). No IO here.
 - `src/subtools/changelog` — render CHANGELOG sections (Keep a Changelog).

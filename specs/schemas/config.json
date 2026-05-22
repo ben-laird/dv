@@ -78,7 +78,7 @@
       "title": "Discovery subtool",
       "description": "Enumerates Packages and resolves which Plugin manages each (specs/config-format.md § discovery)."
     },
-    "changesets": {
+    "records": {
       "type": "object",
       "properties": {
         "auto-stage": {
@@ -87,8 +87,8 @@
         }
       },
       "additionalProperties": false,
-      "title": "Changesets subtool",
-      "description": "Authoring behavior for Records (specs/cli.md § dv add)."
+      "title": "Records subtool",
+      "description": "Authoring, parsing, and validation of Records (specs/cli.md § dv add)."
     },
     "changelog": {
       "type": "object",

@@ -57,7 +57,7 @@ Ops over JSON-on-stdio. *Not: adapter, driver, backend.*
 method.*
 
 **Subtool** — one of `dv`'s capability modules: **discovery**,
-**changesets**, **versioning**, **changelog**, **tagging**, **publishing**.
+**records**, **versioning**, **changelog**, **tagging**, **publishing**.
 Commands are orchestrations of Subtools. *Not: module (in user-facing
 text), service.*
 

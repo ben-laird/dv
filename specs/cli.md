@@ -77,7 +77,7 @@ required flags in a non-TTY context; `--links` and `--notes` are optional.
 | `--message`      | The Record body (becomes the CHANGELOG line).                           |
 | `--links`        | Optional reference URLs (issues, PRs).                                  |
 | `--notes`        | Optional freeform notes appended to the body.                          |
-| `--stage` / `--no-stage` | Override `changesets.auto-stage` for this invocation.           |
+| `--stage` / `--no-stage` | Override `records.auto-stage` for this invocation.              |
 
 ```
 # interactive
