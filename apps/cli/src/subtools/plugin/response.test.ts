@@ -3,6 +3,7 @@ import { PluginError } from "../../domain/errors.ts";
 import {
   parseDiscoverResponse,
   parseReadVersionResponse,
+  parseReleaseResponse,
   parseUpdateDependencyResponse,
   parseWriteVersionResponse,
 } from "./response.ts";
@@ -232,6 +233,90 @@ Deno.test("parseUpdateDependencyResponse rejects ok:false (failures go through t
     () =>
       parseUpdateDependencyResponse({
         rawStdout: wrongOkStdout,
+        pluginPath: "/x",
+      }),
+    PluginError,
+  );
+});
+
+Deno.test("parseReleaseResponse accepts the minimal {ok:true} success shape", () => {
+  // Given the simplest publish-succeeded response
+  const validStdout = `{"ok":true}`;
+
+  // When parsed
+  const validatedResponse = parseReleaseResponse({
+    rawStdout: validStdout,
+    pluginPath: "/x",
+  });
+
+  // Then ok:true comes back with the optional fields absent
+  assertEquals(validatedResponse.ok, true);
+  assertEquals(validatedResponse.published, undefined);
+});
+
+Deno.test("parseReleaseResponse accepts a richly-populated success", () => {
+  // Given a plugin that reports all the optional fields
+  const validStdout = `{"ok":true,"published":true,"skipped":false,"message":"published to jsr"}`;
+
+  // When parsed
+  const validatedResponse = parseReleaseResponse({
+    rawStdout: validStdout,
+    pluginPath: "/x",
+  });
+
+  // Then every field is preserved
+  assertEquals(validatedResponse.ok, true);
+  assertEquals(validatedResponse.published, true);
+  assertEquals(validatedResponse.skipped, false);
+  assertEquals(validatedResponse.message, "published to jsr");
+});
+
+Deno.test("parseReleaseResponse accepts {ok:false, message:'...'} as a structured failure (not a thrown error)", () => {
+  // Given the documented "publish failed but don't roll back the tag"
+  // shape — release is the ONLY Op where ok:false flows back to the
+  // caller instead of throwing (specs/plugin-contract.md: "Failures
+  // here do not roll back the tags")
+  const failureStdout = `{"ok":false,"message":"jsr: package name taken"}`;
+
+  // When parsed
+  const validatedResponse = parseReleaseResponse({
+    rawStdout: failureStdout,
+    pluginPath: "/x",
+  });
+
+  // Then the failure surfaces as data the caller can aggregate into
+  // a summary — NOT a thrown PluginError
+  assertEquals(validatedResponse.ok, false);
+  assertEquals(validatedResponse.message, "jsr: package name taken");
+});
+
+Deno.test("parseReleaseResponse rejects shapes missing the required `ok` field", () => {
+  // Given a plugin that forgot to emit the `ok` field
+  const missingOkStdout = `{"published":true}`;
+
+  // When parsed
+  // Then PluginError surfaces — `ok` is the only required field
+  assertThrows(
+    () =>
+      parseReleaseResponse({
+        rawStdout: missingOkStdout,
+        pluginPath: "/x",
+      }),
+    PluginError,
+  );
+});
+
+Deno.test("parseReleaseResponse rejects unknown extra fields (strict shape)", () => {
+  // Given a plugin emitting a field the contract does not define
+  const extraFieldStdout = `{"ok":true,"unsupported":"value"}`;
+
+  // When parsed
+  // Then PluginError surfaces — typos and forward-compat probing
+  // should fail loudly rather than silently
+  assertThrows(
+    () =>
+      parseReleaseResponse({
+        rawStdout: extraFieldStdout,
         pluginPath: "/x",
       }),
     PluginError,

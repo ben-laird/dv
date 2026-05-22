@@ -66,6 +66,24 @@ export type UpdateDependencyResponse = z.infer<
   typeof updateDependencyResponseSchema
 >;
 
+// `release` is the only Op where `{ok: false}` is a documented
+// success path for the *protocol* — the plugin tells dv "this
+// publish failed, but don't roll back the tag" (specs/plugin-
+// contract.md: "Failures here do not roll back the tags").
+// `published`, `skipped`, and `message` are optional; `ok` is the
+// only required field. Less strict than write-version because
+// publishing is intentionally fail-tolerant.
+export const releaseResponseSchema = z
+  .object({
+    ok: z.boolean(),
+    published: z.boolean().optional(),
+    skipped: z.boolean().optional(),
+    message: z.string().optional(),
+  })
+  .strict();
+
+export type ReleaseResponse = z.infer<typeof releaseResponseSchema>;
+
 interface ParseSingleOpResponseArgs {
   rawStdout: string;
   pluginPath: string;
@@ -115,6 +133,25 @@ export function parseUpdateDependencyResponse(
   });
 }
 
+// release intentionally bypasses the standard error-envelope check
+// because `{ok: false, message: "..."}` IS a valid release response
+// shape (the plugin reports a non-fatal publish failure; dv
+// continues with other packages and surfaces it in the summary).
+// The release-specific Zod schema fully accepts ok:false, so we let
+// the response flow through to the schema validator instead of
+// short-circuiting on the envelope.
+export function parseReleaseResponse(
+  args: ParseSingleOpResponseArgs,
+): ReleaseResponse {
+  return parsePluginResponse({
+    rawStdout: args.rawStdout,
+    pluginPath: args.pluginPath,
+    opName: "release",
+    responseSchema: releaseResponseSchema,
+    acceptStructuredFailure: true,
+  });
+}
+
 // Shared error-envelope detection + schema parsing pipeline. Every Op's
 // per-schema parser routes through this so the failure shapes
 // (empty stdout, non-JSON, structured envelope, shape violation) are
@@ -125,6 +162,12 @@ interface ParsePluginResponseArgs<T> {
   pluginPath: string;
   opName: string;
   responseSchema: z.ZodType<T>;
+  // Default false: any `{ok: false, error: string}` payload short-
+  // circuits to PluginError. The `release` Op opts in to a more
+  // permissive path because `{ok: false, message: ...}` is part of
+  // its documented success shape — the plugin is reporting a
+  // recoverable publish failure that should NOT abort the run.
+  acceptStructuredFailure?: boolean;
 }
 
 export function parsePluginResponse<T>(args: ParsePluginResponseArgs<T>): T {
@@ -153,14 +196,16 @@ export function parsePluginResponse<T>(args: ParsePluginResponseArgs<T>): T {
     );
   }
 
-  const envelopeAttempt = pluginErrorEnvelopeSchema.safeParse(parsedJson);
-  if (envelopeAttempt.success) {
-    throw new PluginError(
-      "plugin-error",
-      `${opName} reported failure: ${envelopeAttempt.data.error}`,
-      pluginPath,
-      opName,
-    );
+  if (args.acceptStructuredFailure !== true) {
+    const envelopeAttempt = pluginErrorEnvelopeSchema.safeParse(parsedJson);
+    if (envelopeAttempt.success) {
+      throw new PluginError(
+        "plugin-error",
+        `${opName} reported failure: ${envelopeAttempt.data.error}`,
+        pluginPath,
+        opName,
+      );
+    }
   }
 
   const validatedResponse = responseSchema.safeParse(parsedJson);
