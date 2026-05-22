@@ -110,6 +110,28 @@ const changelogSectionSchema = z
       "How rendered CHANGELOG files are written (specs/config-format.md § changelog).",
   });
 
+const historySectionSchema = z
+  .object({
+    enabled: z
+      .boolean()
+      .optional()
+      .describe(
+        "Write a long-form HISTORY.md companion to CHANGELOG.md. Default false.",
+      ),
+    location: z
+      .string()
+      .optional()
+      .describe(
+        "Template for each Package's HISTORY path. Supports {package}, {version}, {package-path}.",
+      ),
+  })
+  .strict()
+  .meta({
+    title: "History subtool",
+    description:
+      "How rendered HISTORY files are written (specs/config-format.md § history). HISTORY carries each Record's full body prose under h3 subsections, grouped by version. Opt-in: dv defaults to CHANGELOG-only.",
+  });
+
 const taggingSectionSchema = z
   .object({
     format: z
@@ -214,6 +236,7 @@ const overrideEntrySchema = z
   .object({
     match: matchGlobSchema,
     changelog: changelogSectionSchema.optional(),
+    history: historySectionSchema.optional(),
     tagging: taggingSectionSchema.optional(),
     publishing: publishingSectionSchema.optional(),
     "plugin-use": z
@@ -245,6 +268,7 @@ export const rawConfigLayerSchema = z
     discovery: discoverySectionSchema.optional(),
     records: recordsSectionSchema.optional(),
     changelog: changelogSectionSchema.optional(),
+    history: historySectionSchema.optional(),
     tagging: taggingSectionSchema.optional(),
     publishing: publishingSectionSchema.optional(),
     git: gitSectionSchema.optional(),
@@ -286,6 +310,7 @@ export const parsedConfigLayerSchema = rawConfigLayerSchema.transform(
       ? { autoStage: rawLayer.records["auto-stage"] }
       : undefined,
     changelog: rawLayer.changelog,
+    history: rawLayer.history,
     tagging: rawLayer.tagging,
     publishing: rawLayer.publishing,
     git: rawLayer.git
@@ -304,6 +329,7 @@ export const parsedConfigLayerSchema = rawConfigLayerSchema.transform(
     overrides: rawLayer.overrides?.map((entry) => ({
       match: entry.match,
       changelog: entry.changelog,
+      history: entry.history,
       tagging: entry.tagging,
       publishing: entry.publishing,
       pluginUse: entry["plugin-use"],

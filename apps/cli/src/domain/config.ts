@@ -25,6 +25,16 @@ export interface ChangelogConfig {
   location: string;
 }
 
+// HISTORY.md is the optional long-form companion document to CHANGELOG.md
+// (specs/design.md § Per-package CHANGELOG.md). CHANGELOG stays terse per
+// Keep a Changelog conventions; HISTORY carries the full Record body prose
+// under h3 subsections so agents and humans get the narrative of why a
+// change happened, not just what shipped. Opt-in: defaults to disabled.
+export interface HistoryConfig {
+  enabled: boolean;
+  location: string;
+}
+
 export interface TaggingConfig {
   format: string;
 }
@@ -52,6 +62,7 @@ export interface SafetyConfig {
 export interface OverrideEntry {
   match: string | string[];
   changelog?: Partial<ChangelogConfig>;
+  history?: Partial<HistoryConfig>;
   tagging?: Partial<TaggingConfig>;
   publishing?: Partial<PublishingConfig>;
   pluginUse?: string;
@@ -61,6 +72,7 @@ export interface Config {
   discovery: DiscoveryConfig;
   records: RecordsConfig;
   changelog: ChangelogConfig;
+  history: HistoryConfig;
   tagging: TaggingConfig;
   publishing: PublishingConfig;
   git: GitConfig;

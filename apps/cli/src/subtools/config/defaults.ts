@@ -11,6 +11,10 @@ export function defaults(): Config {
       format: "keep-a-changelog",
       location: "{package-path}/CHANGELOG.md",
     },
+    history: {
+      enabled: false,
+      location: "{package-path}/HISTORY.md",
+    },
     tagging: { format: "{package}@{version}" },
     publishing: { timeout: "none" },
     git: {

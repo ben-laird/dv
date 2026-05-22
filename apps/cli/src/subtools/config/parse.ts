@@ -178,6 +178,14 @@ function applyLayerOntoConfig(args: ApplyLayerOntoConfigArgs): void {
       mergedConfig.changelog.location = layer.changelog.location;
     }
   }
+  if (layer.history) {
+    if (layer.history.enabled !== undefined) {
+      mergedConfig.history.enabled = layer.history.enabled;
+    }
+    if (layer.history.location !== undefined) {
+      mergedConfig.history.location = layer.history.location;
+    }
+  }
   if (layer.tagging) {
     if (layer.tagging.format !== undefined) {
       mergedConfig.tagging.format = layer.tagging.format;
@@ -220,6 +228,7 @@ function applyLayerOntoConfig(args: ApplyLayerOntoConfigArgs): void {
     mergedConfig.overrides = layer.overrides.map((entry) => ({
       match: entry.match,
       changelog: entry.changelog,
+      history: entry.history,
       tagging: entry.tagging,
       publishing: entry.publishing,
       pluginUse: entry.pluginUse,
