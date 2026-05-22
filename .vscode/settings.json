@@ -1,0 +1,12 @@
+{
+  // YAML schemas for editor autocomplete. The Red Hat YAML extension
+  // (`redhat.vscode-yaml`) picks these up; the in-file `# yaml-language-server:`
+  // modeline does the same job for editors that don't read this map (and
+  // for ad-hoc viewers).
+  "yaml.schemas": {
+    "./specs/schemas/config.json": [
+      ".changelog/config.yaml",
+      "**/.changelog/config.yaml"
+    ]
+  }
+}

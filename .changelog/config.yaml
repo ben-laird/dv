@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=../specs/schemas/config.json
 # dv dogfooding itself.
 #
 # This repo is a monorepo:
