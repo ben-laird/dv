@@ -1289,6 +1289,11 @@
       "npm:zod@4"
     ],
     "members": {
+      "apps/cli": {
+        "dependencies": [
+          "jsr:@seshat/cli@0.1"
+        ]
+      },
       "apps/docs": {
         "dependencies": [
           "npm:@docsearch/css@3",
