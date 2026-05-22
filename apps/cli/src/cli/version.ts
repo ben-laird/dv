@@ -377,6 +377,14 @@ function renderHumanPlan(args: RenderHumanPlanArgs): void {
     console.log(
       `  ${styler.bold(pending.package)} ${pending.currentVersion} → ${pending.projectedVersion} (${pending.bump})`,
     );
+    if (pending.constraintUpdates.length > 0) {
+      const dependentNames = pending.constraintUpdates
+        .map((update) => update.dependent)
+        .join(", ");
+      console.log(
+        `       ${styler.dim(`└ would update dependents: ${dependentNames}`)}`,
+      );
+    }
   }
   if (args.plan.unresolvedReferences.length > 0) {
     console.log("");

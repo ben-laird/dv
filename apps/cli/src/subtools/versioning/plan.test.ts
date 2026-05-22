@@ -182,3 +182,162 @@ Deno.test("buildVersionPlan produces JSON that validates against rawPlanSchema",
   // Then the JSON round trip is contract-valid
   rawPlanSchema.parse(roundTripped);
 });
+
+Deno.test("buildVersionPlan lists every other discovered Package as a candidate constraint update", () => {
+  // Given two packages where one is bumped
+  const discoveredPackages = [
+    buildPackage("core", "packages/core"),
+    buildPackage("cli", "packages/cli"),
+  ];
+  const parsedRecords: DvRecord[] = [buildRecord("a.md", "feat", ["core"])];
+  const packageCurrentVersions = [
+    packageVersion("core", "1.4.2"),
+    packageVersion("cli", "0.8.0"),
+  ];
+
+  // When the plan is built
+  const plan = buildVersionPlan({
+    command: "status",
+    discoveredPackages,
+    parsedRecords,
+    renameLedger: [],
+    packageCurrentVersions,
+  });
+
+  // Then the bumped package's pending entry lists the other discovered
+  // package with the projected version; cli is NOT in pending (Algebra §9)
+  assertEquals(plan.pending.length, 1);
+  assertEquals(plan.pending[0]?.package, "core");
+  assertEquals(plan.pending[0]?.constraintUpdates, [
+    { dependent: "cli", newConstraint: "1.5.0" },
+  ]);
+});
+
+Deno.test("buildVersionPlan sorts constraintUpdates by dependent for byte-stable output", () => {
+  // Given three packages where the middle one (by sort order) bumps
+  const discoveredPackages = [
+    buildPackage("b", "packages/b"),
+    buildPackage("a", "packages/a"),
+    buildPackage("c", "packages/c"),
+  ];
+  const parsedRecords: DvRecord[] = [buildRecord("x.md", "feat", ["b"])];
+  const packageCurrentVersions = [
+    packageVersion("a", "1.0.0"),
+    packageVersion("b", "1.0.0"),
+    packageVersion("c", "1.0.0"),
+  ];
+
+  // When the plan is built
+  const plan = buildVersionPlan({
+    command: "status",
+    discoveredPackages,
+    parsedRecords,
+    renameLedger: [],
+    packageCurrentVersions,
+  });
+
+  // Then b's constraintUpdates are sorted alphabetically (a, c — not
+  // insertion-order b's neighbours), and the same plan rebuilt
+  // produces an identical structure
+  assertEquals(plan.pending[0]?.package, "b");
+  assertEquals(plan.pending[0]?.constraintUpdates, [
+    { dependent: "a", newConstraint: "1.1.0" },
+    { dependent: "c", newConstraint: "1.1.0" },
+  ]);
+
+  const rebuiltPlan = buildVersionPlan({
+    command: "status",
+    discoveredPackages,
+    parsedRecords,
+    renameLedger: [],
+    packageCurrentVersions,
+  });
+  assertEquals(plan, rebuiltPlan);
+});
+
+Deno.test("buildVersionPlan excludes the bumped Package from its own constraintUpdates", () => {
+  // Given a single-package repo with one feat record
+  const discoveredPackages = [buildPackage("solo", "packages/solo")];
+  const parsedRecords: DvRecord[] = [buildRecord("x.md", "feat", ["solo"])];
+  const packageCurrentVersions = [packageVersion("solo", "1.0.0")];
+
+  // When the plan is built
+  const plan = buildVersionPlan({
+    command: "status",
+    discoveredPackages,
+    parsedRecords,
+    renameLedger: [],
+    packageCurrentVersions,
+  });
+
+  // Then constraintUpdates is empty — solo never lists itself
+  assertEquals(plan.pending[0]?.constraintUpdates, []);
+});
+
+Deno.test("buildVersionPlan lists mutual constraintUpdates when two packages both bump", () => {
+  // Given two packages, both with records
+  const discoveredPackages = [
+    buildPackage("alpha", "packages/alpha"),
+    buildPackage("beta", "packages/beta"),
+  ];
+  const parsedRecords: DvRecord[] = [
+    buildRecord("a.md", "feat", ["alpha"]),
+    buildRecord("b.md", "fix", ["beta"]),
+  ];
+  const packageCurrentVersions = [
+    packageVersion("alpha", "1.0.0"),
+    packageVersion("beta", "1.0.0"),
+  ];
+
+  // When the plan is built
+  const plan = buildVersionPlan({
+    command: "status",
+    discoveredPackages,
+    parsedRecords,
+    renameLedger: [],
+    packageCurrentVersions,
+  });
+
+  // Then each bumped package lists the other as a constraint update,
+  // with that other's projected version
+  const alphaEntry = plan.pending.find((p) => p.package === "alpha");
+  const betaEntry = plan.pending.find((p) => p.package === "beta");
+  assertEquals(alphaEntry?.constraintUpdates, [
+    { dependent: "beta", newConstraint: "1.1.0" },
+  ]);
+  assertEquals(betaEntry?.constraintUpdates, [
+    { dependent: "alpha", newConstraint: "1.0.1" },
+  ]);
+});
+
+Deno.test("buildVersionPlan lists constraintUpdates for unbumped dependents too", () => {
+  // Given three packages where only one bumps
+  const discoveredPackages = [
+    buildPackage("a", "packages/a"),
+    buildPackage("b", "packages/b"),
+    buildPackage("c", "packages/c"),
+  ];
+  const parsedRecords: DvRecord[] = [buildRecord("x.md", "feat", ["a"])];
+  const packageCurrentVersions = [
+    packageVersion("a", "1.0.0"),
+    packageVersion("b", "1.0.0"),
+    packageVersion("c", "1.0.0"),
+  ];
+
+  // When the plan is built
+  const plan = buildVersionPlan({
+    command: "status",
+    discoveredPackages,
+    parsedRecords,
+    renameLedger: [],
+    packageCurrentVersions,
+  });
+
+  // Then a is the only pending entry (Algebra §9: cascading does not
+  // induce bumps) but its constraintUpdates names both b and c
+  assertEquals(plan.pending.length, 1);
+  assertEquals(plan.pending[0]?.constraintUpdates, [
+    { dependent: "b", newConstraint: "1.1.0" },
+    { dependent: "c", newConstraint: "1.1.0" },
+  ]);
+});

@@ -73,7 +73,18 @@ export function buildVersionPlan(args: BuildVersionPlanArgs): Plan {
       stability,
       changeCounts: aggregatedEntry.changeCounts,
       records: [...aggregatedEntry.recordFilenames],
-      constraintUpdates: [],
+      // Constraint cascading is *purely additive on existing pending
+      // entries* (language.md Algebra §9). This builder never pushes
+      // new entries onto pendingEntries on behalf of dependents — it
+      // only annotates already-bumped packages with the cross product
+      // of `dependent → projectedVersion`. The plugin filters at
+      // execute time; the plan reports the full cross product so
+      // status and dry-run agree (Algebra §7).
+      constraintUpdates: buildConstraintUpdatesFor({
+        bumpedPackageName: packageName,
+        bumpedProjectedVersion: formatVersion(projectedVersion),
+        discoveredPackages: args.discoveredPackages,
+      }),
     });
   }
   pendingEntries.sort((leftEntry, rightEntry) =>
@@ -121,4 +132,37 @@ function buildKnownPackageStabilities(
     stabilities.set(discoveredPackage.name, stabilityOf(currentVersion));
   }
   return stabilities;
+}
+
+interface BuildConstraintUpdatesForArgs {
+  bumpedPackageName: string;
+  bumpedProjectedVersion: string;
+  discoveredPackages: Package[];
+}
+
+interface ConstraintUpdate {
+  dependent: string;
+  newConstraint: string;
+}
+
+// Quadratic cross product: for each bumped Package, list every *other*
+// discovered Package as a dependent whose constraint *would* be
+// rewritten if it carried this dependency. The plugin filters at
+// execute time via `changed: false`. Pre-sorted by `dependent` for
+// byte-stable JSON.
+function buildConstraintUpdatesFor(
+  args: BuildConstraintUpdatesForArgs,
+): ConstraintUpdate[] {
+  const updates: ConstraintUpdate[] = [];
+  for (const candidateDependent of args.discoveredPackages) {
+    if (candidateDependent.name === args.bumpedPackageName) continue;
+    updates.push({
+      dependent: candidateDependent.name,
+      newConstraint: args.bumpedProjectedVersion,
+    });
+  }
+  updates.sort((leftUpdate, rightUpdate) =>
+    leftUpdate.dependent.localeCompare(rightUpdate.dependent),
+  );
+  return updates;
 }

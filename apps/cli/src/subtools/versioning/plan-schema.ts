@@ -44,7 +44,7 @@ const planConstraintUpdateSchema = z
   .meta({
     title: "Constraint update",
     description:
-      "A dependent Package whose constraint on the bumped Package would be rewritten. Always empty in M3 — constraint cascading lands in M4.",
+      "A dependent Package whose constraint on the bumped Package may be rewritten. dv reports the cross product of bumped × every-other-discovered package; the plugin filters at execute time via `changed: false` for dependents that do not carry the dependency.",
   });
 
 const planPendingEntrySchema = z
@@ -63,7 +63,7 @@ const planPendingEntrySchema = z
     constraintUpdates: z
       .array(planConstraintUpdateSchema)
       .describe(
-        "Dependents whose constraint would be rewritten (always empty in M3).",
+        "Dependents whose constraint may be rewritten when this Package bumps. The plugin filters per-manifest at execute time.",
       ),
   })
   .strict()

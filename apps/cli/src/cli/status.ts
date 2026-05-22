@@ -239,6 +239,14 @@ function renderHumanStatus(args: RenderHumanStatusArgs): void {
         pendingEntry.bump,
       )}  ${styler.dim(`(${changeCountSummary})`)}`,
     );
+    if (pendingEntry.constraintUpdates.length > 0) {
+      const dependentNames = pendingEntry.constraintUpdates
+        .map((update) => update.dependent)
+        .join(", ");
+      console.log(
+        `       ${styler.dim(`└ would update dependents: ${dependentNames}`)}`,
+      );
+    }
   }
 
   if (plan.unresolvedReferences.length > 0) {
