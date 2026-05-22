@@ -9,6 +9,7 @@
 // Output is hand-deterministic: 2-space indentation, trailing newline,
 // keys ordered as Zod emits them.
 
+import { rawCliErrorEnvelopeSchema } from "@seshat/cli";
 import { resolve } from "@std/path";
 import { z } from "zod";
 import { rawConfigLayerSchema } from "../subtools/config/schema.ts";
@@ -44,6 +45,11 @@ const GENERATED_SCHEMA_FILES: GeneratedSchemaFile[] = [
     outputPath: resolve(REPO_ROOT, "specs/schemas/plan.json"),
     schema: rawPlanSchema,
     schemaId: "urn:dv:schema:v1:plan",
+  },
+  {
+    outputPath: resolve(REPO_ROOT, "specs/schemas/cli-error.json"),
+    schema: rawCliErrorEnvelopeSchema,
+    schemaId: "urn:dv:schema:v1:cli-error",
   },
 ];
 

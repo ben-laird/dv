@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:dv:schema:v1:cli-error",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string",
+      "description": "Schema URN identifying the envelope version. Consumers should match against this before reading the `error` tree."
+    },
+    "error": {
+      "$ref": "#/$defs/__schema0"
+    }
+  },
+  "required": [
+    "schema",
+    "error"
+  ],
+  "additionalProperties": false,
+  "title": "CLI error envelope",
+  "description": "The JSON shape emitted on stderr when a `@seshat/cli`-based CLI exits with an error under `--json` mode. The top-level `schema` field carries the URN so downstream tools (shell scripts, agent fleets) can version-gate before parsing.",
+  "$defs": {
+    "__schema0": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "Stable error code (e.g. 'dirty-tree')."
+        },
+        "message": {
+          "type": "string",
+          "description": "Human-readable summary."
+        },
+        "hint": {
+          "description": "Actionable next-step suggestion, when one applies.",
+          "type": "string"
+        },
+        "severity": {
+          "description": "Omitted on the default ('error'); present only for warning-severity entries.",
+          "type": "string",
+          "enum": [
+            "error",
+            "warning"
+          ]
+        },
+        "context": {
+          "description": "Per-code structured context — shape varies by `code`. Consumers branch on `code` to read fields safely.",
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {}
+        },
+        "subErrors": {
+          "description": "Child errors aggregated under this one (e.g. per-package publish failures under release-partial-failure).",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema0"
+          }
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "additionalProperties": false,
+      "title": "CLI error payload",
+      "description": "One node in the error tree. Recursive via `subErrors`. Wire shape is flat (code/context/etc. at the top level) — the `kind` nesting in the in-process class is a TS-narrowing convenience, not a wire concern."
+    }
+  }
+}

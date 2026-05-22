@@ -4,6 +4,12 @@
 // renderCliError so human-stderr and --json envelope outputs flow
 // from one structured shape.
 
+export {
+  type RawCliErrorEnvelope,
+  type RawCliErrorPayload,
+  rawCliErrorEnvelopeSchema,
+  rawCliErrorPayloadSchema,
+} from "./cli-error-schema.ts";
 export { defineCommand } from "./command-spec.ts";
 export type {
   Cli,
