@@ -87,12 +87,18 @@ interface RenderEditorTemplateArgs {
 }
 
 function renderEditorTemplate(args: RenderEditorTemplateArgs): string {
+  // The template body itself must NOT contain a literal `<!--` — that
+  // would open a nested comment inside the outer one, and
+  // stripHtmlComments uses a non-greedy match that would close on the
+  // *inner* `-->`, leaking the rest of the template into the user's
+  // record. The help text describes the rule in prose instead of
+  // demonstrating the syntax.
   return `<!--
 type: ${args.changeType}
 packages: ${args.packageNames.join(", ")}
 
 Write what should appear in the CHANGELOG below.
-Lines wrapped in <!-- ... --> (like this block) are stripped before saving.
+Lines in this comment block are stripped before saving.
 An empty body aborts without writing the file.
 -->
 
