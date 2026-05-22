@@ -1,4 +1,5 @@
 import type { Cli, CliConfig, CommandSpec } from "./command-spec.ts";
+import { CliError } from "./errors.ts";
 import { formatCommandHelp, formatTopLevelHelp } from "./help.ts";
 import {
   parseSubcommandArgv,
@@ -83,7 +84,24 @@ export function defineCli(config: CliConfig): Cli {
         return await matchedCommand.run(parsedContext);
       } catch (caughtError) {
         if (config.reportError !== undefined) {
-          config.reportError(caughtError);
+          // Wrap non-CliError throws so the reporter always sees a
+          // uniform shape. Mode defaults to "human" here; callers
+          // that want JSON output read the mode from their own flag
+          // closure inside the reporter implementation (the
+          // framework can't know which command's `--json` flag is
+          // the relevant one). EC7 wires the per-command flow.
+          const errorForReport =
+            caughtError instanceof CliError
+              ? caughtError
+              : new CliError({
+                  code: "unknown",
+                  message:
+                    caughtError instanceof Error
+                      ? caughtError.message
+                      : String(caughtError),
+                  cause: caughtError,
+                });
+          config.reportError(errorForReport, { mode: "human" });
         }
         return 1;
       }

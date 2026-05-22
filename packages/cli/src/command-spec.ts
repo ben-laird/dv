@@ -39,10 +39,24 @@ export interface CommandSpec<
   run: CommandRunner<TFlagMap>;
 }
 
-// `reportError` is the only error-handling hook. It writes to stderr;
-// the framework exits 1 afterward. Keeping it opaque lets callers layer
-// in their own error machinery (structured codes, JSON envelopes) later
-// without churning the framework.
+// `reportError` is the framework's structured error hook. It receives
+// any value the runner threw (CliError, plain Error, or anything else
+// the runner managed to throw); the framework wraps non-CliError
+// values into a default-shape CliError before invoking the hook, so
+// implementations can assume a uniform `caughtError instanceof
+// CliError` if they choose. The `ctx.mode` field tells the hook
+// whether to render to human stderr or to the --json envelope; the
+// caller (e.g. dv's main.ts) decides mode based on its own flag
+// parsing. The framework exits 1 after the hook returns.
+export interface ReportErrorContext {
+  mode: "human" | "json";
+}
+
+export type ReportErrorHook = (
+  caughtError: unknown,
+  ctx: ReportErrorContext,
+) => void;
+
 export interface CliConfig {
   name: string;
   version: string;
@@ -54,7 +68,7 @@ export interface CliConfig {
   // biome-ignore lint/suspicious/noExplicitAny: see comment above
   // deno-lint-ignore no-explicit-any
   commands: Record<string, CommandSpec<any>>;
-  reportError?: (caughtError: unknown) => void;
+  reportError?: ReportErrorHook;
 }
 
 export interface Cli {

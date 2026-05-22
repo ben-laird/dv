@@ -1,6 +1,7 @@
 import { assertEquals, assertStringIncludes } from "@std/assert";
 import type { CliConfig, CommandSpec } from "./command-spec.ts";
 import { defineCli } from "./define-cli.ts";
+import { CliError } from "./errors.ts";
 
 // Test helper — captures console.log and console.error during one
 // dispatch invocation. Stubbing the globals matches the apps/cli test
@@ -39,7 +40,7 @@ async function captureConsole<T>(
 // Tiny config helper — most tests share name/version/usage.
 function buildConfig(args: {
   commands: Record<string, CommandSpec>;
-  reportError?: (caughtError: unknown) => void;
+  reportError?: CliConfig["reportError"];
 }): CliConfig {
   return {
     name: "tst",
@@ -224,9 +225,10 @@ Deno.test("defineCli passes through a runner's non-zero exit code", async () => 
   assertEquals(result, 3);
 });
 
-Deno.test("defineCli calls reportError and exits 1 when a runner throws", async () => {
-  // Given a runner that throws and a CLI configured with reportError
-  const reportedErrors: unknown[] = [];
+Deno.test("defineCli wraps non-CliError throws into a CliError before calling reportError", async () => {
+  // Given a runner that throws a plain Error and a CLI configured
+  // with reportError that captures whatever it's given
+  const reportedArgs: { err: unknown; mode: string }[] = [];
   const cli = defineCli(
     buildConfig({
       commands: {
@@ -238,8 +240,8 @@ Deno.test("defineCli calls reportError and exits 1 when a runner throws", async 
           },
         },
       },
-      reportError: (caughtError) => {
-        reportedErrors.push(caughtError);
+      reportError: (caughtError, ctx) => {
+        reportedArgs.push({ err: caughtError, mode: ctx.mode });
       },
     }),
   );
@@ -247,10 +249,53 @@ Deno.test("defineCli calls reportError and exits 1 when a runner throws", async 
   // When dispatched
   const { result } = await captureConsole(() => cli.run(["status"]));
 
-  // Then reportError received the thrown error and exit code is 1
+  // Then the hook saw a CliError (wrapped by the framework), with
+  // the original Error preserved on `cause` for future --debug
+  // rendering. Exit code is 1.
   assertEquals(result, 1);
-  assertEquals(reportedErrors.length, 1);
-  assertEquals((reportedErrors[0] as Error).message, "boom");
+  assertEquals(reportedArgs.length, 1);
+  const reportedError = reportedArgs[0]?.err as CliError;
+  assertEquals(reportedError instanceof CliError, true);
+  assertEquals(reportedError.kind.code, "unknown");
+  assertEquals(reportedError.message, "boom");
+  // The framework defaults to human mode; consumers that emit JSON
+  // override mode inside the reporter via their own flag closure.
+  assertEquals(reportedArgs[0]?.mode, "human");
+});
+
+Deno.test("defineCli passes a thrown CliError through to reportError verbatim", async () => {
+  // Given a runner that throws a CliError already shaped for the
+  // contract surface
+  const reportedArgs: { err: unknown; mode: string }[] = [];
+  const cli = defineCli(
+    buildConfig({
+      commands: {
+        status: {
+          flags: {},
+          usage: "Usage: tst status",
+          run: () => {
+            throw new CliError({
+              code: "dirty-tree",
+              message: "working tree is not clean",
+              hint: "commit or stash first",
+            });
+          },
+        },
+      },
+      reportError: (caughtError, ctx) => {
+        reportedArgs.push({ err: caughtError, mode: ctx.mode });
+      },
+    }),
+  );
+
+  // When dispatched
+  const { result } = await captureConsole(() => cli.run(["status"]));
+
+  // Then the CliError reaches the hook unchanged — no re-wrapping
+  assertEquals(result, 1);
+  const reportedError = reportedArgs[0]?.err as CliError;
+  assertEquals(reportedError.kind.code, "dirty-tree");
+  assertEquals(reportedError.hint, "commit or stash first");
 });
 
 Deno.test("defineCli exits 1 silently when a runner throws and no reportError is set", async () => {

@@ -12,6 +12,8 @@ export type {
   CommandSpec,
   FlagSpec,
   FlagsOf,
+  ReportErrorContext,
+  ReportErrorHook,
   RunnerContext,
 } from "./command-spec.ts";
 export { defineCli } from "./define-cli.ts";
@@ -22,3 +24,4 @@ export {
   type CliErrorShape,
   type DefaultCliErrorShape,
 } from "./errors.ts";
+export { type RenderCliErrorArgs, renderCliError } from "./render-cli-error.ts";
