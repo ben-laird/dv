@@ -71,7 +71,7 @@ interface FormatBulletLineArgs {
 }
 
 function formatBulletLine(args: FormatBulletLineArgs): string {
-  const headlineText = firstLineOf(args.record.body).trim();
+  const headlineText = extractHeadline(args.record.body);
   const isBreaking =
     args.record.type === "feat!" || args.record.type === "fix!";
   const breakingPrefix = isBreaking ? "**BREAKING** " : "";
@@ -79,9 +79,26 @@ function formatBulletLine(args: FormatBulletLineArgs): string {
   return `- ${breakingPrefix}${headlineText}${linkSuffix}`;
 }
 
-function firstLineOf(body: string): string {
-  const newlineIndex = body.indexOf("\n");
-  return newlineIndex === -1 ? body : body.slice(0, newlineIndex);
+// Picks the headline text from a Record body. Records are markdown
+// documents; the convention is to lead with an h1 (`# Headline`) so
+// the file lints cleanly as a standalone document. The renderer
+// strips the `#` and uses what remains. Bodies without an h1 fall
+// back to the first non-empty line (the pre-v1 convention) so older
+// records keep working.
+export function extractHeadline(body: string): string {
+  const firstNonEmptyLine = findFirstNonEmptyLine(body);
+  const h1Match = firstNonEmptyLine.match(/^#\s+(.+?)\s*$/);
+  if (h1Match !== null && h1Match[1] !== undefined) {
+    return h1Match[1].trim();
+  }
+  return firstNonEmptyLine.trim();
+}
+
+function findFirstNonEmptyLine(body: string): string {
+  for (const line of body.split("\n")) {
+    if (line.trim().length > 0) return line;
+  }
+  return "";
 }
 
 function renderLinkSuffix(links: string[]): string {

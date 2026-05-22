@@ -56,11 +56,21 @@ with per-package types.
 
 ## Body
 
-Free-form markdown. All of it is included verbatim in the CHANGELOG entry.
-Multi-paragraph bodies are fine; lists, code blocks, links are fine.
+Free-form markdown. Records are markdown files that should also be valid
+standalone documents — recommended convention is to lead with an `# Headline`
+line so the file lints cleanly (e.g. markdownlint's MD041 "first line must be
+a top-level heading" rule). The CHANGELOG renderer strips the leading `#` and
+uses the rest of that line as the bullet.
 
-There is no enforced "headline must be one line" convention — write what the
-release notes should say.
+Bodies without a leading `#` heading still work: the renderer falls back to
+the first non-empty line. The h1 convention is a recommendation, not a
+hard requirement.
+
+Multi-paragraph bodies are fine; lists, code blocks, links are fine.
+**Today only the headline reaches the CHANGELOG bullet** — paragraphs below
+the h1 live in the record file for PR reviewers and survive in git history
+but are not rendered into CHANGELOG.md. (A future change may surface them
+in a long-form companion document.)
 
 ## Examples
 
@@ -74,7 +84,7 @@ links:
   - https://github.com/example/seshat/issues/42
 ---
 
-Add OAuth 2.0 device flow support.
+# Add OAuth 2.0 device flow support
 
 Clients without a browser (CLIs, embedded devices) can now authenticate
 using the device authorization grant.
@@ -88,7 +98,7 @@ type: fix
 packages: [core, cli]
 ---
 
-Correctly handle UTF-8 BOM in config files.
+# Correctly handle UTF-8 BOM in config files
 ```
 
 ### A breaking change
@@ -99,7 +109,7 @@ type: feat!
 packages: [core]
 ---
 
-Drop support for Node 16; minimum version is now Node 20.
+# Drop support for Node 16; minimum version is now Node 20
 
 The `legacy-stream` API has been removed; use `WebStream` instead.
 ```

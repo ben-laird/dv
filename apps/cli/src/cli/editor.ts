@@ -93,15 +93,24 @@ function renderEditorTemplate(args: RenderEditorTemplateArgs): string {
   // *inner* `-->`, leaking the rest of the template into the user's
   // record. The help text describes the rule in prose instead of
   // demonstrating the syntax.
+  //
+  // The scaffolded h1 line below is what the CHANGELOG renderer lifts
+  // as the bullet headline (see subtools/changelog/render.ts:
+  // extractHeadline). Writing it as `# headline` keeps each record a
+  // valid standalone markdown document (MD041) while still rendering
+  // cleanly into per-Package CHANGELOG.md files.
   return `<!--
 type: ${args.changeType}
 packages: ${args.packageNames.join(", ")}
 
 Write what should appear in the CHANGELOG below.
+The first \`# Headline\` line becomes the CHANGELOG bullet; further
+paragraphs live in the record for PR reviewers but are not rendered.
 Lines in this comment block are stripped before saving.
 An empty body aborts without writing the file.
 -->
 
+#
 
 `;
 }
