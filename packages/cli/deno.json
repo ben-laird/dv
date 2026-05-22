@@ -4,5 +4,6 @@
   "tasks": {
     "test": "deno test -A",
     "check": "deno check src/mod.ts"
-  }
+  },
+  "version": "0.1.0"
 }
