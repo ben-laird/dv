@@ -4,17 +4,17 @@
 // human mode) or a JSON envelope (--json mode). The shape is the
 // public contract; the rendering is the framework's concern.
 //
-// Why structured: errors carry context. A bare `dv: ...` line tells
-// the user something went wrong but not how to recover, or what
-// happened underneath. The fields below let the writer surface the
-// stable code (for machine consumers), the human message, an optional
-// remediation hint, the source error chain, sub-errors for
-// aggregations like `dv release --partial-failure`, and arbitrary
-// context for things like the offending plugin path or package name.
+// The error's identity lives in a single `kind: TShape` field, where
+// TShape is a discriminated union the consumer declares (see
+// @seshat/dv's DvErrorShape). That single field is what makes
+// catch-site narrowing work cleanly: `if (err.kind.code === "x")`
+// narrows `err.kind.context` along with it, the way Rust's `enum`
+// variants do. Sibling fields like `message`, `hint`, `subErrors`,
+// `severity`, and `cause` are envelope concerns and live on the
+// class itself.
 
-// The minimum any CliError shape must declare — a `code` string. The
-// framework's generic accepts any shape extending this, so consumers
-// can pin a discriminated union like:
+// The minimum any CliError shape must declare — a `code` string.
+// Consumers pin a discriminated union extending this:
 //
 //   type DvErrorShape =
 //     | { code: "dirty-tree" }
@@ -22,9 +22,9 @@
 //     | { code: "release-partial-failure"; context: { totalAttempted: number } };
 //
 // then `class DvError extends CliError<DvErrorShape> {}` welds the
-// code list to its per-code context. TS narrows `err.context` based
-// on `err.code` natively at every read site — no separate map to
-// keep in sync.
+// code list to its per-code context. At every read site,
+// `if (err.kind.code === "plugin-not-executable") err.kind.context.pluginPath`
+// narrows automatically — no casts, no helper guards.
 export interface CliErrorShape {
   code: string;
   context?: Record<string, unknown>;
@@ -32,36 +32,18 @@ export interface CliErrorShape {
 
 // The default — unconstrained code, open-ended optional context.
 // Keeps existing throw sites working without a generic argument and
-// lets the framework operate on heterogeneous error trees (e.g. when
+// lets the framework operate on heterogeneous error trees (e.g.
 // rendering subErrors that come from multiple subclasses).
 export type DefaultCliErrorShape = {
   code: string;
   context?: Record<string, unknown>;
 };
 
-// Pulls the runtime `context` type out of a shape variant. Three
-// cases distribute across the union:
-//   - variant has `context: X` (required) → context type is X
-//   - variant has `context?: X` (optional) → context type is X
-//     (we strip `undefined`)
-//   - variant declares no `context` → context type is the empty
-//     `Record<string, never>`
-// The all-or-nothing matching at the constructor-init level is
-// handled separately by `CliErrorInit`'s intersection below.
-type ContextOf<TShape extends CliErrorShape> = TShape extends {
-  context?: infer X;
-}
-  ? Exclude<X, undefined> extends never
-    ? Record<string, never>
-    : Exclude<X, undefined>
-  : Record<string, never>;
-
-// Constructor init payload, narrowed per discriminated-union arm.
-// `code` accepts only the literal codes from the union; the
-// `context` requirement follows the matched arm — required when the
-// arm has `context: X`, optional when `context?: X`, forbidden (or
-// `{}`-shaped) when the arm declares none. Default shape's
-// `context?` is optional, keeping minimal constructions ergonomic.
+// Constructor init payload. Flattens TShape's fields onto the init
+// object so authors write `{ code, context, message, ... }` rather
+// than `{ kind: { code, context }, message, ... }` — the class itself
+// nests them. Narrowed per discriminated-union arm: `code` accepts
+// only the union's literal codes, `context` follows the matched arm.
 export type CliErrorInit<
   TShape extends CliErrorShape = DefaultCliErrorShape,
 > = TShape extends CliErrorShape
@@ -80,10 +62,11 @@ export type CliErrorInit<
   : never;
 
 // The JSON-envelope shape a CliError serializes to (minus the
-// top-level `schema` field, which the envelope wrapper adds). Erased
-// to `string` / `Record<string, unknown>` at the wire boundary —
-// consumers parsing JSON back to typed errors can re-narrow against
-// their own union.
+// top-level `schema` field, which the envelope wrapper adds).
+// Intentionally flat — wire consumers see `{ code, context }` at
+// the top level, not `{ kind: { code, context } }`. The `kind`
+// nesting is a TS-narrowing convenience; the wire keeps the shape
+// callers already pin against.
 export interface CliErrorPayload {
   code: string;
   message: string;
@@ -96,14 +79,17 @@ export interface CliErrorPayload {
 export class CliError<
   TShape extends CliErrorShape = DefaultCliErrorShape,
 > extends Error {
-  readonly code: TShape["code"];
+  // The discriminator field. Narrowing `err.kind.code` propagates to
+  // `err.kind.context` because they're parts of one tagged-union
+  // value, not separate readonly fields. This is the whole reason
+  // for the nesting.
+  readonly kind: TShape;
   readonly hint?: string;
   readonly severity: "error" | "warning";
   // subErrors carry their own (typically different) shape; erased to
   // the default at the array boundary so the parent doesn't have to
   // declare them.
   readonly subErrors: CliError[];
-  readonly context: ContextOf<TShape>;
 
   constructor(init: CliErrorInit<TShape>) {
     super(
@@ -111,23 +97,28 @@ export class CliError<
       init.cause !== undefined ? { cause: init.cause } : undefined,
     );
     this.name = "CliError";
-    this.code = init.code as TShape["code"];
+    // Reconstruct the tagged-union value from the flat init. The
+    // intersection types make TS treat `init.context` as required-
+    // when-the-arm-demands-it, optional-otherwise; the runtime
+    // collapses both into the kind object.
+    const contextValue = "context" in init ? init.context : undefined;
+    this.kind = (contextValue !== undefined
+      ? { code: init.code, context: contextValue }
+      : { code: init.code }) as TShape;
     this.hint = init.hint;
     this.severity = init.severity ?? "error";
     this.subErrors = init.subErrors ?? [];
-    this.context = (("context" in init ? init.context : {}) ??
-      {}) as ContextOf<TShape>;
   }
 
   // Serializes the error tree to the JSON-envelope payload shape.
-  // Omits default `severity` and empty `subErrors` / `context` so the
-  // wire format stays terse. Recursive — sub-errors serialize
-  // themselves. The context erases to `Record<string, unknown>` here;
-  // typed re-narrowing happens at the read site against the
-  // consumer's own union.
+  // Flattens `kind` back onto the wire — consumers see `code` and
+  // `context` at the top level, the same shape they used to write
+  // against before the kind-nesting refactor. Omits default
+  // `severity` and empty `subErrors` / `context` so the format
+  // stays terse. Recursive — sub-errors serialize themselves.
   toJSON(): CliErrorPayload {
     const payload: CliErrorPayload = {
-      code: this.code,
+      code: this.kind.code,
       message: this.message,
     };
     if (this.hint !== undefined) payload.hint = this.hint;
@@ -135,8 +126,9 @@ export class CliError<
     if (this.subErrors.length > 0) {
       payload.subErrors = this.subErrors.map((subError) => subError.toJSON());
     }
-    const contextRecord = this.context as Record<string, unknown>;
-    if (Object.keys(contextRecord).length > 0) {
+    const contextRecord = (this.kind as { context?: Record<string, unknown> })
+      .context;
+    if (contextRecord !== undefined && Object.keys(contextRecord).length > 0) {
       payload.context = contextRecord;
     }
     return payload;

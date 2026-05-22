@@ -8,13 +8,13 @@ Deno.test("CliError constructs with the minimal required fields", () => {
     message: "working tree is not clean",
   });
 
-  // Then the public fields carry the inputs and defaults
-  assertEquals(error.code, "dirty-tree");
+  // Then the kind tag carries the code; sibling fields default to
+  // the documented defaults
+  assertEquals(error.kind.code, "dirty-tree");
   assertEquals(error.message, "working tree is not clean");
   assertEquals(error.hint, undefined);
   assertEquals(error.severity, "error");
   assertEquals(error.subErrors, []);
-  assertEquals(error.context, {});
   assertEquals(error instanceof Error, true);
 });
 
@@ -38,17 +38,23 @@ Deno.test("CliError carries hint, severity, cause, subErrors, and context when s
     context: { totalAttempted: 3 },
   });
 
-  // Then every field is preserved verbatim
-  assertEquals(error.code, "release-partial-failure");
+  // Then every field is preserved verbatim; the kind tag carries
+  // both code and context
+  assertEquals(error.kind.code, "release-partial-failure");
   assertEquals(error.hint, "rerun dv release --force after fixing the cause");
   assertEquals(error.severity, "error");
   assertEquals(error.cause, inner);
   assertEquals(error.subErrors.length, 1);
-  assertEquals(error.subErrors[0]?.code, "publish-failed");
-  assertEquals(error.context.totalAttempted, 3);
+  assertEquals(error.subErrors[0]?.kind.code, "publish-failed");
+  // Context is part of the kind tag, not a top-level field.
+  const errorKind = error.kind as {
+    code: string;
+    context: { totalAttempted: number };
+  };
+  assertEquals(errorKind.context.totalAttempted, 3);
 });
 
-Deno.test("CliError.toJSON omits defaults and empty collections for terse wire output", () => {
+Deno.test("CliError.toJSON flattens kind back onto the wire and omits defaults", () => {
   // Given a minimal CliError
   const error = new CliError({
     code: "dirty-tree",
@@ -58,8 +64,9 @@ Deno.test("CliError.toJSON omits defaults and empty collections for terse wire o
   // When serialized
   const payload = error.toJSON();
 
-  // Then only the required fields appear — no `severity: "error"`,
-  // no empty subErrors, no empty context
+  // Then the wire shape is flat (`code` at the top level, not nested
+  // under `kind`) and only the required fields appear — no default
+  // `severity`, no empty subErrors, no empty context
   assertEquals(payload, {
     code: "dirty-tree",
     message: "working tree is not clean",
@@ -78,7 +85,7 @@ Deno.test("CliError.toJSON includes hint and context when present", () => {
   // When serialized
   const payload = error.toJSON();
 
-  // Then the optional fields ride along
+  // Then the optional fields ride along, flattened to the wire shape
   assertEquals(payload.hint, "run chmod +x on the plugin file");
   assertEquals(payload.context, {
     pluginPath: "./examples/plugins/deno/release",
@@ -148,7 +155,7 @@ Deno.test("CliError preserves the Error.cause linkage so JS stack chains work", 
   assertEquals(error.cause, inner);
 });
 
-Deno.test("CliError's discriminated-union generic enforces code↔context pairing at the throw site", () => {
+Deno.test("CliError's `kind` field narrows code↔context together at the catch site", () => {
   // Given an app-side error union — `code` and per-code `context`
   // declared together so they can't drift
   type AppErrorShape =
@@ -176,20 +183,21 @@ Deno.test("CliError's discriminated-union generic enforces code↔context pairin
     },
   });
 
-  // Then each carries the expected runtime context. The compile-
-  // time check that pairs code↔context happens at the construction
-  // site above — TS rejects `code: "dirty-tree"` with a `context`
-  // field, or `code: "plugin-not-executable"` without one. Read-
-  // site narrowing requires manual discrimination (TS can't link
-  // `err.code` and `err.context` since they're separate readonly
-  // fields), but that's a small price for the throw-time safety.
-  assertEquals(dirtyTreeError.code, "dirty-tree");
-  const pluginContext = pluginError.context as {
-    pluginPath: string;
-    opName: string;
-  };
-  assertEquals(pluginContext.pluginPath, "./examples/plugins/deno/release");
-  assertEquals(pluginContext.opName, "release");
+  // Then `err.kind.code` discriminates the entire `err.kind` value,
+  // so `err.kind.context` narrows in the same branch — no casts,
+  // no helper guards. This is the whole point of the kind field.
+  if (pluginError.kind.code === "plugin-not-executable") {
+    assertEquals(
+      pluginError.kind.context.pluginPath,
+      "./examples/plugins/deno/release",
+    );
+    assertEquals(pluginError.kind.context.opName, "release");
+  }
+  // The no-context variant has no `context` to read; TS knows it's
+  // absent in that arm.
+  if (dirtyTreeError.kind.code === "dirty-tree") {
+    assertEquals(dirtyTreeError.kind.code, "dirty-tree");
+  }
 });
 
 Deno.test("CliError defaults to the open shape when no generic is supplied (back-compat)", () => {
@@ -201,9 +209,13 @@ Deno.test("CliError defaults to the open shape when no generic is supplied (back
     context: { whatever: "value", count: 7 },
   });
 
-  // When the context is read
+  // When the context is read off the kind tag
   // Then the default shape allows any string code with an open
-  // record context — no compile-time narrowing, just runtime values
-  assertEquals(error.context.whatever, "value");
-  assertEquals(error.context.count, 7);
+  // record context — runtime values come through unchanged
+  const kindWithContext = error.kind as {
+    code: string;
+    context: Record<string, unknown>;
+  };
+  assertEquals(kindWithContext.context.whatever, "value");
+  assertEquals(kindWithContext.context.count, 7);
 });
