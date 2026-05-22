@@ -486,6 +486,7 @@ interface RenderHumanPlanArgs {
 
 function renderHumanPlan(args: RenderHumanPlanArgs): void {
   const styler = makeStyler(args.colorEnabled);
+  console.log("");
   console.log(`${styler.bold("Plan (dry-run)")}:`);
   for (const entry of args.plan.awaitingRelease) {
     const firstStableMarker = entry.firstStable
@@ -495,6 +496,7 @@ function renderHumanPlan(args: RenderHumanPlanArgs): void {
       `  ${styler.bold(entry.package)} ${entry.version} → tag ${entry.tag}${firstStableMarker}`,
     );
   }
+  console.log("");
 }
 
 interface RenderHumanSummaryArgs {
@@ -523,25 +525,36 @@ function renderHumanSummary(args: RenderHumanSummaryArgs): void {
   if (args.pushedTagNames.length > 0) {
     segments.push(`pushed ${args.pushedTagNames.length}`);
   }
+  console.log("");
   console.log(`${styler.bold("✓")} ${segments.join(", ")}`);
 
   // First-stable celebration — per Algebra §3 no Record can produce
   // 1.0.0, so a tag at exactly 1.0.0 with no prior history is the
   // moment a Package crosses out of Unstable. Worth noting.
-  for (const entry of args.plan.awaitingRelease) {
-    if (entry.firstStable) {
+  const firstStableEntries = args.plan.awaitingRelease.filter(
+    (entry) => entry.firstStable,
+  );
+  if (firstStableEntries.length > 0) {
+    console.log("");
+    for (const entry of firstStableEntries) {
       console.log(
         `  ${styler.bold("🎉")} ${entry.package} promoted to 1.0.0 — first stable release`,
       );
     }
   }
 
-  for (const outcome of args.releaseOpOutcomes) {
-    if (outcome.ok) continue;
-    console.log(
-      `  ${styler.dim(`✗ ${outcome.package} (${outcome.tag})`)}: ${outcome.message ?? "release op failed"}`,
-    );
+  const failedOutcomes = args.releaseOpOutcomes.filter(
+    (outcome) => !outcome.ok,
+  );
+  if (failedOutcomes.length > 0) {
+    console.log("");
+    for (const outcome of failedOutcomes) {
+      console.log(
+        `  ${styler.dim(`✗ ${outcome.package} (${outcome.tag})`)}: ${outcome.message ?? "release op failed"}`,
+      );
+    }
   }
+  console.log("");
 }
 
 interface Styler {

@@ -323,6 +323,7 @@ export async function runVersion(
     const message = renderCommitMessage({
       plan,
       template: loadedConfig.git.commitMessageTemplate,
+      prunedUnresolved: options.prune && plan.unresolvedReferences.length > 0,
     });
     const commitResult = await commitChanges({
       repoRootPath,
@@ -504,6 +505,7 @@ interface RenderHumanPlanArgs {
 
 function renderHumanPlan(args: RenderHumanPlanArgs): void {
   const styler = makeStyler(args.colorEnabled);
+  console.log("");
   console.log(`${styler.bold("Plan (dry-run)")}:`);
   for (const pending of args.plan.pending) {
     console.log(
@@ -531,6 +533,7 @@ function renderHumanPlan(args: RenderHumanPlanArgs): void {
       );
     }
   }
+  console.log("");
 }
 
 interface RenderHumanSummaryArgs {
@@ -550,6 +553,7 @@ function renderHumanSummary(args: RenderHumanSummaryArgs): void {
       `  ${styler.bold(pending.package)} ${pending.currentVersion} → ${pending.projectedVersion} (${pending.bump})`,
     );
   }
+  console.log("");
   console.log(
     `${styler.bold("✓")} versioned ${bumpedPackageCount} package${
       bumpedPackageCount === 1 ? "" : "s"
@@ -557,6 +561,7 @@ function renderHumanSummary(args: RenderHumanSummaryArgs): void {
   );
   for (const line of summaryLines) console.log(line);
   if (args.cascadedUpdates.length > 0) {
+    console.log("");
     const dependentNames = [
       ...new Set(args.cascadedUpdates.map((update) => update.dependent)),
     ].join(", ");
@@ -568,6 +573,7 @@ function renderHumanSummary(args: RenderHumanSummaryArgs): void {
       )}`,
     );
   }
+  console.log("");
 }
 
 interface Styler {

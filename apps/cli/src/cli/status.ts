@@ -196,6 +196,8 @@ function renderHumanStatus(args: RenderHumanStatusArgs): void {
   const { plan, discoveredPackages, recordsListing, colorEnabled } = args;
   const styler = makeStyler(colorEnabled);
 
+  console.log("");
+
   if (discoveredPackages.length === 0) {
     console.log(styler.dim("no packages tracked"));
     console.log(
@@ -203,6 +205,7 @@ function renderHumanStatus(args: RenderHumanStatusArgs): void {
         ".changelog/config.yaml",
       )} to add some.`,
     );
+    console.log("");
     return;
   }
 
@@ -226,6 +229,7 @@ function renderHumanStatus(args: RenderHumanStatusArgs): void {
         styler,
       });
     }
+    console.log("");
     return;
   }
 
@@ -308,6 +312,7 @@ function renderHumanStatus(args: RenderHumanStatusArgs): void {
       styler,
     });
   }
+  console.log("");
 }
 
 interface RenderAwaitingReleaseTableArgs {

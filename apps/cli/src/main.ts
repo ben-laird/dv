@@ -8,7 +8,7 @@ import {
   type ReportErrorContext,
   renderCliError,
 } from "@seshat/cli";
-import { relative } from "@std/path";
+import { join, relative } from "@std/path";
 import { runAdd } from "./cli/add.ts";
 import { runInit } from "./cli/init.ts";
 import { runRelease } from "./cli/release.ts";
@@ -16,7 +16,7 @@ import { runStatus } from "./cli/status.ts";
 import { runValidate } from "./cli/validate.ts";
 import { runVersion } from "./cli/version.ts";
 import { CHANGE_TYPES, isChangeType } from "./domain/change-type.ts";
-import { configPath, recordsPath } from "./subtools/config/mod.ts";
+import { CONFIG_DIR, configPath, recordsPath } from "./subtools/config/mod.ts";
 
 const USAGE_TEXT = `dv — language-agnostic, git-native changelog CLI
 
@@ -36,14 +36,54 @@ Milestones 1–3 are landing; the rest of v1 follows specs/v1-scope.md.
 const DV_VERSION = "0.1.0";
 
 const initCommand = defineCommand({
-  flags: {},
-  usage: "Usage: dv init",
-  run: async ({ argv }) => {
+  flags: {
+    json: { kind: "boolean" },
+  },
+  usage: "Usage: dv init [--json]",
+  run: async ({ argv, flags }) => {
     if (argv.length > 0) {
       console.error(`dv init: unexpected arguments: ${argv.join(" ")}`);
       return 2;
     }
     const initResult = await runInit();
+    if (flags.json === true) {
+      // Structured success envelope — symmetric with the cli-error
+      // envelope so scripted scaffolding flows can read `created`
+      // vs `alreadyInitialized` directly without parsing stdout text.
+      const configRelative = relative(
+        initResult.repoRoot,
+        configPath(initResult.repoRoot),
+      );
+      const recordsRelative = `${relative(
+        initResult.repoRoot,
+        recordsPath(initResult.repoRoot),
+      )}/`;
+      const gitignoreRelative = relative(
+        initResult.repoRoot,
+        join(initResult.repoRoot, CONFIG_DIR, ".gitignore"),
+      );
+      const wasAlreadyInitialized =
+        !initResult.configCreated &&
+        !initResult.recordsDirCreated &&
+        !initResult.gitignoreCreated;
+      console.log(
+        JSON.stringify(
+          {
+            schema: "urn:dv:schema:v1:init-result",
+            repoRoot: initResult.repoRoot,
+            alreadyInitialized: wasAlreadyInitialized,
+            created: {
+              config: initResult.configCreated ? configRelative : null,
+              recordsDir: initResult.recordsDirCreated ? recordsRelative : null,
+              gitignore: initResult.gitignoreCreated ? gitignoreRelative : null,
+            },
+          },
+          null,
+          2,
+        ),
+      );
+      return 0;
+    }
     if (
       !initResult.configCreated &&
       !initResult.recordsDirCreated &&
