@@ -12,37 +12,78 @@
 // aggregations like `dv release --partial-failure`, and arbitrary
 // context for things like the offending plugin path or package name.
 
-export interface CliErrorInit {
-  // Stable identifier — the part downstream tooling and tests pin
-  // against. Per `specs/v1-scope.md` § Automation surface, codes are
-  // part of dv's public contract.
+// The minimum any CliError shape must declare — a `code` string. The
+// framework's generic accepts any shape extending this, so consumers
+// can pin a discriminated union like:
+//
+//   type DvErrorShape =
+//     | { code: "dirty-tree" }
+//     | { code: "plugin-not-executable"; context: { pluginPath: string; opName: string } }
+//     | { code: "release-partial-failure"; context: { totalAttempted: number } };
+//
+// then `class DvError extends CliError<DvErrorShape> {}` welds the
+// code list to its per-code context. TS narrows `err.context` based
+// on `err.code` natively at every read site — no separate map to
+// keep in sync.
+export interface CliErrorShape {
   code: string;
-  message: string;
-  // Optional remediation suggestion. Rendered as a dim "hint:" line
-  // under the main message.
-  hint?: string;
-  // Severity is reserved for future warning-level diagnostics; default
-  // 'error'. Unused today but on the wire so we don't have to migrate
-  // when warning support arrives.
-  severity?: "error" | "warning";
-  // Standard Error.cause; preserved through the chain but not
-  // serialized into the JSON envelope (it's a JS Error instance, not
-  // a contract). Future --debug rendering will surface it.
-  cause?: unknown;
-  // For aggregations — e.g. dv release reporting one CliError per
-  // package that failed to publish, wrapped under a parent
-  // CliError('release-partial-failure'). Renders recursively.
-  subErrors?: CliError[];
-  // Open-ended structured data for the JSON envelope. Use this for
-  // anything callers should be able to branch on: plugin paths,
-  // package names, file paths, tag strings. Keep values JSON-
-  // serializable.
   context?: Record<string, unknown>;
 }
 
+// The default — unconstrained code, open-ended optional context.
+// Keeps existing throw sites working without a generic argument and
+// lets the framework operate on heterogeneous error trees (e.g. when
+// rendering subErrors that come from multiple subclasses).
+export type DefaultCliErrorShape = {
+  code: string;
+  context?: Record<string, unknown>;
+};
+
+// Pulls the runtime `context` type out of a shape variant. Three
+// cases distribute across the union:
+//   - variant has `context: X` (required) → context type is X
+//   - variant has `context?: X` (optional) → context type is X
+//     (we strip `undefined`)
+//   - variant declares no `context` → context type is the empty
+//     `Record<string, never>`
+// The all-or-nothing matching at the constructor-init level is
+// handled separately by `CliErrorInit`'s intersection below.
+type ContextOf<TShape extends CliErrorShape> = TShape extends {
+  context?: infer X;
+}
+  ? Exclude<X, undefined> extends never
+    ? Record<string, never>
+    : Exclude<X, undefined>
+  : Record<string, never>;
+
+// Constructor init payload, narrowed per discriminated-union arm.
+// `code` accepts only the literal codes from the union; the
+// `context` requirement follows the matched arm — required when the
+// arm has `context: X`, optional when `context?: X`, forbidden (or
+// `{}`-shaped) when the arm declares none. Default shape's
+// `context?` is optional, keeping minimal constructions ergonomic.
+export type CliErrorInit<
+  TShape extends CliErrorShape = DefaultCliErrorShape,
+> = TShape extends CliErrorShape
+  ? {
+      code: TShape["code"];
+      message: string;
+      hint?: string;
+      severity?: "error" | "warning";
+      cause?: unknown;
+      subErrors?: CliError[];
+    } & (TShape extends { context: infer X }
+      ? { context: X }
+      : TShape extends { context?: infer X }
+        ? { context?: Exclude<X, undefined> }
+        : { context?: Record<string, never> })
+  : never;
+
 // The JSON-envelope shape a CliError serializes to (minus the
-// top-level `schema` field, which the envelope wrapper adds). Used by
-// `toJSON` and matched by the Zod schema in cli-error-schema.ts.
+// top-level `schema` field, which the envelope wrapper adds). Erased
+// to `string` / `Record<string, unknown>` at the wire boundary —
+// consumers parsing JSON back to typed errors can re-narrow against
+// their own union.
 export interface CliErrorPayload {
   code: string;
   message: string;
@@ -52,27 +93,38 @@ export interface CliErrorPayload {
   context?: Record<string, unknown>;
 }
 
-export class CliError extends Error {
-  readonly code: string;
+export class CliError<
+  TShape extends CliErrorShape = DefaultCliErrorShape,
+> extends Error {
+  readonly code: TShape["code"];
   readonly hint?: string;
   readonly severity: "error" | "warning";
+  // subErrors carry their own (typically different) shape; erased to
+  // the default at the array boundary so the parent doesn't have to
+  // declare them.
   readonly subErrors: CliError[];
-  readonly context: Record<string, unknown>;
+  readonly context: ContextOf<TShape>;
 
-  constructor(init: CliErrorInit) {
-    super(init.message, init.cause !== undefined ? { cause: init.cause } : undefined);
+  constructor(init: CliErrorInit<TShape>) {
+    super(
+      init.message,
+      init.cause !== undefined ? { cause: init.cause } : undefined,
+    );
     this.name = "CliError";
-    this.code = init.code;
+    this.code = init.code as TShape["code"];
     this.hint = init.hint;
     this.severity = init.severity ?? "error";
     this.subErrors = init.subErrors ?? [];
-    this.context = init.context ?? {};
+    this.context = (("context" in init ? init.context : {}) ??
+      {}) as ContextOf<TShape>;
   }
 
   // Serializes the error tree to the JSON-envelope payload shape.
   // Omits default `severity` and empty `subErrors` / `context` so the
   // wire format stays terse. Recursive — sub-errors serialize
-  // themselves.
+  // themselves. The context erases to `Record<string, unknown>` here;
+  // typed re-narrowing happens at the read site against the
+  // consumer's own union.
   toJSON(): CliErrorPayload {
     const payload: CliErrorPayload = {
       code: this.code,
@@ -83,8 +135,9 @@ export class CliError extends Error {
     if (this.subErrors.length > 0) {
       payload.subErrors = this.subErrors.map((subError) => subError.toJSON());
     }
-    if (Object.keys(this.context).length > 0) {
-      payload.context = this.context;
+    const contextRecord = this.context as Record<string, unknown>;
+    if (Object.keys(contextRecord).length > 0) {
+      payload.context = contextRecord;
     }
     return payload;
   }

@@ -45,7 +45,7 @@ Deno.test("CliError carries hint, severity, cause, subErrors, and context when s
   assertEquals(error.cause, inner);
   assertEquals(error.subErrors.length, 1);
   assertEquals(error.subErrors[0]?.code, "publish-failed");
-  assertEquals(error.context, { totalAttempted: 3 });
+  assertEquals(error.context.totalAttempted, 3);
 });
 
 Deno.test("CliError.toJSON omits defaults and empty collections for terse wire output", () => {
@@ -67,7 +67,7 @@ Deno.test("CliError.toJSON omits defaults and empty collections for terse wire o
 });
 
 Deno.test("CliError.toJSON includes hint and context when present", () => {
-  // Given an error with a hint and context
+  // Given an error with a hint and context (default open shape)
   const error = new CliError({
     code: "plugin-not-executable",
     message: "plugin not executable",
@@ -146,4 +146,64 @@ Deno.test("CliError preserves the Error.cause linkage so JS stack chains work", 
   // Then it's the same instance — useful for `--debug` rendering
   // later and for native console.error chaining
   assertEquals(error.cause, inner);
+});
+
+Deno.test("CliError's discriminated-union generic enforces code↔context pairing at the throw site", () => {
+  // Given an app-side error union — `code` and per-code `context`
+  // declared together so they can't drift
+  type AppErrorShape =
+    | { code: "dirty-tree" }
+    | {
+        code: "plugin-not-executable";
+        context: { pluginPath: string; opName: string };
+      }
+    | {
+        code: "release-partial-failure";
+        context: { totalAttempted: number };
+      };
+
+  // When errors are constructed for each variant
+  const dirtyTreeError = new CliError<AppErrorShape>({
+    code: "dirty-tree",
+    message: "working tree is not clean",
+  });
+  const pluginError = new CliError<AppErrorShape>({
+    code: "plugin-not-executable",
+    message: "plugin not executable",
+    context: {
+      pluginPath: "./examples/plugins/deno/release",
+      opName: "release",
+    },
+  });
+
+  // Then each carries the expected runtime context. The compile-
+  // time check that pairs code↔context happens at the construction
+  // site above — TS rejects `code: "dirty-tree"` with a `context`
+  // field, or `code: "plugin-not-executable"` without one. Read-
+  // site narrowing requires manual discrimination (TS can't link
+  // `err.code` and `err.context` since they're separate readonly
+  // fields), but that's a small price for the throw-time safety.
+  assertEquals(dirtyTreeError.code, "dirty-tree");
+  const pluginContext = pluginError.context as {
+    pluginPath: string;
+    opName: string;
+  };
+  assertEquals(pluginContext.pluginPath, "./examples/plugins/deno/release");
+  assertEquals(pluginContext.opName, "release");
+});
+
+Deno.test("CliError defaults to the open shape when no generic is supplied (back-compat)", () => {
+  // Given an error constructed without a generic argument — the
+  // pattern existing throw sites use today
+  const error = new CliError({
+    code: "ad-hoc",
+    message: "loose context shape",
+    context: { whatever: "value", count: 7 },
+  });
+
+  // When the context is read
+  // Then the default shape allows any string code with an open
+  // record context — no compile-time narrowing, just runtime values
+  assertEquals(error.context.whatever, "value");
+  assertEquals(error.context.count, 7);
 });

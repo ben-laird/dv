@@ -19,4 +19,6 @@ export {
   CliError,
   type CliErrorInit,
   type CliErrorPayload,
+  type CliErrorShape,
+  type DefaultCliErrorShape,
 } from "./errors.ts";
