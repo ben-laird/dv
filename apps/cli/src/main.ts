@@ -3,21 +3,25 @@
 
 import { parseArgs } from "@std/cli/parse-args";
 import { relative } from "@std/path";
+import { runAdd } from "./cli/add.ts";
 import { runInit } from "./cli/init.ts";
 import { runStatus } from "./cli/status.ts";
+import { runValidate } from "./cli/validate.ts";
+import { CHANGE_TYPES, isChangeType } from "./domain/change-type.ts";
 import { DvError } from "./domain/errors.ts";
 import { configPath, recordsPath } from "./subtools/config/mod.ts";
 
 const USAGE_TEXT = `dv — language-agnostic, git-native changelog CLI
 
 Usage:
-  dv init             Scaffold .changelog/config.yaml and records/ dir
-  dv status [--json]  Show what dv would do (read-only)
-  dv --help           Show this message
-  dv --version        Show the dv version
+  dv init                              Scaffold .changelog/config.yaml + records/
+  dv status [--json]                   Show what dv would do (read-only)
+  dv add [--type T --packages P …]     File a Record (interactive or flag-driven)
+  dv validate [--json]                 Lint records and config (CI-friendly)
+  dv --help                            Show this message
+  dv --version                         Show the dv version
 
-Milestone 1 ships init + status (discover); the rest of the command set
-arrives in later milestones (see specs/v1-scope.md).
+Milestones 1 and 2 are landing; the rest of v1 follows specs/v1-scope.md.
 `;
 
 const DV_VERSION = "0.0.0";
@@ -39,6 +43,10 @@ export async function main(argv: string[]): Promise<number> {
         return await runInitCommand(subcommandArgv);
       case "status":
         return await runStatusCommand(subcommandArgv);
+      case "add":
+        return await runAddCommand(subcommandArgv);
+      case "validate":
+        return await runValidateCommand(subcommandArgv);
       default:
         console.error(`dv: unknown command '${subcommandName}'`);
         console.error(`run 'dv --help' for usage`);
@@ -101,6 +109,108 @@ async function runStatusCommand(subcommandArgv: string[]): Promise<number> {
   });
   await runStatus({ emitJson: parsedFlags.json, colorEnabled });
   return 0;
+}
+
+async function runAddCommand(subcommandArgv: string[]): Promise<number> {
+  const parsedFlags = parseArgs(subcommandArgv, {
+    string: ["type", "message", "notes"],
+    collect: ["packages", "links"],
+    boolean: ["stage", "no-stage", "help"],
+    alias: { h: "help" },
+    unknown: (flagName) => {
+      if (flagName.startsWith("-")) {
+        console.error(`dv add: unknown flag '${flagName}'`);
+        Deno.exit(2);
+      }
+      return true;
+    },
+  });
+  if (parsedFlags.help) {
+    console.log(
+      "Usage: dv add [--type <t>] [--packages <p>...] [--message <m>] [--links <url>...] [--notes <text>] [--stage | --no-stage]",
+    );
+    return 0;
+  }
+
+  const rawChangeType = parsedFlags.type;
+  if (rawChangeType !== undefined && !isChangeType(rawChangeType)) {
+    console.error(
+      `dv add: --type must be one of ${CHANGE_TYPES.join(", ")} (got '${rawChangeType}')`,
+    );
+    return 2;
+  }
+
+  const packageNames = expandCommaSeparated(
+    parsedFlags.packages as string[] | undefined,
+  );
+  const links = expandCommaSeparated(parsedFlags.links as string[] | undefined);
+
+  const stageOverride =
+    parsedFlags["no-stage"] === true
+      ? false
+      : parsedFlags.stage === true
+        ? true
+        : undefined;
+
+  const addResult = await runAdd({
+    changeType: rawChangeType,
+    packageNames,
+    message: parsedFlags.message,
+    links,
+    notes: parsedFlags.notes,
+    stageOverride,
+  });
+
+  const relativeRecordPath = relative(
+    addResult.repoRootPath,
+    addResult.recordPath,
+  );
+  console.log(
+    `created ${relativeRecordPath}${addResult.staged ? " (staged)" : ""}`,
+  );
+  return 0;
+}
+
+async function runValidateCommand(subcommandArgv: string[]): Promise<number> {
+  const parsedFlags = parseArgs(subcommandArgv, {
+    boolean: ["json", "help", "color", "no-color"],
+    alias: { h: "help" },
+    unknown: (flagName) => {
+      if (flagName.startsWith("-")) {
+        console.error(`dv validate: unknown flag '${flagName}'`);
+        Deno.exit(2);
+      }
+      return true;
+    },
+  });
+  if (parsedFlags.help) {
+    console.log("Usage: dv validate [--json] [--no-color]");
+    return 0;
+  }
+  const colorEnabled = resolveColorEnabled({
+    forceColor: parsedFlags.color === true,
+    suppressColor: parsedFlags["no-color"] === true,
+    emitJson: parsedFlags.json === true,
+  });
+  const validateResult = await runValidate({
+    emitJson: parsedFlags.json,
+    colorEnabled,
+  });
+  return validateResult.exitCode;
+}
+
+function expandCommaSeparated(
+  rawValues: string[] | undefined,
+): string[] | undefined {
+  if (rawValues === undefined) return undefined;
+  const expanded: string[] = [];
+  for (const rawValue of rawValues) {
+    for (const part of rawValue.split(",")) {
+      const trimmedPart = part.trim();
+      if (trimmedPart.length > 0) expanded.push(trimmedPart);
+    }
+  }
+  return expanded.length > 0 ? expanded : undefined;
 }
 
 interface ResolveColorEnabledArgs {
