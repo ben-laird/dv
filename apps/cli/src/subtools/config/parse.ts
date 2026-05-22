@@ -4,11 +4,13 @@ import type { z } from "zod";
 import type { Config } from "../../domain/config.ts";
 import { ConfigError } from "../../domain/errors.ts";
 import { defaults } from "./defaults.ts";
-import { type RawConfigLayer, rawConfigLayerSchema } from "./schema.ts";
+import { type ParsedConfigLayer, parsedConfigLayerSchema } from "./schema.ts";
 
 // Loads `.changelog/config.yaml` (or any path), follows the extends chain,
-// merges per-section, and applies defaults. Each layer is validated through
-// the Zod schema in ./schema.ts, which doubles as the kebab→camel mapper.
+// merges per-section, and applies defaults. Each layer is validated and
+// kebab→camel transformed through `parsedConfigLayerSchema` from
+// ./schema.ts; the merger only has to read the (already-camelCased) typed
+// shape.
 //
 // Errors surface as ConfigError with a stable `code` so `--json` consumers
 // can distinguish "config-not-found" from "config-shape" from
@@ -18,11 +20,11 @@ export async function loadConfig(configFilePath: string): Promise<Config> {
   const absoluteConfigFilePath = isAbsolute(configFilePath)
     ? configFilePath
     : resolve(configFilePath);
-  const layeredRawConfigs = await loadExtendsChain({
+  const layeredParsedConfigs = await loadExtendsChain({
     configFilePath: absoluteConfigFilePath,
     visitedPaths: new Set(),
   });
-  return mergeIntoDefaults(layeredRawConfigs);
+  return mergeIntoDefaults(layeredParsedConfigs);
 }
 
 interface LoadExtendsChainArgs {
@@ -32,7 +34,7 @@ interface LoadExtendsChainArgs {
 
 async function loadExtendsChain(
   args: LoadExtendsChainArgs,
-): Promise<RawConfigLayer[]> {
+): Promise<ParsedConfigLayer[]> {
   const { configFilePath, visitedPaths } = args;
   if (visitedPaths.has(configFilePath)) {
     throw new ConfigError(
@@ -45,20 +47,20 @@ async function loadExtendsChain(
   const rawText = await readFileOrConfigError(configFilePath);
   const parsedLayer = parseYamlAsLayer({ rawText, configFilePath });
 
-  const layeredRawConfigs: RawConfigLayer[] = [];
+  const layeredParsedConfigs: ParsedConfigLayer[] = [];
   for (const extendsRef of normalizeExtendsList(parsedLayer.extends)) {
     const resolvedExtendsPath = isAbsolute(extendsRef)
       ? extendsRef
       : resolve(dirname(configFilePath), extendsRef);
-    layeredRawConfigs.push(
+    layeredParsedConfigs.push(
       ...(await loadExtendsChain({
         configFilePath: resolvedExtendsPath,
         visitedPaths: new Set(visitedPaths),
       })),
     );
   }
-  layeredRawConfigs.push(parsedLayer);
-  return layeredRawConfigs;
+  layeredParsedConfigs.push(parsedLayer);
+  return layeredParsedConfigs;
 }
 
 async function readFileOrConfigError(configFilePath: string): Promise<string> {
@@ -80,7 +82,7 @@ interface ParseYamlAsLayerArgs {
   configFilePath: string;
 }
 
-function parseYamlAsLayer(args: ParseYamlAsLayerArgs): RawConfigLayer {
+function parseYamlAsLayer(args: ParseYamlAsLayerArgs): ParsedConfigLayer {
   const { rawText, configFilePath } = args;
   let parsedYaml: unknown;
   try {
@@ -94,10 +96,10 @@ function parseYamlAsLayer(args: ParseYamlAsLayerArgs): RawConfigLayer {
     );
   }
   if (parsedYaml === null || parsedYaml === undefined) {
-    return {};
+    return {} as ParsedConfigLayer;
   }
 
-  const validationResult = rawConfigLayerSchema.safeParse(parsedYaml);
+  const validationResult = parsedConfigLayerSchema.safeParse(parsedYaml);
   if (!validationResult.success) {
     throw configErrorFromZod({
       issues: validationResult.error.issues,
@@ -108,14 +110,14 @@ function parseYamlAsLayer(args: ParseYamlAsLayerArgs): RawConfigLayer {
 }
 
 function normalizeExtendsList(
-  extendsValue: RawConfigLayer["extends"],
+  extendsValue: ParsedConfigLayer["extends"],
 ): string[] {
   if (extendsValue === undefined) return [];
   return Array.isArray(extendsValue) ? extendsValue : [extendsValue];
 }
 
 interface ConfigErrorFromZodArgs {
-  issues: z.ZodIssue[];
+  issues: z.core.$ZodIssue[];
   configFilePath: string;
 }
 
@@ -140,16 +142,16 @@ function configErrorFromZod(args: ConfigErrorFromZodArgs): ConfigError {
   );
 }
 
-function mergeIntoDefaults(layeredRawConfigs: RawConfigLayer[]): Config {
+function mergeIntoDefaults(layeredParsedConfigs: ParsedConfigLayer[]): Config {
   const mergedConfig = defaults();
-  for (const layer of layeredRawConfigs) {
+  for (const layer of layeredParsedConfigs) {
     applyLayerOntoConfig({ layer, mergedConfig });
   }
   return mergedConfig;
 }
 
 interface ApplyLayerOntoConfigArgs {
-  layer: RawConfigLayer;
+  layer: ParsedConfigLayer;
   mergedConfig: Config;
 }
 
