@@ -51,8 +51,21 @@ can be reviewed in a "Release PR" before tags get cut and publishes fire.
 
 ## Status
 
-In design. Nothing implemented yet. See [specs/v1-scope.md](specs/v1-scope.md)
-for what's planned and in what order.
+Milestone 1 ships: `dv init`, `dv status`, and plugin-driven package
+discovery work today. The rest of v1 — authoring records, version bumps,
+CHANGELOG rendering, tagging, and release — is in flight per
+[specs/v1-scope.md](specs/v1-scope.md).
+
+Try it from the repo:
+
+```sh
+deno task install   # adds `dv` to your PATH (runs in-tree source)
+dv --help
+dv status           # lists packages discovered by the example plugin
+```
+
+Contributing: see [CONVENTIONS.md](CONVENTIONS.md) for toolchain (Biome +
+`deno lint`), test layout, and the Zod-generates-JSON-Schema flow.
 
 ## Docs
 
