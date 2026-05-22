@@ -51,7 +51,15 @@ These are not up for re-litigation without explicit conversation:
 
 - **Monorepo-first.** Single-package repos work as a degenerate case.
 - **Git-coupled.** The tool assumes a git repo and uses it directly.
-- **Strict Conventional Commits + SemVer.** No escape hatches in v1.
+- **Strict SemVer; CC-compatible Record vocabulary.** Records carry a
+  `type` field drawn from a Conventional Commits subset (`feat`, `fix`,
+  `feat!`, `fix!`) — that vocabulary is fixed. But `dv` **never parses
+  commit messages**: Records are the authoritative declaration of intent,
+  and contributors can write commits however they like. Teams already on
+  CC get bonus affordances (planned: `dv record from-commit`, drafting
+  Records from CC-formatted history); teams that aren't lose nothing.
+  CC is an accelerator, not a gate. See `specs/design.md` § Records over
+  commit messages.
 - **Plugins are executables.** Shebang-routed; no host-language lock-in.
   v1 ships no first-party builtins, so plugin DX is load-bearing:
   `dv plugin invoke` (test one op), `dv plugin verify` (conformance vs
@@ -75,8 +83,10 @@ These are not up for re-litigation without explicit conversation:
 - **Per-package CHANGELOG.md and per-package git tags** (`pkg-name@1.2.3`).
 - **Constraint-only cascading.** When a dep bumps, its consumers' manifests
   get the new constraint, but consumers themselves do not auto-bump.
-- **Only `feat`, `fix`, and breaking variants accepted in records.** Other
-  CC types (`chore`, `docs`, etc.) live in git history, not CHANGELOG.
+- **Only bump-producing Record types are accepted.** Records carry one of
+  `feat`, `fix`, `feat!`, `fix!`. Non-bump categories (`chore`, `docs`,
+  `refactor`, etc.) are deliberately *not* a thing in `dv` — internal
+  churn lives in git history, not CHANGELOG.
 - **Config is YAML only.** No TypeScript, JSON, or other config formats. See
   `specs/design.md` § Config format for the trade-offs.
 - **Capability decomposition.** `dv` is built as independent subtool
@@ -116,7 +126,7 @@ These are not up for re-litigation without explicit conversation:
 
 - Not a replacement for `npm publish` / `cargo publish` / etc. Those happen
   inside release plugins.
-- Not an opinionated workflow tool beyond CC + SemVer.
+- Not an opinionated workflow tool beyond SemVer + a small Record-type vocabulary.
 - Not a roadmap tool *yet* — that's a deliberate v2 scope (see `specs/design.md`).
 
 ## Notes for implementation

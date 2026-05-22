@@ -17,6 +17,13 @@ CHANGELOG entries and version bumps.
 Heavily inspired by [changesets](https://github.com/changesets/changesets),
 but extends the model to any ecosystem via executable plugins.
 
+**Works with any commit style.** `dv` reads Records, not commit messages
+— so contributors write changelog intent for users, and commit messages
+for reviewers, and neither has to compromise. Teams already on
+[Conventional Commits](https://www.conventionalcommits.org) will get
+bonus affordances (drafting Records from CC commits is on the roadmap),
+but CC is never required.
+
 ## Quick example
 
 A contributor adds a record alongside their PR:
