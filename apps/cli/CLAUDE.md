@@ -1,21 +1,26 @@
-# src/ — implementation conventions
+# apps/cli/ — implementation conventions
 
-Loaded automatically when working inside `src/`. Assumes you've read
+Loaded automatically when working inside `apps/cli/`. Assumes you've read
 `.claude/CLAUDE.md` and `specs/language.md`.
+
+This is the `dv` CLI: the primary workspace member. Source lives under
+`apps/cli/src/`; the package's own `deno.json` declares its name, exports,
+and tasks. The repo's shared imports, fmt, and lint live in the root
+`deno.json`.
 
 ## Architecture
 
 `dv` is built as the subtool decomposition from `specs/design.md`. One module
 per capability; commands compose them and hold no domain logic of their own.
 
-- `subtools/discovery` — run discover plugins, resolve the Package set.
-- `subtools/changesets` — author, parse, and validate Records.
-- `subtools/versioning` — the **pure algebra**: `classify`, `apply`,
+- `src/subtools/discovery` — run discover plugins, resolve the Package set.
+- `src/subtools/changesets` — author, parse, and validate Records.
+- `src/subtools/versioning` — the **pure algebra**: `classify`, `apply`,
   `aggregate`, bump-join (`specs/language.md` § Operations). No IO here.
-- `subtools/changelog` — render CHANGELOG sections (Keep a Changelog).
-- `subtools/tagging` — Tag formatting + git tag IO.
-- `subtools/publishing` — invoke the release plugin.
-- `cli/` — one thin orchestration per command (`init`, `add`, `status`,
+- `src/subtools/changelog` — render CHANGELOG sections (Keep a Changelog).
+- `src/subtools/tagging` — Tag formatting + git tag IO.
+- `src/subtools/publishing` — invoke the release plugin.
+- `src/cli/` — one thin orchestration per command (`init`, `add`, `status`,
   `validate`, `version`, `release`, `v1`, `rename`, `plugin …`).
 
 ## Invariants to preserve
@@ -38,7 +43,7 @@ per capability; commands compose them and hold no domain logic of their own.
 
 ## Toolchain
 
-- TypeScript on Deno. Prefer the std modules wired in `deno.json`:
+- TypeScript on Deno. Prefer the std modules wired in the root `deno.json`:
   `@std/semver` (Versions/Bumps), `@std/front-matter` (Records),
   `@std/yaml` (config), `@std/cli` (arg parsing), `@std/path`, `@std/fs`.
 - Model the domains from `language.md` as types — `Bump` as a 3-value union,
