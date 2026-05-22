@@ -5,7 +5,7 @@
   "tasks": {
     "dv": "deno run -A src/main.ts",
     "test": "deno test -A",
-    "check": "deno check src/main.ts src/scripts/generate-schemas.ts src/scripts/install-dev-shim.ts",
+    "check": "deno check src/main.ts src/scripts/generate-schemas.ts src/scripts/install-dev-shim.ts src/scripts/gate.ts",
     "compile": "deno compile -A -o ../../dist/dv src/main.ts"
   },
   "imports": {

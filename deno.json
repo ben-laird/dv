@@ -15,7 +15,8 @@
     "uninstall": "deno run -A apps/cli/src/scripts/install-dev-shim.ts --uninstall",
     "schemas:generate": "deno run -A apps/cli/src/scripts/generate-schemas.ts generate",
     "schemas:check": "deno run -A apps/cli/src/scripts/generate-schemas.ts check",
-    "verify": "deno task fmt:check && deno task lint && deno task check && deno task test && deno task schemas:check"
+    "verify": "deno task fmt:check && deno task lint && deno task check && deno task test && deno task schemas:check",
+    "gate": "deno run -A apps/cli/src/scripts/gate.ts"
   },
   "imports": {
     "@std/assert": "jsr:@std/assert@^1",
