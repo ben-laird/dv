@@ -1,0 +1,13 @@
+{
+  "name": "@seshat/docs",
+  "version": "0.0.0",
+  "nodeModulesDir": "auto",
+  "tasks": {
+    "dev": "deno run -A npm:vitepress dev",
+    "build": "deno run -A npm:vitepress build",
+    "preview": "deno run -A npm:vitepress preview"
+  },
+  "imports": {
+    "vitepress": "npm:vitepress@^1"
+  }
+}
