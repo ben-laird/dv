@@ -1,0 +1,35 @@
+{
+  "name": "@seshat/dv",
+  "version": "0.0.0",
+  "exports": "./src/main.ts",
+  "tasks": {
+    "dv": "deno run -A src/main.ts",
+    "test": "deno test -A",
+    "check": "deno check src/main.ts",
+    "fmt": "deno fmt",
+    "lint": "deno lint",
+    "compile": "deno compile -A -o dist/dv src/main.ts"
+  },
+  "imports": {
+    "@std/cli": "jsr:@std/cli@^1",
+    "@std/fs": "jsr:@std/fs@^1",
+    "@std/path": "jsr:@std/path@^1",
+    "@std/yaml": "jsr:@std/yaml@^1",
+    "@std/front-matter": "jsr:@std/front-matter@^1",
+    "@std/semver": "jsr:@std/semver@^1"
+  },
+  "fmt": {
+    "lineWidth": 80,
+    "indentWidth": 2,
+    "semiColons": true,
+    "singleQuote": false
+  },
+  "lint": {
+    "rules": { "tags": ["recommended"] }
+  },
+  "compilerOptions": {
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true
+  }
+}
