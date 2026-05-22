@@ -1,7 +1,13 @@
 // dv entry point. Subcommands are CommandSpec objects passed to
 // `defineCli` from @seshat/cli; this file is glue, not dispatch.
 
-import { defineCli, defineCommand } from "@seshat/cli";
+import {
+  CliError,
+  defineCli,
+  defineCommand,
+  type ReportErrorContext,
+  renderCliError,
+} from "@seshat/cli";
 import { relative } from "@std/path";
 import { runAdd } from "./cli/add.ts";
 import { runInit } from "./cli/init.ts";
@@ -10,7 +16,6 @@ import { runStatus } from "./cli/status.ts";
 import { runValidate } from "./cli/validate.ts";
 import { runVersion } from "./cli/version.ts";
 import { CHANGE_TYPES, isChangeType } from "./domain/change-type.ts";
-import { DvError } from "./domain/errors.ts";
 import { configPath, recordsPath } from "./subtools/config/mod.ts";
 
 const USAGE_TEXT = `dv — language-agnostic, git-native changelog CLI
@@ -271,41 +276,92 @@ function resolveColorEnabled(args: ResolveColorEnabledArgs): boolean {
   return Deno.stdout.isTerminal();
 }
 
-function reportDvError(
-  caughtError: unknown,
-  _ctx: { mode: "human" | "json" },
-): void {
-  // EC7 will route through @seshat/cli's renderCliError for proper
-  // human-vs-JSON output. For now keep the minimal `dv: <message>`
-  // line so the framework's wrapped CliError still surfaces something
-  // useful.
-  if (caughtError instanceof DvError) {
-    console.error(`dv: ${caughtError.message}`);
-    return;
-  }
-  if (caughtError instanceof Error) {
-    console.error(`dv: ${caughtError.message}`);
-    return;
-  }
-  console.error(`dv: ${String(caughtError)}`);
+// Pre-scans the argv before the framework dispatches so the error
+// reporter knows whether to emit a JSON envelope or human stderr
+// when a runner throws. The pre-scan is conservative: a literal
+// `--json` token anywhere in the trailing argv (after the
+// subcommand) flips the mode. False positives (e.g. `dv add
+// --message "--json"`) are tolerable — `dv add` doesn't accept
+// `--json` so the value can't legitimately appear there.
+//
+// The framework's own `ctx.mode` is hardcoded to "human" (it
+// doesn't know which command's `--json` flag is the relevant
+// one). dv resolves the mode at the binary boundary instead.
+interface DetectReportModeArgs {
+  argv: string[];
 }
 
-const cli = defineCli({
-  name: "dv",
-  version: DV_VERSION,
-  usage: USAGE_TEXT,
-  commands: {
-    init: initCommand,
-    status: statusCommand,
-    add: addCommand,
-    validate: validateCommand,
-    version: versionCommand,
-    release: releaseCommand,
-  },
-  reportError: reportDvError,
-});
+interface DetectedReportMode {
+  emitJson: boolean;
+  colorEnabled: boolean;
+}
+
+function detectReportMode(args: DetectReportModeArgs): DetectedReportMode {
+  const emitJson = args.argv.includes("--json");
+  const suppressColor =
+    args.argv.includes("--no-color") || Deno.env.get("NO_COLOR") !== undefined;
+  // Errors render to stderr; mirror the stdout TTY check used by
+  // the success-path renderers so the color decision stays
+  // consistent (a redirected stdout almost always means a piped
+  // run, where color escapes corrupt downstream parsing).
+  const colorEnabled = emitJson
+    ? false
+    : suppressColor
+      ? false
+      : Deno.stderr.isTerminal();
+  return { emitJson, colorEnabled };
+}
+
+function makeReportDvError(
+  detectedMode: DetectedReportMode,
+): (caughtError: unknown, ctx: ReportErrorContext) => void {
+  return (caughtError, _ctx) => {
+    // The framework hands us a CliError (it auto-wraps non-
+    // CliError throws via `code: "unknown"`), so we never need to
+    // re-narrow here. We ignore the framework's ctx.mode — dv
+    // resolves mode at the argv boundary, not per-command, so the
+    // pre-scanned value is authoritative.
+    if (!(caughtError instanceof CliError)) {
+      // Defensive fallback for the (impossible-per-contract)
+      // case the framework doesn't pre-wrap.
+      console.error(`dv: ${String(caughtError)}`);
+      return;
+    }
+    const rendered = renderCliError({
+      err: caughtError,
+      mode: detectedMode.emitJson ? "json" : "human",
+      colorEnabled: detectedMode.colorEnabled,
+    });
+    if (detectedMode.emitJson) {
+      // JSON mode goes to stderr verbatim — the consumer parses
+      // the envelope from stderr while normal command output
+      // (which may itself be JSON) flows on stdout.
+      console.error(rendered);
+    } else {
+      // Human mode: prefix the binary name so output looks like
+      // `dv error[dirty-tree]: working tree is not clean`. The
+      // renderer leaves the prefix to the consumer.
+      console.error(`dv ${rendered}`);
+    }
+  };
+}
 
 export function main(argv: string[]): Promise<number> {
+  const detectedMode = detectReportMode({ argv });
+  const cli = defineCli({
+    name: "dv",
+    version: DV_VERSION,
+    usage: USAGE_TEXT,
+    commands: {
+      init: initCommand,
+      status: statusCommand,
+      add: addCommand,
+      validate: validateCommand,
+      version: versionCommand,
+      release: releaseCommand,
+    },
+    reportError: makeReportDvError(detectedMode),
+  });
   return cli.run(argv);
 }
 
