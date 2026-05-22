@@ -32,21 +32,22 @@ the last.
 
 From the repo root:
 
-| Task                          | What it does                                              |
-| ----------------------------- | --------------------------------------------------------- |
-| `deno task dv -- <args>`      | Run the in-tree `dv` CLI (one-off).                       |
-| `deno task install`           | `deno install -g -A -f --name dv …` — puts `dv` on PATH.  |
-| `deno task uninstall`         | Removes the installed `dv` shim.                          |
-| `deno task fmt`               | Biome format (write).                                     |
-| `deno task fmt:check`         | Biome format (check only, for CI).                        |
-| `deno task lint`              | Biome lint **and** `deno lint` — both must pass.          |
-| `deno task lint:biome`        | Biome-only lint (debug helper).                           |
-| `deno task lint:deno`         | `deno lint`-only (debug helper).                          |
-| `deno task lint:fix`          | Apply Biome's safe fixes, then run `deno lint`.           |
-| `deno task check`             | Per-workspace `deno check`.                               |
-| `deno task test`              | Run the whole test suite (`deno test -A`).                |
-| `deno task schemas:generate`  | Emit `specs/schemas/*.json` from the Zod source.          |
-| `deno task schemas:check`     | CI gate: re-generate in memory; fail if diff vs disk.     |
+| Task                          | What it does                                                         |
+| ----------------------------- | -------------------------------------------------------------------- |
+| `deno task dv -- <args>`      | Run the in-tree `dv` CLI (one-off).                                  |
+| `deno task install`           | `deno install -g -A -f --name dv …` — puts `dv` on PATH.             |
+| `deno task uninstall`         | Removes the installed `dv` shim.                                     |
+| `deno task fmt`               | Biome format (write).                                                |
+| `deno task fmt:check`         | Biome format (check only, for CI).                                   |
+| `deno task lint`              | Biome lint **and** `deno lint` — both must pass.                     |
+| `deno task lint:biome`        | Biome-only lint (debug helper).                                      |
+| `deno task lint:deno`         | `deno lint`-only (debug helper).                                     |
+| `deno task lint:fix`          | Apply Biome's safe fixes, then run `deno lint`.                      |
+| `deno task check`             | Per-workspace `deno check`.                                          |
+| `deno task test`              | Run the whole test suite (`deno test -A`).                           |
+| `deno task schemas:generate`  | Emit `specs/schemas/*.json` from the Zod source.                     |
+| `deno task schemas:check`     | CI gate: re-generate in memory; fail if diff vs disk.                |
+| `deno task verify`            | All gates in sequence (fmt:check, lint, check, test, schemas:check). |
 
 The `install` task is what to use when iterating on TTY output — colors,
 prompts, banners. The installed shim runs the in-tree source, so edits

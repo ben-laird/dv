@@ -14,7 +14,8 @@
     "install": "deno install -g -A -f --name dv --config deno.json apps/cli/src/main.ts",
     "uninstall": "deno uninstall -g dv",
     "schemas:generate": "deno run -A apps/cli/src/scripts/generate-schemas.ts generate",
-    "schemas:check": "deno run -A apps/cli/src/scripts/generate-schemas.ts check"
+    "schemas:check": "deno run -A apps/cli/src/scripts/generate-schemas.ts check",
+    "verify": "deno task fmt:check && deno task lint && deno task check && deno task test && deno task schemas:check"
   },
   "imports": {
     "@std/assert": "jsr:@std/assert@^1",
