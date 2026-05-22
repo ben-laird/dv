@@ -1,5 +1,6 @@
 import type { ChangeType } from "../domain/change-type.ts";
 import { DvError } from "../domain/errors.ts";
+import { parseEditorCommand } from "./parse-editor-command.ts";
 
 // Opens the user's editor on a contextual template for `dv add`'s
 // interactive flow (specs/cli.md § dv add). Resolution chain:
@@ -7,6 +8,12 @@ import { DvError } from "../domain/errors.ts";
 // Windows). HTML-comment blocks are stripped from the result; an
 // empty body after stripping signals "abort with no file written"
 // to the caller.
+//
+// The editor value goes through a POSIX-style tokenizer
+// (parse-editor-command.ts) so quoted paths, escaped spaces, and
+// single-quoted args all behave the way `$EDITOR` does in any other
+// tool. Falls back to the platform default if EDITOR / VISUAL parse
+// fails or is empty.
 
 interface OpenEditorForRecordBodyArgs {
   changeType: ChangeType;
@@ -85,12 +92,24 @@ interface EditorCommandSpec {
 
 function resolveEditorCommand(): EditorCommandSpec {
   const envEditor = Deno.env.get("EDITOR") ?? Deno.env.get("VISUAL");
-  if (envEditor && envEditor.trim().length > 0) {
-    const parts = envEditor.trim().split(/\s+/);
-    return {
-      command: parts[0]!,
-      commandArgs: parts.slice(1),
-    };
+  if (envEditor !== undefined && envEditor.trim().length > 0) {
+    try {
+      return parseEditorCommand(envEditor);
+    } catch (caughtError) {
+      // Fall through to the platform default on a parse failure so a
+      // malformed EDITOR doesn't deadlock dv. The original error is
+      // re-thrown with context so the user sees the actual problem.
+      if (
+        caughtError instanceof DvError &&
+        caughtError.code === "editor-parse"
+      ) {
+        throw new DvError(
+          "editor-parse",
+          `EDITOR='${envEditor}' did not parse: ${caughtError.message}`,
+        );
+      }
+      throw caughtError;
+    }
   }
   const isWindows = Deno.build.os === "windows";
   return { command: isWindows ? "notepad" : "vi", commandArgs: [] };
