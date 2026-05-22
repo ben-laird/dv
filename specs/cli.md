@@ -155,8 +155,9 @@ the aggregated Bump, rewrites the manifest Version, prepends CHANGELOG
 entries (and HISTORY entries when `history.enabled: true` in config),
 updates dependents' constraints (constraint-only cascade), and deletes the
 consumed Records. Auto-commits the result by default with a templated
-Conventional-Commits message. **Does not push.** The commit it produces is
-the Release PR.
+message (CC-shaped — an emission convention only; `dv` never parses
+contributor commits). **Does not push.** The commit it produces is the
+Release PR.
 
 Halts on an Unresolved Reference (a Record pointing at a Package that no
 longer exists with no Rename edge); `--prune` drops such Records instead.

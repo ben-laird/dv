@@ -36,10 +36,10 @@ YAML, between `---` delimiters at the top of the file.
 
 ### Required fields
 
-| Field      | Type            | Description                                                            |
-| ---------- | --------------- | ---------------------------------------------------------------------- |
-| `type`     | string          | Conventional Commits type. One of: `feat`, `fix`, `feat!`, `fix!`.     |
-| `packages` | list of strings | Package names this record affects. Must match config-known packages.|
+| Field      | Type            | Description                                                                                                                              |
+| ---------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `type`     | string          | Change Type. One of: `feat`, `fix`, `feat!`, `fix!` (vocabulary borrowed from Conventional Commits; commits themselves are never parsed). |
+| `packages` | list of strings | Package names this record affects. Must match config-known packages.                                                                     |
 
 A file with `type: feat` and three packages bumps all three by minor.
 

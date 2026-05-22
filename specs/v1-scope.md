@@ -63,7 +63,9 @@ agent-specific.
 
 ### Behavior
 
-- Strict CC + SemVer mapping; only `feat`, `fix`, breaking variants accepted
+- Strict SemVer mapping over the Record-type vocabulary (`feat`, `fix`,
+  `feat!`, `fix!`); no commit-message parsing. CC compatibility is
+  vocabulary-only, not a contributor requirement.
 - Pre-1.0 strict semver: bumps stay in 0.x.y, breaking changes bump minor
   (capped from major), same as `feat`
 - Constraint-only cascading (dependents' manifests updated; versions are not)
@@ -87,8 +89,12 @@ Not v1, but the architecture leaves room for each:
 - **Pre-release tracks** — alpha/beta/rc handling.
 - **Aggregate root CHANGELOG.md** — opt-in, "what shipped across the repo."
 - **Full cascading bumps** — opt-in policy for auto-bumping dependents.
-- **Inclusion of non-bump CC types in CHANGELOG** — opt-in "include
-  refactors/docs" mode.
+- **Inclusion of non-bump Record types in CHANGELOG** — opt-in "include
+  refactors/docs" mode (would extend the Record-type vocabulary beyond
+  the current bump-producing subset).
+- **CC-accelerator affordances** — `dv record from-commit <sha>` /
+  `from-range <range>` to draft Records from Conventional Commits
+  history. See `design.md` § Records over commit messages.
 - **GitHub Actions companion** — bot/action that maintains a Release PR.
 
 ## Non-goals (probably forever)
@@ -96,7 +102,9 @@ Not v1, but the architecture leaves room for each:
 - Replacing publish mechanisms (`npm publish`, `cargo publish`, etc.). Those
   belong inside release plugins.
 - Supporting VCSes other than git.
-- Imposing workflow opinions beyond CC + SemVer.
+- Imposing workflow opinions beyond SemVer + the Record-type vocabulary.
+  In particular, `dv` will never require a specific commit-message
+  format.
 - Hosted services, SaaS, accounts.
 - **Embedded AI features** — no LLM calls in `dv` itself, no API key
   flows, no "smart" suggestions. AI-driven tools that call `dv` are
@@ -139,4 +147,6 @@ A user can:
 4. Get a clean Release PR via `dv version`.
 5. Cut tags and trigger publishes via `dv release`.
 
-With CC + SemVer adherence enforced and per-package CHANGELOGs maintained.
+With SemVer adherence enforced and per-package CHANGELOGs maintained.
+Contributors author Records directly; commit-message style is up to the
+team.

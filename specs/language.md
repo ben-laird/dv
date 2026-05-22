@@ -38,7 +38,10 @@ phase, regime, stage.*
 
 **Change Type** — the kind of a single change, drawn from the Conventional
 Commits subset `dv` accepts: `feat`, `fix`, `feat!`, `fix!`. The `!`
-denotes a breaking change. *Not: kind, category.*
+denotes a breaking change. The vocabulary is borrowed from CC because it
+is the lingua franca; `dv` does **not** read commit messages — a Change
+Type is declared on a Record, never inferred from git. *Not: kind,
+category.*
 
 **Bump** — a SemVer increment level: `patch`, `minor`, `major`. Totally
 ordered as `patch ⊏ minor ⊏ major`. *Not: increment, level, severity.*

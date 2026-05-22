@@ -44,10 +44,11 @@ tools that call `dv`**, not in `dv` itself.
 
 This explicitly includes AI features. `dv` will never embed an LLM, ship
 with API key flows, or include "smart" suggestions for bump types or
-record messages. The strict CC + SemVer policy exists precisely so
-that bump decisions stay with humans (or with tools the user explicitly
-chose to install); embedding AI assistance would undermine the
-deterministic, reviewable, git-native character of the tool.
+record messages. The strict Record-type → SemVer mapping exists
+precisely so that bump decisions stay with humans (or with tools the
+user explicitly chose to install); embedding AI assistance would
+undermine the deterministic, reviewable, git-native character of the
+tool.
 
 **Automation-friendly, not agent-friendly.** A core principle is that the
 same affordances that make `dv` drivable by an AI agent — complete
@@ -315,17 +316,58 @@ establishes a default; passing the flag overrides for this invocation.
 Boolean options accept both `--no-foo` (Unix convention) and `--foo=false`
 (explicit-boolean form) for negation.
 
-### Strict Conventional Commits + SemVer
+### Records over commit messages
 
-A record's `type` field is constrained to CC vocabulary. The mapping to
-SemVer is fixed:
+`dv` borrows Conventional Commits' *vocabulary* for Record types, but
+**never parses commit messages**. A Record's `type` field is constrained
+to the CC subset `{feat, fix, feat!, fix!}` (see Algebra in
+`specs/language.md`), and the mapping to SemVer is fixed:
 
 - `feat` → minor bump
 - `fix` → patch bump
-- `feat!`, `fix!`, or `BREAKING CHANGE` → major bump
+- `feat!`, `fix!` → major bump (post-1.0; capped to minor pre-1.0)
 
-This is the entire decision surface for bump levels. Strict adherence keeps
-the format mechanically parseable and avoids workflow opinions.
+This is the entire decision surface for bump levels. The vocabulary is
+strict; how contributors *write commits* is entirely up to them.
+
+**Why this matters.** The release-automation space currently forces a
+choice:
+
+- CC-required tools (semantic-release, release-please) derive bumps and
+  changelogs from commit messages. Great leverage for teams already on
+  CC; locked door for everyone else.
+- CC-agnostic tools (Changesets) decouple changelog intent from commits.
+  Inclusive, but CC users get no extra leverage from their existing
+  discipline.
+
+`dv` collapses that choice. Because Records are the authoritative
+artifact, teams that don't use CC just write Records — same DX as
+Changesets, no commit-format burden. Teams that *do* use CC get bonus
+affordances (see roadmap below) that turn their existing discipline into
+auto-drafted Records, while keeping Records reviewable on the PR.
+
+This also resolves a real tension Changesets adopters have articulated:
+commit messages and changelog notes serve two different audiences
+(internal reviewers vs. published-artifact users), and forcing one
+string to serve both is suboptimal. Records are for the user-facing
+changelog; commits remain whatever shape the team prefers.
+
+**v1 scope.** v1 implements only the inclusive half: contributors write
+Records (via `dv add` or by hand), `dv` aggregates them. No commit
+parsing, no CC enforcement, no CC linting.
+
+**Roadmap (post-v1).** CC-accelerator affordances that read commits as
+*input* only, never as the source of truth:
+
+- `dv record from-commit <sha>` — draft a Record from a CC-formatted
+  commit, opened for review before filing.
+- `dv record from-range <range>` — draft Records across a commit range,
+  for teams retrofitting `dv` onto existing CC history.
+- An opt-in `--auto-from-commits` mode for `dv add` that prefills from
+  the current branch's CC commits.
+
+In every case the Record file is the source of truth — the commit is a
+hint, the Record is the contract.
 
 ### Pre-1.0 policy: strict SemVer
 
@@ -379,14 +421,16 @@ discoverable, validated, and consistent than manual manifest editing.
 
 ### Only bump-producing types accepted as records
 
-Of CC's vocabulary, only `feat`, `fix`, and breaking variants are valid in
-records. The other CC types (`chore`, `docs`, `refactor`, `test`, `ci`,
-`build`, `perf`, `style`, `revert`) do not produce records — they live in
-git history.
+The Record-type vocabulary is `{feat, fix, feat!, fix!}` and nothing else.
+This is a subset of Conventional Commits' broader type list (`chore`,
+`docs`, `refactor`, `test`, `ci`, `build`, `perf`, `style`, `revert`), but
+the relationship is incidental: `dv` doesn't ship the CC universe with
+some types disabled — it defines its own small vocabulary, deliberately
+chosen to match CC's bump-producing subset for familiarity.
 
-Rationale: CHANGELOG.md is for users of the published artifact. If the change
-doesn't affect them, it doesn't belong. `git log` is the place for internal
-churn.
+Rationale: CHANGELOG.md is for users of the published artifact. If the
+change doesn't affect them, it doesn't belong. `git log` is the place for
+internal churn.
 
 This can be relaxed later (e.g., add an opt-in "include internal changes"
 mode) without restructuring anything.
@@ -455,9 +499,12 @@ defaults:
 - **`dv version` auto-commits by default** (`git.auto-commit`, default
   true). The commit is the reviewable artifact at the heart of the
   Release PR pattern, so producing it automatically — with a consistent,
-  CC-compliant, templated message — keeps that workflow smooth. Teams
-  that prefer to compose their own commits set `auto-commit: false` (or
-  pass `--no-commit`) and `dv version` stages the changes instead.
+  templated message (CC-shaped by default, since `dv` emits it and that
+  costs nothing) — keeps that workflow smooth. This is a one-way emission
+  convention, not a contributor requirement: `dv` writes a CC-shaped
+  commit, but never reads contributor commits. Teams that prefer to
+  compose their own commits set `auto-commit: false` (or pass
+  `--no-commit`) and `dv version` stages the changes instead.
 - **`dv version` does not push.** The commit lives on the current branch;
   pushing the branch is part of the user's PR workflow, not `dv`'s
   concern.
