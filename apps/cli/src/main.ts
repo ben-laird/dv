@@ -5,6 +5,7 @@ import { defineCli, defineCommand } from "@seshat/cli";
 import { relative } from "@std/path";
 import { runAdd } from "./cli/add.ts";
 import { runInit } from "./cli/init.ts";
+import { runRelease } from "./cli/release.ts";
 import { runStatus } from "./cli/status.ts";
 import { runValidate } from "./cli/validate.ts";
 import { runVersion } from "./cli/version.ts";
@@ -20,6 +21,7 @@ Usage:
   dv add [--type T --packages P …]     File a Record (interactive or flag-driven)
   dv validate [--json]                 Lint records and config (CI-friendly)
   dv version [--dry-run --prune …]     Consume Records → bump, CHANGELOG, commit
+  dv release [--dry-run --push --yes]  Mint per-Package tags + fire release plugins
   dv --help                            Show this message
   dv --version                         Show the dv version
 
@@ -194,6 +196,53 @@ const versionCommand = defineCommand({
   },
 });
 
+const releaseCommand = defineCommand({
+  flags: {
+    "dry-run": { kind: "boolean" },
+    "no-dry-run": { kind: "boolean" },
+    force: { kind: "boolean" },
+    push: { kind: "boolean" },
+    "no-push": { kind: "boolean" },
+    yes: { kind: "boolean", alias: "y" },
+    json: { kind: "boolean" },
+    color: { kind: "boolean" },
+    "no-color": { kind: "boolean" },
+  },
+  usage:
+    "Usage: dv release [--dry-run] [--force] [--push | --no-push] [--yes] [--json]",
+  run: async ({ flags }) => {
+    const dryRunOverride =
+      flags["no-dry-run"] === true
+        ? false
+        : flags["dry-run"] === true
+          ? true
+          : undefined;
+    const pushOverride =
+      flags["no-push"] === true
+        ? false
+        : flags.push === true
+          ? true
+          : undefined;
+    const colorEnabled = resolveColorEnabled({
+      forceColor: flags.color === true,
+      suppressColor: flags["no-color"] === true,
+      emitJson: flags.json === true,
+    });
+    const result = await runRelease({
+      dryRun: dryRunOverride,
+      force: flags.force === true,
+      push: pushOverride,
+      yes: flags.yes === true,
+      emitJson: flags.json === true,
+      colorEnabled,
+    });
+    // Non-zero exit when any release Op failed (push failures throw
+    // and surface through the framework's reportError hook).
+    const hasFailures = result.releaseOpOutcomes.some((outcome) => !outcome.ok);
+    return hasFailures ? 1 : 0;
+  },
+});
+
 function expandCommaSeparated(
   rawValues: string[] | undefined,
 ): string[] | undefined {
@@ -244,6 +293,7 @@ const cli = defineCli({
     add: addCommand,
     validate: validateCommand,
     version: versionCommand,
+    release: releaseCommand,
   },
   reportError: reportDvError,
 });
