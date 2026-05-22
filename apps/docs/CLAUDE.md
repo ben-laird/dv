@@ -7,9 +7,19 @@ This is the **VitePress site** that publishes `dv`'s docs. Two facts about
 it are load-bearing:
 
 - **Deno workspace member.** VitePress runs under Deno via the `npm:`
-  specifier (Deno v2's npm compat). The package's `deno.json` sets
-  `"nodeModulesDir": "auto"` so Vite gets the `node_modules/` layout it
-  expects. No standalone `package.json`, no `npm install`.
+  specifier (Deno v2's npm compat). The root `deno.json` sets
+  `"nodeModulesDir": "auto"` — that field only takes effect at the
+  workspace root, never in a member — so Vite gets the `node_modules/`
+  layout it expects. No standalone `package.json`, no `npm install`.
+- **Peer deps are declared explicitly.** Deno's npm resolver doesn't
+  auto-install peer dependencies the way npm/pnpm do. VitePress's main
+  peers (`vue`, `@vueuse/core`, `@vue/devtools-api`, `@docsearch/*`)
+  live in this package's `imports` map so Vite can find them in
+  `node_modules/`. If you see a fresh "failed to resolve" error after
+  upgrading VitePress, add the missing dep here.
+- This `deno.json` deliberately omits `name`/`version`/`exports` — the
+  site isn't a publishable library, just a workspace member with its
+  own tasks and deps.
 - **`specs/` is upstream.** The content rendered here lives in `../../specs/`
   — language, design, cli, record-format, config-format, plugin-contract,
   schemas, walkthrough, v1-scope. The site's job is to present it; the

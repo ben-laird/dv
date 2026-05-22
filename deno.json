@@ -1,5 +1,6 @@
 {
   "workspace": ["./apps/cli", "./apps/docs"],
+  "nodeModulesDir": "auto",
   "tasks": {
     "dv": "deno task --filter @seshat/dv dv",
     "test": "deno test -A",

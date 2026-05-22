@@ -1,13 +1,15 @@
 {
-  "name": "@seshat/docs",
-  "version": "0.0.0",
-  "nodeModulesDir": "auto",
   "tasks": {
     "dev": "deno run -A npm:vitepress dev",
     "build": "deno run -A npm:vitepress build",
     "preview": "deno run -A npm:vitepress preview"
   },
   "imports": {
-    "vitepress": "npm:vitepress@^1"
+    "vitepress": "npm:vitepress@^1",
+    "vue": "npm:vue@^3",
+    "@vueuse/core": "npm:@vueuse/core@^11",
+    "@vue/devtools-api": "npm:@vue/devtools-api@^7",
+    "@docsearch/css": "npm:@docsearch/css@^3",
+    "@docsearch/js": "npm:@docsearch/js@^3"
   }
 }
