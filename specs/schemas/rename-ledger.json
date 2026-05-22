@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:dv:schema:v1:rename-ledger",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "properties": {
+      "from": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Old Package name (referenced by Records)."
+      },
+      "to": {
+        "type": "string",
+        "minLength": 1,
+        "description": "New Package name (the current identity)."
+      },
+      "at": {
+        "type": "string",
+        "minLength": 1,
+        "description": "New Package's first Version under the new name."
+      }
+    },
+    "required": [
+      "from",
+      "to",
+      "at"
+    ],
+    "additionalProperties": false,
+    "title": "Rename entry",
+    "description": "A single `from → to` lineage edge in the rename ledger."
+  },
+  "title": "dv rename ledger (.changelog/renames.yaml)",
+  "description": "Append-only ledger of Package renames. Resolution follows the reflexive-transitive closure of these edges (specs/language.md Algebra §8)."
+}
