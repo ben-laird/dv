@@ -1,0 +1,11 @@
+{
+  "name": "@seshat/dv",
+  "version": "0.0.0",
+  "exports": "./src/main.ts",
+  "tasks": {
+    "dv": "deno run -A src/main.ts",
+    "test": "deno test -A",
+    "check": "deno check src/main.ts",
+    "compile": "deno compile -A -o ../../dist/dv src/main.ts"
+  }
+}
