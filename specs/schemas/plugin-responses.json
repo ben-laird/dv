@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:dv:schema:v1:plugin-responses",
   "title": "dv plugin per-op responses",
-  "description": "v1 draft. The stdout JSON payload dv expects from each plugin Op. `dv plugin verify` checks responses against these. See docs/plugin-contract.md.",
+  "description": "v1 draft. The stdout JSON payload dv expects from each plugin Op. `dv plugin verify` checks responses against these. See specs/plugin-contract.md.",
   "$defs": {
     "error": {
       "type": "object",

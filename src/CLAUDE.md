@@ -1,17 +1,17 @@
 # src/ — implementation conventions
 
 Loaded automatically when working inside `src/`. Assumes you've read
-`.claude/CLAUDE.md` and `docs/language.md`.
+`.claude/CLAUDE.md` and `specs/language.md`.
 
 ## Architecture
 
-`dv` is built as the subtool decomposition from `docs/design.md`. One module
+`dv` is built as the subtool decomposition from `specs/design.md`. One module
 per capability; commands compose them and hold no domain logic of their own.
 
 - `subtools/discovery` — run discover plugins, resolve the Package set.
 - `subtools/changesets` — author, parse, and validate Records.
 - `subtools/versioning` — the **pure algebra**: `classify`, `apply`,
-  `aggregate`, bump-join (`docs/language.md` § Operations). No IO here.
+  `aggregate`, bump-join (`specs/language.md` § Operations). No IO here.
 - `subtools/changelog` — render CHANGELOG sections (Keep a Changelog).
 - `subtools/tagging` — Tag formatting + git tag IO.
 - `subtools/publishing` — invoke the release plugin.
@@ -23,16 +23,16 @@ per capability; commands compose them and hold no domain logic of their own.
 - **Plan-then-execute.** Every destructive command computes a `Plan` (a pure
   function of repo state) and then executes it. `dv status`, `--dry-run`, and
   the real run share the *same* plan-building code — they must not diverge
-  (`docs/language.md` Algebra §7). The Plan serializes to
-  `docs/schemas/plan.json`.
+  (`specs/language.md` Algebra §7). The Plan serializes to
+  `specs/schemas/plan.json`.
 - **Keep the core algebra pure.** `classify` / `apply` / `aggregate` /
   bump-join touch no git, filesystem, or plugins. Push IO to the edges so the
   laws stay property-testable.
 - **Release is stateless.** Never write a release-state file. A Package is
   released iff its current Version has a matching Tag (Algebra §4).
 - **Plugins are a boundary.** All plugin interaction is JSON-over-stdio per
-  `docs/plugin-contract.md`. Validate responses against
-  `docs/schemas/plugin-responses.json`; honor the per-slot timeouts.
+  `specs/plugin-contract.md`. Validate responses against
+  `specs/schemas/plugin-responses.json`; honor the per-slot timeouts.
 - **`--json` is a contract**, matching the committed schemas — never an
   ad-hoc shape.
 

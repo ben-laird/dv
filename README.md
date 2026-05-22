@@ -51,26 +51,26 @@ can be reviewed in a "Release PR" before tags get cut and publishes fire.
 
 ## Status
 
-In design. Nothing implemented yet. See [docs/v1-scope.md](docs/v1-scope.md)
+In design. Nothing implemented yet. See [specs/v1-scope.md](specs/v1-scope.md)
 for what's planned and in what order.
 
 ## Docs
 
-New here? Read the [walkthrough](docs/walkthrough.md) — `dv` end to end on a
+New here? Read the [walkthrough](specs/walkthrough.md) — `dv` end to end on a
 sample monorepo — then dip into the rest as needed.
 
 **Concepts**
-- [Ubiquitous language](docs/language.md) — the canonical vocabulary and the
+- [Ubiquitous language](specs/language.md) — the canonical vocabulary and the
   algebra of the domain; the doc every other doc defers to
-- [Design overview and rationale](docs/design.md) — architectural decisions
+- [Design overview and rationale](specs/design.md) — architectural decisions
   and the *why* behind each
 
 **Reference**
-- [CLI reference](docs/cli.md) — every command, flag, and example
-- [Record file format](docs/record-format.md) — the file users write
-- [Config file format](docs/config-format.md) — `.changelog/config.yaml`
-- [Plugin contract](docs/plugin-contract.md) — the extension surface
-- [Schemas](docs/schemas/) — versioned config, plugin-response, and Plan contracts
+- [CLI reference](specs/cli.md) — every command, flag, and example
+- [Record file format](specs/record-format.md) — the file users write
+- [Config file format](specs/config-format.md) — `.changelog/config.yaml`
+- [Plugin contract](specs/plugin-contract.md) — the extension surface
+- [Schemas](specs/schemas/) — versioned config, plugin-response, and Plan contracts
 
 **Planning**
-- [v1 scope and roadmap](docs/v1-scope.md) — what ships, what's deferred
+- [v1 scope and roadmap](specs/v1-scope.md) — what ships, what's deferred

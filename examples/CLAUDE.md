@@ -2,15 +2,15 @@
 
 Loaded automatically when working inside `examples/`. These are **copyable
 starting points** — not maintained dependencies and not first-party builtins.
-That distinction is deliberate (see `.claude/CLAUDE.md` and `docs/design.md`):
+That distinction is deliberate (see `.claude/CLAUDE.md` and `specs/design.md`):
 promoting an example to a supported builtin is a separate, future decision.
 
 ## Rules
 
-- Each plugin conforms to `docs/plugin-contract.md`: an executable speaking
+- Each plugin conforms to `specs/plugin-contract.md`: an executable speaking
   JSON-over-stdio, implementing the Ops it declares (`discover`,
   `read-version`, `write-version`, `update-dependency`, `release`).
-- Responses must validate against `docs/schemas/plugin-responses.json`.
+- Responses must validate against `specs/schemas/plugin-responses.json`.
 - Verify with `dv plugin verify <plugin>`; iterate on single Ops with
   `dv plugin invoke <plugin> <op>`.
 - Keep them **minimal and readable** — they teach the contract. Clarity over

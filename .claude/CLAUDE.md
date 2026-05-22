@@ -13,32 +13,32 @@ the target.
 ## Where to look
 
 - `README.md` — public pitch and quick example
-- `docs/design.md` — architectural decisions and the *why* behind each
-- `docs/language.md` — **the ubiquitous language**: canonical terms + the
+- `specs/design.md` — architectural decisions and the *why* behind each
+- `specs/language.md` — **the ubiquitous language**: canonical terms + the
   domain algebra. When a term is in question, this doc wins. Read it first.
-- `docs/walkthrough.md` — `dv` end to end on a sample monorepo; the fastest
+- `specs/walkthrough.md` — `dv` end to end on a sample monorepo; the fastest
   way to grok the pipeline
-- `docs/cli.md` — per-command reference (synopsis, flags, examples)
-- `docs/record-format.md` — the user-facing record file format
-- `docs/config-format.md` — `.changelog/config.yaml` reference
-- `docs/plugin-contract.md` — extension surface (any executable can be a plugin)
-- `docs/schemas/` — versioned JSON Schema drafts: config, plugin-responses, plan
-- `docs/v1-scope.md` — what's in v1, what's deferred, in what order to build
+- `specs/cli.md` — per-command reference (synopsis, flags, examples)
+- `specs/record-format.md` — the user-facing record file format
+- `specs/config-format.md` — `.changelog/config.yaml` reference
+- `specs/plugin-contract.md` — extension surface (any executable can be a plugin)
+- `specs/schemas/` — versioned JSON Schema drafts: config, plugin-responses, plan
+- `specs/v1-scope.md` — what's in v1, what's deferred, in what order to build
 
 ## Working agreement
 
-- **Read order.** `docs/language.md` first — its vocabulary and algebra are
+- **Read order.** `specs/language.md` first — its vocabulary and algebra are
   authoritative. Use its exact terms (Record, not "changeset"; Bump;
-  Stability; Plan; Tag; Unresolved Reference). Then `docs/design.md` for the
+  Stability; Plan; Tag; Unresolved Reference). Then `specs/design.md` for the
   *why*, then the specific reference doc for the thing you're building.
-- **Build order.** Follow `docs/v1-scope.md` § Suggested implementation
+- **Build order.** Follow `specs/v1-scope.md` § Suggested implementation
   order. Each milestone is independently dogfoodable; don't skip ahead.
 - **The docs are the source of truth.** Every behavior is specified. If
   something you need isn't covered, that is a genuine gap — **surface it and
   ask**, don't invent the decision. Many choices here were made deliberately
   against plausible alternatives; silently reinventing them is a regression.
 - **Keep docs and code in lockstep.** If a decision genuinely changes, update
-  the relevant doc — and `language.md` / `docs/schemas/` if the vocabulary or
+  the relevant doc — and `language.md` / `specs/schemas/` if the vocabulary or
   contracts move — in the same change. Code that contradicts the docs is a
   bug in one of them.
 - **The algebra is testable.** The laws in `language.md` (bump = join,
@@ -65,7 +65,7 @@ These are not up for re-litigation without explicit conversation:
   tag. No state file. Picks up manual bumps; needs no special mechanic
   for first-release or 1.0. `dv v1 <package>` is a gated, celebrated
   command for the 0.x → 1.0.0 stability commitment (the one milestone
-  no record type can produce). See `docs/design.md`.
+  no record type can produce). See `specs/design.md`.
 - **Renames are declared, never guessed.** Heuristic rename detection is
   avoided (dangerous for release lineage). An explicit append-only
   ledger (`.changelog/renames.yaml`, writable via `dv rename`) resolves
@@ -78,14 +78,14 @@ These are not up for re-litigation without explicit conversation:
 - **Only `feat`, `fix`, and breaking variants accepted in records.** Other
   CC types (`chore`, `docs`, etc.) live in git history, not CHANGELOG.
 - **Config is YAML only.** No TypeScript, JSON, or other config formats. See
-  `docs/design.md` § Config format for the trade-offs.
+  `specs/design.md` § Config format for the trade-offs.
 - **Capability decomposition.** `dv` is built as independent subtool
   modules (discovery, changesets, versioning, changelog, tagging,
   publishing) with commands as thin orchestrations over them. Config is
   organized by subtool, with a `git` substrate section for cross-cutting
   git operations. Git is a substrate, not a capability. `versioning` has
   no config section in v1 (its policies are locked) but is still a module.
-  See `docs/design.md` § Capability decomposition.
+  See `specs/design.md` § Capability decomposition.
 - **Composable Unix primitive.** `dv` does one job well and exposes
   machine-readable interfaces so anything else can drive it. No embedded
   AI, no integrations with external services, no SaaS. AI-driven tooling
@@ -100,7 +100,7 @@ These are not up for re-litigation without explicit conversation:
   `dv release` prompts for confirmation by default in TTY contexts and
   requires explicit `--yes` in non-TTY contexts. `safety.dry-run-by-default`
   in config can flip the whole tool into default-dry-run mode. See
-  `docs/design.md` § Dry-run and safety.
+  `specs/design.md` § Dry-run and safety.
 - **Config + flag parity for runtime behavior.** Every config option
   that influences how `dv` acts on a given run has a corresponding
   command-line flag, and vice versa. Exception: repo-definition config
@@ -110,20 +110,20 @@ These are not up for re-litigation without explicit conversation:
   stable, versioned machine format (git's default-vs-`--porcelain`
   split). Color on for TTYs, suppressed by `NO_COLOR` / `--no-color`.
   `dv status` is a read-only preview of `dv version` and shares its Plan
-  schema. See `docs/design.md` § Status and output conventions.
+  schema. See `specs/design.md` § Status and output conventions.
 
 ## What `dv` is *not*
 
 - Not a replacement for `npm publish` / `cargo publish` / etc. Those happen
   inside release plugins.
 - Not an opinionated workflow tool beyond CC + SemVer.
-- Not a roadmap tool *yet* — that's a deliberate v2 scope (see `docs/design.md`).
+- Not a roadmap tool *yet* — that's a deliberate v2 scope (see `specs/design.md`).
 
 ## Notes for implementation
 
 - The CLI is written in **TypeScript on Deno**. A Rust rewrite is on the
   table only if/when `dv` stabilizes enough to earn the polish — see
-  `docs/design.md` § Implementation language for the rationale and
+  `specs/design.md` § Implementation language for the rationale and
   trigger conditions.
 - The plugin contract is the most stable surface; design changes to it should
   be discussed before being made.

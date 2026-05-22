@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:dv:schema:v1:plan",
   "title": "dv Plan",
-  "description": "v1 draft. The side-effect-free Plan emitted by `dv status --json` and `dv version|release --dry-run --json`. A pure function of repo state (see docs/language.md Algebra §7).",
+  "description": "v1 draft. The side-effect-free Plan emitted by `dv status --json` and `dv version|release --dry-run --json`. A pure function of repo state (see specs/language.md Algebra §7).",
   "type": "object",
   "required": ["schema", "command", "pending", "awaitingRelease"],
   "properties": {
