@@ -27,6 +27,7 @@ extends: []
 discovery: {}
 records: {}
 changelog: {}
+history: {}
 tagging: {}
 publishing: {}
 
@@ -188,6 +189,48 @@ changelog:
 | `format`   | string | `keep-a-changelog`              | Output format. v1 supports only `keep-a-changelog`.              |
 | `location` | string | `"{package-path}/CHANGELOG.md"` | Where to write each package's CHANGELOG. Supports template vars. |
 
+## `history`
+
+Optional long-form companion document to `CHANGELOG.md`. CHANGELOG stays terse
+per Keep a Changelog conventions (single-line bullets); HISTORY carries each
+Record's full body prose under `### Headline` subsections, grouped by version.
+The two documents are complementary: agents and humans scan CHANGELOG for
+"what shipped" and HISTORY for "why these decisions."
+
+```yaml
+history:
+  enabled: false
+  location: "{package-path}/HISTORY.md"
+```
+
+| Key        | Type    | Default                        | Meaning                                                                         |
+| ---------- | ------- | ------------------------------ | ------------------------------------------------------------------------------- |
+| `enabled`  | boolean | `false`                        | Write HISTORY.md during `dv version`. Default off; existing repos opt in.       |
+| `location` | string  | `"{package-path}/HISTORY.md"`  | Where to write each Package's HISTORY. Supports the same template vars.         |
+
+Format:
+
+```markdown
+# History
+
+## [1.5.0] - 2026-05-22
+
+### Add OAuth device flow
+
+Clients without a browser (CLIs, embedded devices) can now authenticate
+using the device authorization grant.
+
+### Patch the parser
+
+(...record body prose...)
+```
+
+Records are expected to lead with an `# Headline` line (see
+`record-format.md` § Body) — the renderer strips the leading `#` for the
+h3 title and emits the body below it as the entry content. Records without
+an h1 (the pre-v1 convention) fall back to the first non-empty line as the
+title.
+
 ## `tagging`
 
 How git tags are formatted.
@@ -322,6 +365,7 @@ overrides:
 ### Override-able sections
 
 - `changelog` (all keys)
+- `history` (all keys)
 - `tagging` (all keys)
 - `publishing` (all keys)
 - The plugin assignment for a package (via `use:` at the override level)

@@ -190,7 +190,12 @@ The subtools:
 - **records** — author, parse, validate, and consume Records.
 - **versioning** — compute version bumps from Records and apply them,
   including constraint cascade.
-- **changelog** — render CHANGELOG entries from consumed Records.
+- **changelog** — render terse CHANGELOG entries from consumed Records
+  (Keep a Changelog format: single-line bullets).
+- **history** — optional long-form HISTORY.md companion that carries
+  each Record's full body prose under per-version h3 subsections.
+  Opt-in via `history.enabled` (see `config-format.md` § history).
+  Same per-Package model as changelog; complementary, not exclusive.
 - **tagging** — mint git tags.
 - **publishing** — invoke release plugins.
 
@@ -199,7 +204,8 @@ Commands are orchestrations:
 - `dv add` → discovery + records (create)
 - `dv status` → discovery + records (read) + versioning (preview)
 - `dv validate` → discovery + records (validate)
-- `dv version` → discovery + records (consume) + versioning + changelog + commit
+- `dv version` → discovery + records (consume) + versioning + changelog
+  (+ history when enabled) + commit
 - `dv release` → discovery + tagging + publishing + push
 
 Git operations (stage, commit, push, tag, clean-tree checks) are the
@@ -207,8 +213,8 @@ Git operations (stage, commit, push, tag, clean-tree checks) are the
 own. They get a dedicated `git` config section rather than being
 scattered across subtools, because some git operations are inherently
 cross-subtool: the commit `dv version` produces bundles manifest changes
-(versioning), CHANGELOG edits (changelog), and deleted Record files
-(records subtool) into a single commit.
+(versioning), CHANGELOG edits (changelog), HISTORY edits (history, when
+enabled), and deleted Record files (records subtool) into a single commit.
 
 Benefits:
 
@@ -275,9 +281,10 @@ orchestrations of subtools. Key conventions:
   matching it.
 - **`extends` is top-level only.** Local paths in v1; registry references
   later. No HTTPS URLs (supply-chain hazard).
-- **Override-able sections**: `changelog`, `tagging`, `publishing`, and a
-  package's plugin assignment — all per-package concerns. Not `git`,
-  `safety`, `discovery` globals, `extends`, or `$schema`.
+- **Override-able sections**: `changelog`, `history`, `tagging`,
+  `publishing`, and a package's plugin assignment — all per-package
+  concerns. Not `git`, `safety`, `discovery` globals, `extends`, or
+  `$schema`.
 
 Lessons inherited from Biome's evolution: don't duplicate include/exclude
 across domains (drove their config simplification), version the schema URL,
@@ -390,7 +397,29 @@ Each package gets its own `CHANGELOG.md` at its package root. This matches
 how registries (npm, crates.io, PyPI) surface changelogs and keeps each
 package's history self-contained.
 
+CHANGELOG.md stays terse per Keep a Changelog conventions — single-line
+bullets, action verbs, no prose paragraphs. The Record body's first
+`# Headline` line becomes the bullet text; the rest of the body is not
+rendered to CHANGELOG.
+
 No aggregate root-level CHANGELOG in v1. Could be added later as an opt-in.
+
+### Per-package HISTORY.md (opt-in)
+
+For long-form release notes, dv writes an optional companion `HISTORY.md`
+alongside each `CHANGELOG.md`. HISTORY carries each Record's full body
+prose under `### Headline` subsections, grouped by version. Same per-Package
+model as CHANGELOG; complementary, not exclusive.
+
+Opt-in via `history.enabled: true` in `.changelog/config.yaml`. Defaults
+to off so existing dv repos see no behavior change. See
+`config-format.md` § history.
+
+Rationale: KaC bullets answer "what shipped" terse and scannable; HISTORY
+answers "why these decisions" with the full prose authors wrote on the
+Record at PR time. Agents grounding summaries in repo state benefit from
+having the narrative without dv embedding any LLM features itself
+(design.md § Composable primitive).
 
 ### Per-package git tags
 

@@ -152,10 +152,11 @@ dv version [--dry-run] [--no-commit] [--prune] [--yes]
 
 Phase one of the release. Consumes pending Records and, per Package: applies
 the aggregated Bump, rewrites the manifest Version, prepends CHANGELOG
-entries, updates dependents' constraints (constraint-only cascade), and
-deletes the consumed Records. Auto-commits the result by default with a
-templated Conventional-Commits message. **Does not push.** The commit it
-produces is the Release PR.
+entries (and HISTORY entries when `history.enabled: true` in config),
+updates dependents' constraints (constraint-only cascade), and deletes the
+consumed Records. Auto-commits the result by default with a templated
+Conventional-Commits message. **Does not push.** The commit it produces is
+the Release PR.
 
 Halts on an Unresolved Reference (a Record pointing at a Package that no
 longer exists with no Rename edge); `--prune` drops such Records instead.

@@ -66,11 +66,14 @@ Bodies without a leading `#` heading still work: the renderer falls back to
 the first non-empty line. The h1 convention is a recommendation, not a
 hard requirement.
 
-Multi-paragraph bodies are fine; lists, code blocks, links are fine.
-**Today only the headline reaches the CHANGELOG bullet** — paragraphs below
-the h1 live in the record file for PR reviewers and survive in git history
-but are not rendered into CHANGELOG.md. (A future change may surface them
-in a long-form companion document.)
+Multi-paragraph bodies are fine; lists, code blocks, links are fine. The
+headline reaches `CHANGELOG.md` as a terse bullet; paragraphs below the h1
+reach the optional `HISTORY.md` companion (when `history.enabled: true`,
+see `config-format.md` § history) as long-form release-note prose. The two
+documents are complementary: CHANGELOG for "what shipped," HISTORY for
+"why these decisions." If `history.enabled` is false (the default), the
+body below the h1 still lives in the record file for PR reviewers and
+survives in git history — it just doesn't end up in any rendered output.
 
 ## Examples
 
