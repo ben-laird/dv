@@ -1,6 +1,6 @@
 import { ensureDir } from "@std/fs";
-import { dirname } from "@std/path";
-import { configPath, recordsPath } from "../subtools/config/mod.ts";
+import { dirname, join } from "@std/path";
+import { CONFIG_DIR, configPath, recordsPath } from "../subtools/config/mod.ts";
 import { requireRepoRoot } from "../subtools/git/repo-root.ts";
 
 const STARTER_CONFIG = `# dv configuration. See https://dv.dev/schema/v1.yaml for the schema.
@@ -18,22 +18,39 @@ const STARTER_CONFIG = `# dv configuration. See https://dv.dev/schema/v1.yaml fo
 #   format: "{package}@{version}"
 `;
 
+// A directory-local .gitignore so .changelog/ stays clean even when an
+// interactive editor (e.g. VSCode) crashes mid-`dv add`, leaving a
+// stray temp file behind. Git honors nested .gitignores recursively
+// (same as `.git/info/exclude` works for git's own internals). dv
+// stays inside its own directory rather than reaching out to the
+// repo's root .gitignore — keeping ownership boundaries clean.
+const STARTER_CHANGELOG_GITIGNORE = `# In-progress record edit files. Normally cleaned up in dv's
+# finally-block; this entry catches leftovers if the editor crashes.
+.dv-record-edit-*
+`;
+
 export interface InitResult {
   repoRoot: string;
   configCreated: boolean;
   recordsDirCreated: boolean;
+  gitignoreCreated: boolean;
 }
 
 export async function runInit(): Promise<InitResult> {
   const repoRoot = await requireRepoRoot();
   const cfgPath = configPath(repoRoot);
   const recPath = recordsPath(repoRoot);
+  const gitignorePath = join(repoRoot, CONFIG_DIR, ".gitignore");
 
   await ensureDir(dirname(cfgPath));
   const configCreated = await writeIfMissing(cfgPath, STARTER_CONFIG);
   const recordsDirCreated = await ensureDirCreated(recPath);
+  const gitignoreCreated = await writeIfMissing(
+    gitignorePath,
+    STARTER_CHANGELOG_GITIGNORE,
+  );
 
-  return { repoRoot, configCreated, recordsDirCreated };
+  return { repoRoot, configCreated, recordsDirCreated, gitignoreCreated };
 }
 
 async function writeIfMissing(

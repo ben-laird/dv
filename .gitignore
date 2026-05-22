@@ -11,7 +11,7 @@ apps/docs/.vitepress/dist/
 # Editor / OS
 .DS_Store
 
-# dv: in-progress record edit files (only present if the editor
-# subprocess was killed before dv could clean up — normally the temp
-# file is removed in a finally block before dv exits).
-.changelog/.dv-record-edit-*
+# Note: dv's in-progress record edit files (.changelog/.dv-record-edit-*)
+# are ignored via the directory-local .changelog/.gitignore that
+# `dv init` writes — kept there so dv owns its own directory and
+# doesn't reach out to the repo root.

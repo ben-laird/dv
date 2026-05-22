@@ -37,7 +37,11 @@ const initCommand = defineCommand({
       return 2;
     }
     const initResult = await runInit();
-    if (!initResult.configCreated && !initResult.recordsDirCreated) {
+    if (
+      !initResult.configCreated &&
+      !initResult.recordsDirCreated &&
+      !initResult.gitignoreCreated
+    ) {
       console.log("dv: already initialized");
       return 0;
     }
@@ -56,6 +60,9 @@ const initCommand = defineCommand({
           recordsPath(initResult.repoRoot),
         )}/`,
       );
+    }
+    if (initResult.gitignoreCreated) {
+      console.log("created .changelog/.gitignore");
     }
     return 0;
   },

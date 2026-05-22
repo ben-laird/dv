@@ -1,0 +1,3 @@
+# In-progress record edit files. Normally cleaned up in dv's
+# finally-block; this entry catches leftovers if the editor crashes.
+.dv-record-edit-*

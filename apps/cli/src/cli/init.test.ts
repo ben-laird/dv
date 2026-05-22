@@ -28,7 +28,7 @@ async function inTempRepo(args: InTempRepoArgs): Promise<void> {
   }
 }
 
-Deno.test("runInit creates the config file and records directory in a fresh repo", async () => {
+Deno.test("runInit creates the config file, records directory, and changelog gitignore in a fresh repo", async () => {
   await inTempRepo({
     testBody: async () => {
       // Given a fresh git repo with no .changelog/ directory
@@ -36,9 +36,11 @@ Deno.test("runInit creates the config file and records directory in a fresh repo
       // When runInit is called
       const initResult = await runInit();
 
-      // Then both the config file and records directory exist on disk
+      // Then config, records directory, and .changelog/.gitignore all
+      // exist on disk
       assertEquals(initResult.configCreated, true);
       assertEquals(initResult.recordsDirCreated, true);
+      assertEquals(initResult.gitignoreCreated, true);
       const configFileStat = await Deno.stat(
         join(initResult.repoRoot, ".changelog", "config.yaml"),
       );
@@ -47,6 +49,12 @@ Deno.test("runInit creates the config file and records directory in a fresh repo
         join(initResult.repoRoot, ".changelog", "records"),
       );
       assertEquals(recordsDirStat.isDirectory, true);
+      const gitignoreBody = await Deno.readTextFile(
+        join(initResult.repoRoot, ".changelog", ".gitignore"),
+      );
+      // The gitignore should at minimum cover the in-progress record
+      // edit file pattern — that's the whole reason it exists
+      assertEquals(gitignoreBody.includes(".dv-record-edit-*"), true);
     },
   });
 });
@@ -63,6 +71,30 @@ Deno.test("runInit is idempotent and reports nothing-created on a second invocat
       // Then no files were created on the second call
       assertEquals(secondInitResult.configCreated, false);
       assertEquals(secondInitResult.recordsDirCreated, false);
+      assertEquals(secondInitResult.gitignoreCreated, false);
+    },
+  });
+});
+
+Deno.test("runInit leaves a user-edited .changelog/.gitignore untouched", async () => {
+  await inTempRepo({
+    testBody: async () => {
+      // Given a repo where the user has already authored their own
+      // changelog gitignore (e.g. they added more patterns over time)
+      await Deno.mkdir(".changelog", { recursive: true });
+      const userAuthoredGitignore =
+        "# my own patterns\n.dv-record-edit-*\n.custom-cache/\n";
+      await Deno.writeTextFile(".changelog/.gitignore", userAuthoredGitignore);
+
+      // When runInit is called
+      const initResult = await runInit();
+
+      // Then the user's gitignore is preserved verbatim
+      assertEquals(initResult.gitignoreCreated, false);
+      const preservedBody = await Deno.readTextFile(
+        join(initResult.repoRoot, ".changelog", ".gitignore"),
+      );
+      assertEquals(preservedBody, userAuthoredGitignore);
     },
   });
 });
