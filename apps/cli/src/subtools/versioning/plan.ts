@@ -24,12 +24,25 @@ export interface PackageCurrentVersionEntry {
   currentVersion: Version;
 }
 
+// Pre-computed `awaiting-release` lookup the caller threads into the
+// plan builder so the build itself stays pure. Tag presence requires
+// shelling out to `git`, which the builder must not do — status and
+// release compute this once via the tagging subtool, then pass the
+// resulting list in. Omitted → Plan.awaitingRelease stays [].
+export interface AwaitingReleaseLookupEntry {
+  package: string;
+  version: string;
+  tag: string;
+  firstStable: boolean;
+}
+
 export interface BuildVersionPlanArgs {
   command: Plan["command"];
   discoveredPackages: Package[];
   parsedRecords: DvRecord[];
   renameLedger: Rename[];
   packageCurrentVersions: PackageCurrentVersionEntry[];
+  awaitingReleaseLookup?: ReadonlyArray<AwaitingReleaseLookupEntry>;
 }
 
 export function buildVersionPlan(args: BuildVersionPlanArgs): Plan {
@@ -113,11 +126,22 @@ export function buildVersionPlan(args: BuildVersionPlanArgs): Plan {
       leftEntry.package.localeCompare(rightEntry.package),
     );
 
+  const awaitingReleaseEntries = (args.awaitingReleaseLookup ?? [])
+    .map((entry) => ({
+      package: entry.package,
+      version: entry.version,
+      tag: entry.tag,
+      firstStable: entry.firstStable,
+    }))
+    .sort((leftEntry, rightEntry) =>
+      leftEntry.package.localeCompare(rightEntry.package),
+    );
+
   return {
     schema: "urn:dv:schema:v1:plan",
     command: args.command,
     pending: pendingEntries,
-    awaitingRelease: [],
+    awaitingRelease: awaitingReleaseEntries,
     unresolvedReferences: aggregation.unresolvedReferences.map(
       (unresolvedEntry) => ({
         record: unresolvedEntry.recordFilename,

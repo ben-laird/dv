@@ -80,9 +80,8 @@ const planAwaitingReleaseSchema = z
     tag: z.string().describe("The Tag that would be minted."),
     firstStable: z
       .boolean()
-      .optional()
       .describe(
-        "True if this would be the Package's first 1.0.0 (celebrated).",
+        "True if this would be the Package's first 1.0.0 (celebrated). False otherwise; never absent.",
       ),
   })
   .strict()

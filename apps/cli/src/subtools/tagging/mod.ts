@@ -13,4 +13,10 @@ export {
   type TagExistsArgs,
   tagExists,
 } from "../git/mod.ts";
+export {
+  type AwaitingReleaseEntry,
+  type ComputeAwaitingReleaseArgs,
+  computeAwaitingRelease,
+  type PackageWithCurrentVersion,
+} from "./await-release.ts";
 export { type FormatTagArgs, formatTag } from "./format.ts";

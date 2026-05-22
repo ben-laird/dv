@@ -428,3 +428,65 @@ Deno.test("buildVersionPlan omits packages from `tracked` when no current versio
     { package: "ok", currentVersion: "1.0.0", path: "packages/ok" },
   ]);
 });
+
+Deno.test("buildVersionPlan keeps awaitingRelease empty when no lookup is provided (back-compat default)", () => {
+  // Given a fixture with no awaitingReleaseLookup arg
+  const discoveredPackages = [buildPackage("core", "packages/core")];
+  const packageCurrentVersions = [packageVersion("core", "1.0.0")];
+
+  // When the plan is built
+  const plan = buildVersionPlan({
+    command: "status",
+    discoveredPackages,
+    parsedRecords: [],
+    renameLedger: [],
+    packageCurrentVersions,
+  });
+
+  // Then awaitingRelease stays empty — the absent arg means "the
+  // caller did not ask about release state"; we don't fabricate it
+  assertEquals(plan.awaitingRelease, []);
+});
+
+Deno.test("buildVersionPlan copies awaitingReleaseLookup into the Plan, sorted by package", () => {
+  // Given a lookup the caller pre-computed in arbitrary order
+  const discoveredPackages = [
+    buildPackage("alpha", "packages/alpha"),
+    buildPackage("beta", "packages/beta"),
+  ];
+  const packageCurrentVersions = [
+    packageVersion("alpha", "1.0.0"),
+    packageVersion("beta", "0.4.2"),
+  ];
+
+  // When the plan is built with both packages awaiting release
+  const plan = buildVersionPlan({
+    command: "release",
+    discoveredPackages,
+    parsedRecords: [],
+    renameLedger: [],
+    packageCurrentVersions,
+    awaitingReleaseLookup: [
+      {
+        package: "beta",
+        version: "0.4.2",
+        tag: "beta@0.4.2",
+        firstStable: false,
+      },
+      {
+        package: "alpha",
+        version: "1.0.0",
+        tag: "alpha@1.0.0",
+        firstStable: true,
+      },
+    ],
+  });
+
+  // Then both entries appear, sorted by package name (alpha before
+  // beta) — byte-stable JSON across runs
+  assertEquals(plan.awaitingRelease.length, 2);
+  assertEquals(plan.awaitingRelease[0]?.package, "alpha");
+  assertEquals(plan.awaitingRelease[0]?.firstStable, true);
+  assertEquals(plan.awaitingRelease[1]?.package, "beta");
+  assertEquals(plan.awaitingRelease[1]?.firstStable, false);
+});

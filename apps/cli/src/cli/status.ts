@@ -10,6 +10,7 @@ import {
 import { requireRepoRoot } from "../subtools/git/repo-root.ts";
 import { listRecords, type RecordsListing } from "../subtools/records/mod.ts";
 import { loadRenameLedger, renamesPath } from "../subtools/renames/mod.ts";
+import { computeAwaitingRelease } from "../subtools/tagging/mod.ts";
 import {
   buildVersionPlan,
   invokeReadVersion,
@@ -87,12 +88,30 @@ export async function runStatus(
     repoRootPath,
   });
 
+  // Compute the awaiting-release set via the tagging subtool: per
+  // Package, ask git whether the current Version's tag exists.
+  // Sorted, byte-stable; first-stable detection rides along.
+  const packagesByName = new Map(
+    discoveredPackages.map((pkg) => [pkg.name, pkg] as const),
+  );
+  const awaitingReleaseLookup = await computeAwaitingRelease({
+    repoRootPath,
+    tagFormatTemplate: loadedConfig.tagging.format,
+    packagesWithVersions: packageCurrentVersions.flatMap((entry) => {
+      const pkg = packagesByName.get(entry.packageName);
+      return pkg === undefined
+        ? []
+        : [{ pkg, currentVersion: entry.currentVersion }];
+    }),
+  });
+
   const plan = buildVersionPlan({
     command: "status",
     discoveredPackages,
     parsedRecords: recordsListing.parsedRecords,
     renameLedger,
     packageCurrentVersions,
+    awaitingReleaseLookup,
   });
 
   if (options.emitJson) {
@@ -190,6 +209,13 @@ function renderHumanStatus(args: RenderHumanStatusArgs): void {
   if (plan.pending.length === 0 && plan.unresolvedReferences.length === 0) {
     console.log(styler.dim("no pending records"));
     console.log(`  File one with ${styler.cyan("`dv add`")}.`);
+    if (plan.awaitingRelease.length > 0) {
+      console.log("");
+      renderAwaitingReleaseTable({
+        awaitingRelease: plan.awaitingRelease,
+        styler,
+      });
+    }
     if (plan.tracked.length > 0) {
       console.log("");
       renderTrackedTable({ tracked: plan.tracked, styler });
@@ -263,6 +289,14 @@ function renderHumanStatus(args: RenderHumanStatusArgs): void {
     }
   }
 
+  if (plan.awaitingRelease.length > 0) {
+    console.log("");
+    renderAwaitingReleaseTable({
+      awaitingRelease: plan.awaitingRelease,
+      styler,
+    });
+  }
+
   if (plan.tracked.length > 0) {
     console.log("");
     renderTrackedTable({ tracked: plan.tracked, styler });
@@ -273,6 +307,40 @@ function renderHumanStatus(args: RenderHumanStatusArgs): void {
       failureCount: recordsListing.failures.length,
       styler,
     });
+  }
+}
+
+interface RenderAwaitingReleaseTableArgs {
+  awaitingRelease: Plan["awaitingRelease"];
+  styler: Styler;
+}
+
+function renderAwaitingReleaseTable(
+  args: RenderAwaitingReleaseTableArgs,
+): void {
+  const { awaitingRelease, styler } = args;
+  console.log(
+    `${styler.bold("Awaiting release")} — ${awaitingRelease.length} package${
+      awaitingRelease.length === 1 ? "" : "s"
+    } (run ${styler.cyan("`dv release`")}):`,
+  );
+  const nameColumnWidth = Math.max(
+    ...awaitingRelease.map((entry) => entry.package.length),
+    7,
+  );
+  const versionColumnWidth = Math.max(
+    ...awaitingRelease.map((entry) => entry.version.length),
+    5,
+  );
+  for (const entry of awaitingRelease) {
+    const paddedName = entry.package.padEnd(nameColumnWidth);
+    const paddedVersion = entry.version.padEnd(versionColumnWidth);
+    const firstStableMarker = entry.firstStable
+      ? ` ${styler.bold("(first stable!)")}`
+      : "";
+    console.log(
+      `  ${styler.bold(paddedName)}  ${paddedVersion}  ${styler.dim(`would tag ${entry.tag}`)}${firstStableMarker}`,
+    );
   }
 }
 

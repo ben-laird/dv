@@ -26,6 +26,7 @@ import {
 } from "../subtools/history/mod.ts";
 import { listRecords } from "../subtools/records/mod.ts";
 import { loadRenameLedger, renamesPath } from "../subtools/renames/mod.ts";
+import { computeAwaitingRelease } from "../subtools/tagging/mod.ts";
 import {
   buildVersionPlan,
   invokeReadVersion,
@@ -121,12 +122,32 @@ export async function runVersion(
     repoRootPath,
   });
 
+  // Compute the awaiting-release set so the Plan dv version emits
+  // matches dv status's Plan byte-for-byte (Algebra §7: status / dry-
+  // run / real run share one builder, one Plan shape). dv version
+  // itself doesn't *use* awaitingRelease — that's dv release's
+  // concern — but populating it keeps the parity contract honest.
+  const packagesByName = new Map(
+    discoveredPackages.map((pkg) => [pkg.name, pkg] as const),
+  );
+  const awaitingReleaseLookup = await computeAwaitingRelease({
+    repoRootPath,
+    tagFormatTemplate: loadedConfig.tagging.format,
+    packagesWithVersions: packageCurrentVersions.flatMap((entry) => {
+      const pkg = packagesByName.get(entry.packageName);
+      return pkg === undefined
+        ? []
+        : [{ pkg, currentVersion: entry.currentVersion }];
+    }),
+  });
+
   const plan = buildVersionPlan({
     command: "version",
     discoveredPackages,
     parsedRecords: recordsListing.parsedRecords,
     renameLedger,
     packageCurrentVersions,
+    awaitingReleaseLookup,
   });
 
   if (plan.unresolvedReferences.length > 0 && !options.prune) {

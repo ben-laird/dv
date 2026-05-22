@@ -139,14 +139,15 @@
             "description": "The Tag that would be minted."
           },
           "firstStable": {
-            "description": "True if this would be the Package's first 1.0.0 (celebrated).",
-            "type": "boolean"
+            "type": "boolean",
+            "description": "True if this would be the Package's first 1.0.0 (celebrated). False otherwise; never absent."
           }
         },
         "required": [
           "package",
           "version",
-          "tag"
+          "tag",
+          "firstStable"
         ],
         "additionalProperties": false,
         "title": "Awaiting-release entry",
