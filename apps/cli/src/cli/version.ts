@@ -20,6 +20,10 @@ import {
   requireRepoRoot,
   stageFiles,
 } from "../subtools/git/mod.ts";
+import {
+  renderHistorySection,
+  upsertHistorySection,
+} from "../subtools/history/mod.ts";
 import { listRecords } from "../subtools/records/mod.ts";
 import { loadRenameLedger, renamesPath } from "../subtools/renames/mod.ts";
 import {
@@ -214,7 +218,7 @@ export async function runVersion(
       records: recordsForPackage,
       dateString,
     });
-    const changelogPath = resolveChangelogPath({
+    const changelogPath = resolveOutputPathFromTemplate({
       package: pkg,
       locationTemplate: loadedConfig.changelog.location,
       newVersion: pendingEntry.projectedVersion,
@@ -222,6 +226,31 @@ export async function runVersion(
     });
     await upsertChangelogSection({ changelogPath, newSection });
     touchedPaths.push(relative(repoRootPath, changelogPath));
+
+    // Opt-in HISTORY.md — long-form companion document. Off by
+    // default; users enable via `history.enabled: true` in
+    // .changelog/config.yaml. CHANGELOG bullets stay terse per Keep
+    // a Changelog; HISTORY carries the full Record body prose under
+    // h3 subsections so agents and humans get the narrative arc
+    // behind each version.
+    if (loadedConfig.history.enabled) {
+      const historySection = renderHistorySection({
+        newVersion: pendingEntry.projectedVersion,
+        records: recordsForPackage,
+        dateString,
+      });
+      const historyPath = resolveOutputPathFromTemplate({
+        package: pkg,
+        locationTemplate: loadedConfig.history.location,
+        newVersion: pendingEntry.projectedVersion,
+        repoRootPath,
+      });
+      await upsertHistorySection({
+        historyPath,
+        newSection: historySection,
+      });
+      touchedPaths.push(relative(repoRootPath, historyPath));
+    }
   }
 
   // Delete the consumed Records (and pruned ones, if --prune).
@@ -385,14 +414,16 @@ async function readAllCurrentVersions(
   return entries;
 }
 
-interface ResolveChangelogPathArgs {
+interface ResolveOutputPathFromTemplateArgs {
   package: Package;
   locationTemplate: string;
   newVersion: string;
   repoRootPath: string;
 }
 
-function resolveChangelogPath(args: ResolveChangelogPathArgs): string {
+function resolveOutputPathFromTemplate(
+  args: ResolveOutputPathFromTemplateArgs,
+): string {
   const rendered = args.locationTemplate
     .replaceAll("{package}", args.package.name)
     .replaceAll("{package-path}", args.package.path)

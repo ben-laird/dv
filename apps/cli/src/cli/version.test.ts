@@ -727,3 +727,185 @@ Deno.test("runVersion cascades even when the dependent is itself in pending", as
     await fixture.cleanup();
   }
 });
+
+// === HISTORY.md (HC3) ===
+//
+// Uses the single-package setUpFixture with a config override that
+// enables history. Asserts HISTORY.md is written alongside CHANGELOG.md
+// when enabled, and absent when not (the default).
+
+const HISTORY_ENABLED_CONFIG = `discovery:
+  plugins:
+    - match: "packages/*"
+      use: ./plugin
+history:
+  enabled: true
+`;
+
+Deno.test("runVersion writes HISTORY.md alongside CHANGELOG.md when history.enabled is true", async () => {
+  // Given a repo with `history.enabled: true` and a record whose body
+  // carries an h1 headline plus prose
+  const fixture = await setUpFixture({
+    configYaml: HISTORY_ENABLED_CONFIG,
+    initialVersion: "1.4.2",
+    recordFiles: {
+      "a.md":
+        "---\ntype: feat\npackages:\n  - core\n---\n\n# Add OAuth device flow\n\nClients without a browser can now authenticate using the device grant.\n",
+    },
+  });
+
+  try {
+    // When dv version runs
+    await runVersion({
+      noCommit: false,
+      prune: false,
+      emitJson: false,
+      colorEnabled: false,
+      yes: false,
+    });
+
+    // Then a HISTORY.md exists in the package directory next to
+    // CHANGELOG.md
+    const historyPath = join(
+      fixture.repoRootPath,
+      "packages",
+      "core",
+      "HISTORY.md",
+    );
+    const historyText = await Deno.readTextFile(historyPath);
+
+    // And it carries the version heading, the h3 entry, and the body
+    // prose below the h1 (which the CHANGELOG bullet does NOT carry)
+    assertStringIncludes(historyText, "# History");
+    assertStringIncludes(historyText, "## [1.5.0]");
+    assertStringIncludes(historyText, "### Add OAuth device flow");
+    assertStringIncludes(
+      historyText,
+      "Clients without a browser can now authenticate using the device grant.",
+    );
+
+    // And the CHANGELOG still got its terse bullet — the two
+    // documents are complementary, not exclusive
+    const changelogText = await Deno.readTextFile(fixture.changelogPath);
+    assertStringIncludes(changelogText, "- Add OAuth device flow");
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+Deno.test("runVersion does NOT write HISTORY.md when history.enabled is false (the default)", async () => {
+  // Given a repo with the default config (history.enabled defaults to
+  // false) and a record
+  const fixture = await setUpFixture({
+    initialVersion: "1.4.2",
+    recordFiles: {
+      "a.md":
+        "---\ntype: feat\npackages:\n  - core\n---\n\n# Add a feature\n\nProse.\n",
+    },
+  });
+
+  try {
+    // When dv version runs
+    await runVersion({
+      noCommit: false,
+      prune: false,
+      emitJson: false,
+      colorEnabled: false,
+      yes: false,
+    });
+
+    // Then CHANGELOG.md was written as usual
+    const changelogText = await Deno.readTextFile(fixture.changelogPath);
+    assertStringIncludes(changelogText, "## [1.5.0]");
+
+    // But HISTORY.md was NOT created — opt-in default means existing
+    // dv users see zero behavior change
+    const historyPath = join(
+      fixture.repoRootPath,
+      "packages",
+      "core",
+      "HISTORY.md",
+    );
+    let historyExists = true;
+    try {
+      await Deno.stat(historyPath);
+    } catch {
+      historyExists = false;
+    }
+    assertEquals(historyExists, false);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+Deno.test("runVersion's HISTORY.md prepends new sections above existing ones across multiple runs", async () => {
+  // Given a repo with history enabled and one initial record
+  const fixture = await setUpFixture({
+    configYaml: HISTORY_ENABLED_CONFIG,
+    initialVersion: "1.0.0",
+    recordFiles: {
+      "first.md":
+        "---\ntype: feat\npackages:\n  - core\n---\n\n# First change\n\nFirst prose.\n",
+    },
+  });
+
+  try {
+    // When dv version runs once
+    await runVersion({
+      noCommit: false,
+      prune: false,
+      emitJson: false,
+      colorEnabled: false,
+      yes: false,
+    });
+
+    // And a second record is filed (staged + committed so the clean-
+    // tree check passes for the second run — matches what a user
+    // would do filing a record on a new PR)
+    await Deno.writeTextFile(
+      join(fixture.repoRootPath, ".changelog", "records", "second.md"),
+      "---\ntype: fix\npackages:\n  - core\n---\n\n# Second change\n\nSecond prose.\n",
+    );
+    await new Deno.Command("git", {
+      args: ["-C", fixture.repoRootPath, "add", "."],
+    }).output();
+    await new Deno.Command("git", {
+      args: [
+        "-C",
+        fixture.repoRootPath,
+        "commit",
+        "-m",
+        "add second record",
+        "--no-gpg-sign",
+        "-q",
+      ],
+    }).output();
+    await runVersion({
+      noCommit: false,
+      prune: false,
+      emitJson: false,
+      colorEnabled: false,
+      yes: false,
+    });
+
+    // Then HISTORY.md has the newer release above the older one,
+    // mirroring the CHANGELOG splice behavior
+    const historyPath = join(
+      fixture.repoRootPath,
+      "packages",
+      "core",
+      "HISTORY.md",
+    );
+    const historyText = await Deno.readTextFile(historyPath);
+    const secondReleaseIndex = historyText.indexOf("## [1.1.1]");
+    const firstReleaseIndex = historyText.indexOf("## [1.1.0]");
+    assertEquals(secondReleaseIndex > 0, true);
+    assertEquals(firstReleaseIndex > secondReleaseIndex, true);
+    assertStringIncludes(historyText, "### First change");
+    assertStringIncludes(historyText, "### Second change");
+    assertStringIncludes(historyText, "First prose.");
+    assertStringIncludes(historyText, "Second prose.");
+  } finally {
+    await fixture.cleanup();
+  }
+});
