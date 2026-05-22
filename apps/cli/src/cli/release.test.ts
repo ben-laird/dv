@@ -381,9 +381,9 @@ Deno.test("runRelease --push sends minted tags to the configured remote", async 
   }
 });
 
-Deno.test("runRelease continues past a non-zero release op exit, surfacing failures in the summary", async () => {
+Deno.test("runRelease aggregates per-package publish failures into a release-partial-failure DvError with one sub-error per failure", async () => {
   // Given the example plugin's release script is overridden to exit
-  // non-zero (simulating a failed publish)
+  // non-zero (simulating a failed publish for every package)
   const failingReleaseScript = `#!/usr/bin/env -S deno run --allow-env
 console.error("simulated publish failure");
 Deno.exit(1);
@@ -391,6 +391,59 @@ Deno.exit(1);
   const fixture = await setUpReleaseFixture({
     releaseScriptOverride: failingReleaseScript,
   });
+
+  try {
+    // When dv release runs against two packages that both fail
+    // Then DvError surfaces with `release-partial-failure` as the
+    // parent code, carrying one `release-op-failed` sub-error per
+    // failed package — the structured envelope that downstream
+    // automation (and `dv release --force`) can branch on.
+    const caughtError = await assertRejects(
+      () =>
+        runRelease({
+          force: false,
+          yes: true,
+          emitJson: false,
+          colorEnabled: false,
+        }),
+      DvError,
+    );
+    assertEquals(caughtError.kind.code, "release-partial-failure");
+    if (caughtError.kind.code === "release-partial-failure") {
+      assertEquals(caughtError.kind.context.failedCount, 2);
+      assertEquals(caughtError.kind.context.totalAttempted, 2);
+    }
+    assertEquals(caughtError.subErrors.length, 2);
+    // Re-narrow each sub-error against DvError so the discriminated-
+    // union shape carries through. The framework's `subErrors: CliError[]`
+    // is heterogeneous by design; consumers narrow to their CLI's
+    // error type to read context safely.
+    const dvSubErrors = caughtError.subErrors as DvError[];
+    const subErrorCodes = dvSubErrors
+      .map((subError) => subError.kind.code)
+      .sort();
+    assertEquals(subErrorCodes, ["release-op-failed", "release-op-failed"]);
+    const subErrorPackageNames = dvSubErrors
+      .map((subError) => {
+        if (subError.kind.code !== "release-op-failed") return "";
+        return subError.kind.context.package;
+      })
+      .sort();
+    assertEquals(subErrorPackageNames, ["pkg-a", "pkg-b"]);
+
+    // Tags are still minted — publish failures DO NOT roll back tags
+    // per specs/plugin-contract.md. This is the invariant that lets
+    // `dv release --force` recover a partial failure without tag churn.
+    const tagsInRepo = await listTagsInRepo(fixture.repoRootPath);
+    assertEquals(tagsInRepo.sort(), ["pkg-a@1.0.0", "pkg-b@1.0.0"]);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+Deno.test("runRelease does NOT throw release-partial-failure when every package publishes successfully", async () => {
+  // Given the default fixture (publishes succeed)
+  const fixture = await setUpReleaseFixture({});
 
   try {
     // When dv release runs
@@ -401,13 +454,11 @@ Deno.exit(1);
       colorEnabled: false,
     });
 
-    // Then tags are still minted (publish failures DO NOT roll back
-    // tags per specs/plugin-contract.md) but every outcome is
-    // recorded as failed
-    assertEquals(result.mintedTagNames.length, 2);
+    // Then no throw — all outcomes are ok, so the partial-failure
+    // path doesn't trigger
     assertEquals(result.releaseOpOutcomes.length, 2);
     assertEquals(
-      result.releaseOpOutcomes.every((outcome) => !outcome.ok),
+      result.releaseOpOutcomes.every((outcome) => outcome.ok),
       true,
     );
   } finally {

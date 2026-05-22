@@ -232,6 +232,35 @@ export async function runRelease(
     });
   }
 
+  // After the summary has been rendered (so the user sees what
+  // succeeded), surface any per-package publish failures as an
+  // aggregated CliError. Tags and pushes have already happened —
+  // per specs/plugin-contract.md, publish failures do NOT roll back
+  // tags. Throwing here is what flips the process exit code and
+  // emits the structured `release-partial-failure` envelope; the
+  // sub-errors carry one `release-op-failed` per failed package so
+  // automation (and `dv release --force` recovery) can target them.
+  const failedOutcomes = releaseOpOutcomes.filter((outcome) => !outcome.ok);
+  if (failedOutcomes.length > 0) {
+    throw new DvError({
+      code: "release-partial-failure",
+      message: `${failedOutcomes.length} of ${releaseOpOutcomes.length} package(s) failed to publish`,
+      hint: "rerun `dv release --force` after addressing each sub-error (tags are already in place)",
+      context: {
+        failedCount: failedOutcomes.length,
+        totalAttempted: releaseOpOutcomes.length,
+      },
+      subErrors: failedOutcomes.map(
+        (outcome) =>
+          new DvError({
+            code: "release-op-failed",
+            message: outcome.message ?? "release op failed",
+            context: { package: outcome.package, tag: outcome.tag },
+          }),
+      ),
+    });
+  }
+
   return {
     plan,
     mintedTagNames,
