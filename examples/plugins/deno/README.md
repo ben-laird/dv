@@ -30,15 +30,20 @@ discovery:
   2-space indent and a trailing newline. Acceptable for the example because
   deno.json files in this repo don't carry root-level comments — a real-world
   plugin handling comment-bearing manifests would do surgical line edits.
+- `update-dependency` — rewrites `imports[<dependency>]` in `deno.json` to
+  point at `DV_NEW_VERSION`. Preserves any existing range prefix (`^`, `~`)
+  and defaults to caret (`^`) for unrecognized forms — the modern Deno
+  convention. Manifests with no `imports` map, or no entry for the named
+  dependency, return `{ ok: true, changed: false }` — the documented no-op
+  path of the cascade.
 
-`update-dependency` and `release` land in later milestones, alongside their
-respective subtools. The Plugin still conforms — `dv plugin verify` only
-checks Ops the plugin actually declares.
+`release` lands in M5, alongside its subtool. The Plugin still conforms —
+`dv plugin verify` only checks Ops the plugin actually declares.
 
 ## How
 
 Directory-form plugin: each Op lives in its own executable named for the Op
-(`./discover`, `./read-version`, `./write-version`), per
-`specs/plugin-contract.md` § Plugin shape. JSON-over-stdio. Set the executable
-bit (`chmod +x`) when you copy a fresh Op file into place — dv surfaces a
-clear PluginError if it isn't executable.
+(`./discover`, `./read-version`, `./write-version`, `./update-dependency`),
+per `specs/plugin-contract.md` § Plugin shape. JSON-over-stdio. Set the
+executable bit (`chmod +x`) when you copy a fresh Op file into place — dv
+surfaces a clear PluginError if it isn't executable.
