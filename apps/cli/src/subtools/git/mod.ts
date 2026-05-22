@@ -9,5 +9,13 @@ export {
   type CommitChangesResult,
   commitChanges,
 } from "./commit.ts";
+export { type PushTagsArgs, pushTags } from "./push.ts";
 export { findRepoRoot, requireRepoRoot } from "./repo-root.ts";
 export { type StageFilesArgs, stageFiles } from "./stage.ts";
+export { type MintTagArgs, mintTag } from "./tag.ts";
+export {
+  type ListTagsMatchingArgs,
+  listTagsMatching,
+  type TagExistsArgs,
+  tagExists,
+} from "./tag-query.ts";
