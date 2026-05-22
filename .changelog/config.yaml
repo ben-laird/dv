@@ -17,4 +17,11 @@ discovery:
         - "packages/*"
       use: ./examples/plugins/deno
 
+# Long-form companion to CHANGELOG.md — `dv version` writes HISTORY.md
+# alongside CHANGELOG.md when enabled. CHANGELOG stays terse (Keep a
+# Changelog bullets); HISTORY carries each Record's full body prose
+# under per-version h3 subsections. See specs/config-format.md § history.
+history:
+  enabled: true
+
 # Records you author with `dv add` land in .changelog/records/.
