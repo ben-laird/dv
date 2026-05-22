@@ -1,0 +1,31 @@
+#!/usr/bin/env -S deno run --allow-read --allow-env
+// Example dv plugin Op for Deno workspaces — `read-version`. JSON-over-
+// stdio per specs/plugin-contract.md. Copy and adapt — not a maintained dep.
+
+import { join } from "jsr:@std/path@^1";
+
+const packagePath = Deno.env.get("DV_PACKAGE_PATH");
+if (!packagePath) {
+  console.error("DV_PACKAGE_PATH is required");
+  Deno.exit(1);
+}
+
+const manifestPath = join(packagePath, "deno.json");
+let parsed: { version?: unknown };
+try {
+  parsed = JSON.parse(await Deno.readTextFile(manifestPath));
+} catch (caughtError) {
+  const reason = caughtError instanceof Error
+    ? caughtError.message
+    : String(caughtError);
+  console.log(JSON.stringify({ ok: false, error: `cannot read deno.json: ${reason}` }));
+  Deno.exit(1);
+}
+
+// Manifests without a `version` field report 0.0.0 — the documented
+// "no version yet" default. dv's algebra treats 0.0.0 as Unstable.
+const reportedVersion = typeof parsed.version === "string" && parsed.version.length > 0
+  ? parsed.version
+  : "0.0.0";
+
+console.log(JSON.stringify({ version: reportedVersion }));
