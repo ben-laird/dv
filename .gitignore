@@ -1,0 +1,12 @@
+# Deno
+node_modules/
+
+# Compiled CLI binaries
+/dist/
+
+# VitePress build artifacts
+apps/docs/.vitepress/cache/
+apps/docs/.vitepress/dist/
+
+# Editor / OS
+.DS_Store
