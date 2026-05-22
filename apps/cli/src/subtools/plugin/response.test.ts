@@ -1,6 +1,10 @@
 import { assertEquals, assertThrows } from "@std/assert";
 import { PluginError } from "../../domain/errors.ts";
-import { parseDiscoverResponse } from "./response.ts";
+import {
+  parseDiscoverResponse,
+  parseReadVersionResponse,
+  parseWriteVersionResponse,
+} from "./response.ts";
 
 Deno.test("parseDiscoverResponse accepts a well-formed discover payload", () => {
   // Given a plugin that emitted a contract-valid discover response
@@ -87,6 +91,82 @@ Deno.test("parseDiscoverResponse rejects a package entry missing a required fiel
     () =>
       parseDiscoverResponse({
         rawStdout: partialPackageStdout,
+        pluginPath: "/x",
+      }),
+    PluginError,
+  );
+});
+
+Deno.test("parseReadVersionResponse accepts a well-formed SemVer payload", () => {
+  // Given a plugin reporting a current version
+  const validStdout = `{"version":"1.4.2"}`;
+
+  // When parsed
+  const validatedResponse = parseReadVersionResponse({
+    rawStdout: validStdout,
+    pluginPath: "/x",
+  });
+
+  // Then the version string round-trips faithfully
+  assertEquals(validatedResponse.version, "1.4.2");
+});
+
+Deno.test("parseReadVersionResponse accepts the documented '0.0.0' default", () => {
+  // Given a plugin reporting the no-version-yet default
+  const zeroStdout = `{"version":"0.0.0"}`;
+
+  // When parsed
+  const validatedResponse = parseReadVersionResponse({
+    rawStdout: zeroStdout,
+    pluginPath: "/x",
+  });
+
+  // Then it parses cleanly — the algebra treats 0.0.0 as Unstable
+  assertEquals(validatedResponse.version, "0.0.0");
+});
+
+Deno.test("parseReadVersionResponse rejects a non-SemVer version string", () => {
+  // Given a plugin that emitted something that does not look like SemVer
+  const garbageVersionStdout = `{"version":"v1.2-beta"}`;
+
+  // When parsed
+  // Then PluginError flags the regex violation before parseVersion runs
+  assertThrows(
+    () =>
+      parseReadVersionResponse({
+        rawStdout: garbageVersionStdout,
+        pluginPath: "/x",
+      }),
+    PluginError,
+    "read-version",
+  );
+});
+
+Deno.test("parseWriteVersionResponse accepts the {ok: true} acknowledgement", () => {
+  // Given the documented success response
+  const validStdout = `{"ok":true}`;
+
+  // When parsed
+  const validatedResponse = parseWriteVersionResponse({
+    rawStdout: validStdout,
+    pluginPath: "/x",
+  });
+
+  // Then `ok` is the literal true (a schema-strict shape)
+  assertEquals(validatedResponse.ok, true);
+});
+
+Deno.test("parseWriteVersionResponse rejects ok:false (use the error envelope instead)", () => {
+  // Given a plugin that wrongly emits {ok: false} without an `error` field
+  const wrongOkStdout = `{"ok":false}`;
+
+  // When parsed
+  // Then PluginError surfaces — write-version's success contract is
+  // strict `ok: true`; signaling failure goes through the error envelope
+  assertThrows(
+    () =>
+      parseWriteVersionResponse({
+        rawStdout: wrongOkStdout,
         pluginPath: "/x",
       }),
     PluginError,

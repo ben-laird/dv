@@ -33,19 +33,63 @@ export const discoverResponseSchema = z
 
 export type DiscoverResponse = z.infer<typeof discoverResponseSchema>;
 
-interface ParseDiscoverResponseArgs {
+// Standard SemVer pattern (matches specs/schemas/plugin-responses.json
+// $defs.semver). Plugin authors get a precise schema-side failure
+// message when they emit junk, not a downstream parseVersion crash.
+const SEMVER_PATTERN =
+  /^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$/;
+
+export const readVersionResponseSchema = z
+  .object({
+    version: z.string().regex(SEMVER_PATTERN, "must be SemVer (e.g. '1.4.2')"),
+  })
+  .strict();
+
+export type ReadVersionResponse = z.infer<typeof readVersionResponseSchema>;
+
+export const writeVersionResponseSchema = z
+  .object({
+    ok: z.literal(true),
+  })
+  .strict();
+
+export type WriteVersionResponse = z.infer<typeof writeVersionResponseSchema>;
+
+interface ParseSingleOpResponseArgs {
   rawStdout: string;
   pluginPath: string;
 }
 
 export function parseDiscoverResponse(
-  args: ParseDiscoverResponseArgs,
+  args: ParseSingleOpResponseArgs,
 ): DiscoverResponse {
   return parsePluginResponse({
     rawStdout: args.rawStdout,
     pluginPath: args.pluginPath,
     opName: "discover",
     responseSchema: discoverResponseSchema,
+  });
+}
+
+export function parseReadVersionResponse(
+  args: ParseSingleOpResponseArgs,
+): ReadVersionResponse {
+  return parsePluginResponse({
+    rawStdout: args.rawStdout,
+    pluginPath: args.pluginPath,
+    opName: "read-version",
+    responseSchema: readVersionResponseSchema,
+  });
+}
+
+export function parseWriteVersionResponse(
+  args: ParseSingleOpResponseArgs,
+): WriteVersionResponse {
+  return parsePluginResponse({
+    rawStdout: args.rawStdout,
+    pluginPath: args.pluginPath,
+    opName: "write-version",
+    responseSchema: writeVersionResponseSchema,
   });
 }
 

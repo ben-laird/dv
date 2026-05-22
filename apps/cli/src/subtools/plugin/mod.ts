@@ -8,6 +8,12 @@ export {
   discoverResponseSchema,
   parseDiscoverResponse,
   parsePluginResponse,
+  parseReadVersionResponse,
+  parseWriteVersionResponse,
   pluginErrorEnvelopeSchema,
+  type ReadVersionResponse,
+  readVersionResponseSchema,
+  type WriteVersionResponse,
+  writeVersionResponseSchema,
 } from "./response.ts";
 export { type InvokeOpArgs, type InvokeOpResult, invokeOp } from "./runner.ts";
