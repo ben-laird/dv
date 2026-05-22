@@ -50,8 +50,20 @@ From the repo root:
 | `deno task verify`            | All gates in sequence (fmt:check, lint, check, test, schemas:check). |
 
 The `install` task is what to use when iterating on TTY output — colors,
-prompts, banners. The installed shim runs the in-tree source, so edits
-land immediately on the next `dv …` invocation.
+prompts, banners. The installed shim runs the in-tree source against the
+**live** `deno.json`, so source AND config edits land immediately on the
+next `dv …` invocation — no re-install needed when deps or imports change.
+
+The shim is a small hand-written launcher (see
+[`apps/cli/src/scripts/install-dev-shim.ts`](apps/cli/src/scripts/install-dev-shim.ts))
+rather than the output of `deno install`. The standard `deno install`
+snapshots `deno.json` into `~/.deno/bin/.dv/` at install time and never
+refreshes it; we found that stale snapshot biting us across a Zod 3 → 4
+bump (the in-tree code used `.meta()` from Zod 4 while the shim still
+loaded Zod 3 from the snapshot). The custom shim sidesteps that footgun
+by pointing at the live config and source paths directly. POSIX `sh`
+only today; a Windows `.cmd` variant would need to be added if anyone
+develops on Windows.
 
 ## Files
 
