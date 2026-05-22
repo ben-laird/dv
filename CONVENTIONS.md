@@ -1,0 +1,146 @@
+# Engineering conventions
+
+This document captures the conventions that apply across the `dv` /
+Seshat codebase. They sit *underneath* the architectural decisions in
+`.claude/CLAUDE.md` and `specs/` — those govern *what* `dv` does; this
+governs *how* we write the code.
+
+If you're an agent picking up this repo, read [.claude/CLAUDE.md](.claude/CLAUDE.md)
+first, then `specs/language.md`, then this file. Each is shorter than
+the last.
+
+## Toolchain
+
+- **Runtime:** TypeScript on Deno (workspace at the repo root). The CLI
+  binary is `apps/cli`. The docs site at `apps/docs` runs under Deno's
+  npm-compat.
+- **Formatter:** [Biome](https://biomejs.dev) only. Wired through
+  `npm:@biomejs/biome` so no global install is needed. Config at
+  [biome.json](biome.json) at the repo root. Do not run `deno fmt`
+  against TypeScript in this repo — Biome owns formatting.
+- **Linters:** Biome's linter **and** `deno lint`, both required.
+  Biome catches the general JS/TS rules; `deno lint` adds Deno-specific
+  checks (`no-window`, `no-sync-fn-in-async-fn`, etc.) that Biome
+  doesn't know about. They complement, not conflict. `deno task lint`
+  runs both as a single gate.
+- **Validation:** [Zod](https://zod.dev) at every contract boundary —
+  config files, plugin stdio JSON, anything that crosses out of the
+  TypeScript type system. Zod schemas are the in-code source of truth
+  and stay in lockstep with `specs/schemas/*.json`.
+
+### Daily tasks
+
+From the repo root:
+
+| Task                     | What it does                                              |
+| ------------------------ | --------------------------------------------------------- |
+| `deno task dv -- <args>` | Run the in-tree `dv` CLI (one-off).                       |
+| `deno task install`      | `deno install -g -A -f --name dv …` — puts `dv` on PATH.  |
+| `deno task uninstall`    | Removes the installed `dv` shim.                          |
+| `deno task fmt`          | Biome format (write).                                     |
+| `deno task fmt:check`    | Biome format (check only, for CI).                        |
+| `deno task lint`         | Biome lint **and** `deno lint` — both must pass.          |
+| `deno task lint:biome`   | Biome-only lint (debug helper).                           |
+| `deno task lint:deno`    | `deno lint`-only (debug helper).                          |
+| `deno task lint:fix`     | Apply Biome's safe fixes, then run `deno lint`.           |
+| `deno task check`        | Per-workspace `deno check`.                               |
+| `deno task test`         | Run the whole test suite (`deno test -A`).                |
+
+The `install` task is what to use when iterating on TTY output — colors,
+prompts, banners. The installed shim runs the in-tree source, so edits
+land immediately on the next `dv …` invocation.
+
+## Files
+
+- **Test files** use the dot convention: `parse.test.ts`, never
+  `parse_test.ts`. Deno discovers both, but we standardize on the dot
+  form for readability.
+- **Schemas (Zod) and data shapes** live alongside the subtool they
+  describe (`subtools/<x>/schema.ts`, `subtools/<x>/response.ts`).
+- **Pure logic vs. IO** — within a subtool, keep pure functions in one
+  file and IO-bearing functions in another. The algebra (Algebra §1–9
+  in `specs/language.md`) is property-testable; do not contaminate it
+  with filesystem or subprocess calls.
+
+## TypeScript style
+
+- **Function parameters:**
+  - Three or more parameters → object form. Always.
+  - Two parameters → object form unless the meaning is *abundantly* clear
+    at every callsite (e.g. `length(items)`-style). Two adjacent string
+    arguments are almost always a swap hazard; use an object.
+  - One parameter → positional. No object.
+  - Prefer a named `interface FnNameArgs { … }` over inline object
+    types — the shape is then exportable and testable.
+
+- **Variable names** lean long. `discoveredPackages` over `pkgs`,
+  `repoRootPath` over `root`, `pluginAssignmentIndex` over `i`. The
+  default is descriptive; well-understood shorthand (`err`, loop `i`)
+  is fine when context makes it unambiguous, but rule of thumb: pick
+  the longer name unless it's a clear loss.
+
+- **Comments** describe *why*, never *what*. Public functions get one
+  short prose paragraph explaining their reason for existing and any
+  non-obvious invariants. No multi-paragraph docstrings, no narration
+  of the implementation. Reference `specs/` files when a decision is
+  owned upstream.
+
+- **Errors** extend `DvError` and carry a stable `code: string` (e.g.
+  `"config-not-found"`, `"plugin-bad-response"`). The code surfaces in
+  `--json` output per `specs/v1-scope.md` § Automation surface — treat
+  the codes as a public contract.
+
+## Testing
+
+- **Names** read as full sentences describing the behavior — not "X:
+  rejects empty" but "X rejects an empty stdout as a bad response".
+  Reading the test list out loud should sound like a spec.
+
+- **Structure** is Given / When / Then, with explicit comments:
+
+  ```typescript
+  Deno.test("loadConfig on an empty file falls back to documented defaults", async () => {
+    // Given an empty config.yaml
+    const configFilePath = join(configDirectory, "config.yaml");
+
+    // When loadConfig parses it
+    const resolvedConfig = await loadConfig(configFilePath);
+
+    // Then every section carries the default values
+    assertEquals(resolvedConfig.discovery.plugins, []);
+    // …
+  });
+  ```
+
+  Keep the comments uniform even when a phase is empty — the structure
+  itself is part of the spec.
+
+- **Property tests for the algebra.** `specs/language.md` Algebra §1–9
+  is testable: bump join commutativity, idempotence of `version` and
+  `release`, plan determinism, "no Record produces 1.0.0". Lean on
+  property-based testing (`fast-check` via npm) once those subtools
+  land.
+
+## Schemas and the docs/code lockstep
+
+- Every contract surface (`.changelog/config.yaml`, plugin stdio JSON,
+  the Plan emitted by `--json`) is documented in
+  [specs/schemas/](specs/schemas/) as JSON Schema *and* described by a
+  Zod schema in the source.
+- When they diverge, the issue is in whichever drifted — update both
+  in the same change, including
+  [specs/language.md](specs/language.md) if the vocabulary moves.
+- Plugins are tested with `dv plugin verify` against the JSON Schema;
+  in-process callers validate through Zod. Same shape, two consumers.
+
+## What's deliberately *not* in here
+
+- The ubiquitous language (Record, Bump, Stability, Plan, Tag, …) —
+  see [specs/language.md](specs/language.md).
+- Architectural decisions and trade-offs — see
+  [specs/design.md](specs/design.md).
+- Per-command behavior — see [specs/cli.md](specs/cli.md).
+- v1 milestones — see [specs/v1-scope.md](specs/v1-scope.md).
+
+This file is for the engineering grain. Anything that's *about `dv` the
+product* belongs in `specs/`.
