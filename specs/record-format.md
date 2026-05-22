@@ -11,7 +11,7 @@ entries.
 .changelog/
   config.yaml
   renames.yaml        # optional — package rename ledger (see below)
-  changes/
+  records/
     quiet-cats-sneeze.md
     purple-rhinos-dance.md
     ...
