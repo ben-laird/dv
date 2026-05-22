@@ -1,5 +1,5 @@
 import { assertEquals } from "@std/assert";
-import { type Bump, BUMPS } from "../../domain/bump.ts";
+import { BUMPS, type Bump } from "../../domain/bump.ts";
 import { joinBumps } from "./bump-join.ts";
 
 Deno.test("joinBumps takes the chain max — three fixes and one feat join to minor", () => {

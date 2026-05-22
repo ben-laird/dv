@@ -1,11 +1,10 @@
 import type { Config, PluginAssignment } from "../../domain/config.ts";
 import { ConfigError } from "../../domain/errors.ts";
 import type { Package } from "../../domain/package.ts";
+import { invokeOp, parseDiscoverResponse } from "../plugin/mod.ts";
 import { parseDurationMs } from "./duration.ts";
 import { matchesAny, normalizePath, splitMatch } from "./match.ts";
-import { invokeOp } from "./plugin-runner.ts";
 import { resolvePlugin } from "./resolve.ts";
-import { parseDiscoverResponse } from "./response.ts";
 
 const DEFAULT_FAST_OP_TIMEOUT = "60s";
 

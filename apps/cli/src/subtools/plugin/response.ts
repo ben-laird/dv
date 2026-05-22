@@ -7,9 +7,11 @@ import { PluginError } from "../../domain/errors.ts";
 // is recognized for any Op and turned into a PluginError.
 //
 // Per [[feedback-zod-for-contracts]], every plugin stdio boundary is
-// validated through Zod, not hand-rolled.
+// validated through Zod, not hand-rolled. These schemas live in the
+// shared plugin subtool because every subtool that talks to plugins
+// (discovery, versioning, publishing) parses through them.
 
-const pluginErrorEnvelopeSchema = z
+export const pluginErrorEnvelopeSchema = z
   .object({
     ok: z.literal(false),
     error: z.string(),
@@ -39,14 +41,35 @@ interface ParseDiscoverResponseArgs {
 export function parseDiscoverResponse(
   args: ParseDiscoverResponseArgs,
 ): DiscoverResponse {
-  const { rawStdout, pluginPath } = args;
+  return parsePluginResponse({
+    rawStdout: args.rawStdout,
+    pluginPath: args.pluginPath,
+    opName: "discover",
+    responseSchema: discoverResponseSchema,
+  });
+}
+
+// Shared error-envelope detection + schema parsing pipeline. Every Op's
+// per-schema parser routes through this so the failure shapes
+// (empty stdout, non-JSON, structured envelope, shape violation) are
+// identical across discover / read-version / write-version / etc.
+
+interface ParsePluginResponseArgs<T> {
+  rawStdout: string;
+  pluginPath: string;
+  opName: string;
+  responseSchema: z.ZodType<T>;
+}
+
+export function parsePluginResponse<T>(args: ParsePluginResponseArgs<T>): T {
+  const { rawStdout, pluginPath, opName, responseSchema } = args;
   const trimmedStdout = rawStdout.trim();
   if (trimmedStdout.length === 0) {
     throw new PluginError(
       "plugin-bad-response",
-      "discover produced empty stdout",
+      `${opName} produced empty stdout`,
       pluginPath,
-      "discover",
+      opName,
     );
   }
 
@@ -58,9 +81,9 @@ export function parseDiscoverResponse(
       caughtError instanceof Error ? caughtError.message : String(caughtError);
     throw new PluginError(
       "plugin-bad-response",
-      `discover stdout is not valid JSON: ${parserMessage}`,
+      `${opName} stdout is not valid JSON: ${parserMessage}`,
       pluginPath,
-      "discover",
+      opName,
     );
   }
 
@@ -68,13 +91,13 @@ export function parseDiscoverResponse(
   if (envelopeAttempt.success) {
     throw new PluginError(
       "plugin-error",
-      `discover reported failure: ${envelopeAttempt.data.error}`,
+      `${opName} reported failure: ${envelopeAttempt.data.error}`,
       pluginPath,
-      "discover",
+      opName,
     );
   }
 
-  const validatedResponse = discoverResponseSchema.safeParse(parsedJson);
+  const validatedResponse = responseSchema.safeParse(parsedJson);
   if (!validatedResponse.success) {
     const firstIssue = validatedResponse.error.issues[0];
     const issueLocation =
@@ -84,9 +107,9 @@ export function parseDiscoverResponse(
     const issueMessage = firstIssue?.message ?? "unknown shape error";
     throw new PluginError(
       "plugin-bad-response",
-      `discover response @ ${issueLocation}: ${issueMessage}`,
+      `${opName} response @ ${issueLocation}: ${issueMessage}`,
       pluginPath,
-      "discover",
+      opName,
     );
   }
   return validatedResponse.data;

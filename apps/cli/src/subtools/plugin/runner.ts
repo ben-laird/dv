@@ -1,11 +1,16 @@
 import { join } from "@std/path";
 import { PluginError } from "../../domain/errors.ts";
-import type { ResolvedPlugin } from "./resolve.ts";
+import type { ResolvedPlugin } from "../discovery/resolve.ts";
 
 // Invokes a single plugin Op per specs/plugin-contract.md.
 // JSON-over-stdio, op as argv[1] for single-executable plugins, op-named
 // subcommand for directory plugins. Fast ops are bounded by a wall-clock
 // timeout; exceeding it is a failure with no auto-retry.
+//
+// Cross-subtool: discovery's `discover` and versioning's `read-version` /
+// `write-version` all flow through this same runner. The resolver lives
+// in discovery because resolution is *its* job; the runner sits one
+// level up because every subtool that talks to plugins uses it.
 
 export interface InvokeOpArgs {
   resolvedPlugin: ResolvedPlugin;

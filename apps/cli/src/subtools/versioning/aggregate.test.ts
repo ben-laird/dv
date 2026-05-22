@@ -42,12 +42,11 @@ Deno.test("aggregateBumps joins multiple records on one package into a single Bu
 
 Deno.test("aggregateBumps produces order-independent results (commutativity of join)", () => {
   // Given the same three records in two different orders
-  const orderA: DvRecord[] = [
-    buildRecord("a.md", "fix", ["core"]),
-    buildRecord("b.md", "feat", ["core"]),
-    buildRecord("c.md", "feat!", ["core"]),
-  ];
-  const orderB: DvRecord[] = [orderA[2]!, orderA[0]!, orderA[1]!];
+  const recordA = buildRecord("a.md", "fix", ["core"]);
+  const recordB = buildRecord("b.md", "feat", ["core"]);
+  const recordC = buildRecord("c.md", "feat!", ["core"]);
+  const orderA: DvRecord[] = [recordA, recordB, recordC];
+  const orderB: DvRecord[] = [recordC, recordA, recordB];
   const knownPackageStabilities = new Map<string, Stability>([
     ["core", "Stable"],
   ]);
