@@ -126,7 +126,7 @@ released?        : Package → Bool
 plan             : Command × RepoState → Plan
 ```
 
-### classify — the Conventional-Commits → SemVer mapping
+### classify — the Change-Type → SemVer mapping
 
 The whole bump-decision surface, in one table:
 
