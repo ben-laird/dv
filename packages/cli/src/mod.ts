@@ -12,6 +12,4 @@ export type {
   FlagsOf,
   RunnerContext,
 } from "./command-spec.ts";
-
-// defineCli lands in step 3; this module only exports types until then
-// so the workspace member type-checks while the implementation grows.
+export { defineCli } from "./define-cli.ts";
