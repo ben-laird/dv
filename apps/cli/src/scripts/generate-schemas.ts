@@ -14,6 +14,7 @@ import { z } from "zod";
 import { rawConfigLayerSchema } from "../subtools/config/schema.ts";
 import { rawRecordFrontmatterSchema } from "../subtools/records/schema.ts";
 import { renameLedgerSchema } from "../subtools/renames/schema.ts";
+import { rawPlanSchema } from "../subtools/versioning/plan-schema.ts";
 
 interface GeneratedSchemaFile {
   outputPath: string;
@@ -38,6 +39,11 @@ const GENERATED_SCHEMA_FILES: GeneratedSchemaFile[] = [
     outputPath: resolve(REPO_ROOT, "specs/schemas/rename-ledger.json"),
     schema: renameLedgerSchema,
     schemaId: "urn:dv:schema:v1:rename-ledger",
+  },
+  {
+    outputPath: resolve(REPO_ROOT, "specs/schemas/plan.json"),
+    schema: rawPlanSchema,
+    schemaId: "urn:dv:schema:v1:plan",
   },
 ];
 
