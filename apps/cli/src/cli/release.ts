@@ -296,10 +296,11 @@ function assertConfirmedOrYes(args: AssertConfirmedOrYesArgs): void {
   if (args.yes) return;
   const isInteractive = Deno.stdin.isTerminal();
   if (!isInteractive) {
-    throw new DvError(
-      "confirmation-required",
-      "dv release in a non-TTY context requires --yes to confirm",
-    );
+    throw new DvError({
+      code: "confirmation-required",
+      message: "dv release in a non-TTY context requires --yes to confirm",
+      hint: "rerun with --yes to skip the prompt (e.g. in CI)",
+    });
   }
   // Built-in Deno prompt — the framework will grow a real prompt
   // subtool in a follow-up. For prototype use this is fine.
@@ -310,7 +311,10 @@ function assertConfirmedOrYes(args: AssertConfirmedOrYesArgs): void {
     `About to release ${args.plan.awaitingRelease.length} tag(s): ${summaryLine}\nProceed? [y/N]`,
   );
   if (answer !== "y" && answer !== "Y") {
-    throw new DvError("release-cancelled", "user declined the release prompt");
+    throw new DvError({
+      code: "release-cancelled",
+      message: "user declined the release prompt",
+    });
   }
 }
 

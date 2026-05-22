@@ -80,7 +80,7 @@ export async function runValidate(
   });
   for (const failedRecord of recordsListing.failures) {
     validationProblems.push({
-      code: failedRecord.code,
+      code: failedRecord.kind.code,
       message: failedRecord.message,
       source: relative(repoRootPath, failedRecord.recordPath),
     });
@@ -204,7 +204,7 @@ interface AppendProblemArgs {
 function appendProblem(args: AppendProblemArgs): void {
   if (args.caughtError instanceof RecordError) {
     args.validationProblems.push({
-      code: args.caughtError.code,
+      code: args.caughtError.kind.code,
       message: args.caughtError.message,
       source: args.caughtError.recordPath,
     });
@@ -212,7 +212,7 @@ function appendProblem(args: AppendProblemArgs): void {
   }
   if (args.caughtError instanceof DvError) {
     args.validationProblems.push({
-      code: args.caughtError.code,
+      code: args.caughtError.kind.code,
       message: args.caughtError.message,
       source: args.defaultSource,
     });

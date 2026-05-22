@@ -100,12 +100,14 @@ export async function runVersion(
     recordsDirectory: recordsPath(repoRootPath),
   });
   if (recordsListing.failures.length > 0) {
-    throw new DvError(
-      "malformed-records",
-      `${recordsListing.failures.length} record file${
+    throw new DvError({
+      code: "malformed-records",
+      message: `${recordsListing.failures.length} record file${
         recordsListing.failures.length === 1 ? "" : "s"
       } failed to parse — run \`dv validate\` to see details`,
-    );
+      hint: "run `dv validate` for per-record diagnostics",
+      context: { failureCount: recordsListing.failures.length },
+    });
   }
 
   const renameLedger = await loadRenameLedger({
@@ -151,12 +153,14 @@ export async function runVersion(
   });
 
   if (plan.unresolvedReferences.length > 0 && !options.prune) {
-    throw new DvError(
-      "unresolved-reference",
-      `${plan.unresolvedReferences.length} record${
+    throw new DvError({
+      code: "unresolved-reference",
+      message: `${plan.unresolvedReferences.length} record${
         plan.unresolvedReferences.length === 1 ? "" : "s"
       } reference a Package not found — pass --prune to drop them, or use \`dv rename\` to record the lineage`,
-    );
+      hint: "use `dv rename <from> <to>` to declare lineage, or pass --prune to drop the references",
+      context: { count: plan.unresolvedReferences.length },
+    });
   }
 
   // Idempotence (Algebra §5): no records pending and no orphans to
@@ -202,17 +206,17 @@ export async function runVersion(
   for (const pendingEntry of plan.pending) {
     const pkg = discoveredPackageByName.get(pendingEntry.package);
     if (pkg === undefined) {
-      throw new DvError(
-        "internal-plan-mismatch",
-        `plan named package '${pendingEntry.package}' that discovery did not list`,
-      );
+      throw new DvError({
+        code: "internal-plan-mismatch",
+        message: `plan named package '${pendingEntry.package}' that discovery did not list`,
+      });
     }
     const resolvedPlugin = resolvedPluginsByUseString.get(pkg.plugin);
     if (resolvedPlugin === undefined) {
-      throw new DvError(
-        "internal-plan-mismatch",
-        `no resolved plugin for '${pkg.plugin}'`,
-      );
+      throw new DvError({
+        code: "internal-plan-mismatch",
+        message: `no resolved plugin for '${pkg.plugin}'`,
+      });
     }
     await invokeWriteVersion({
       repoRootPath,
@@ -226,10 +230,10 @@ export async function runVersion(
     const recordsForPackage = pendingEntry.records.map((recordFilename) => {
       const record = recordsByFilename.get(recordFilename);
       if (record === undefined) {
-        throw new DvError(
-          "internal-plan-mismatch",
-          `plan named record '${recordFilename}' that records subtool did not list`,
-        );
+        throw new DvError({
+          code: "internal-plan-mismatch",
+          message: `plan named record '${recordFilename}' that records subtool did not list`,
+        });
       }
       return record;
     });

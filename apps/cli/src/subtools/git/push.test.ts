@@ -136,7 +136,7 @@ Deno.test("pushTags throws DvError('git-push-failed') when a referenced tag does
         }),
       DvError,
     );
-    assertEquals(caughtError.code, "git-push-failed");
+    assertEquals(caughtError.kind.code, "git-push-failed");
   } finally {
     await fixture.cleanup();
   }

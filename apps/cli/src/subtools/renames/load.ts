@@ -9,15 +9,21 @@ import { renameLedgerSchema } from "./schema.ts";
 // ledger. Cycle detection happens at resolve time, not load time, since
 // a cycle is a *runtime* invariant violation (Algebra §8 requires a DAG
 // of edges for the closure to be a function).
+//
+// RenameLedgerError keeps a class identity so resolve.ts's
+// cycle/duplicate detection can throw a related error tagged the same
+// way. The path it carries moves into `kind.context.ledgerPath` to
+// match the structured error model.
 
 export class RenameLedgerError extends DvError {
-  constructor(
-    code: string,
-    message: string,
-    public readonly ledgerPath: string,
-  ) {
-    super(code, message);
-    this.name = "RenameLedgerError";
+  get ledgerPath(): string {
+    // Every variant the constructor accepts (ledger-parse,
+    // ledger-shape, ledger-duplicate-edge, ledger-cycle) declares
+    // `context.ledgerPath: string`. The cast walks past the
+    // `unknown` arm (no context) — only those four codes are used
+    // at our throw sites.
+    return (this.kind as unknown as { context: { ledgerPath: string } }).context
+      .ledgerPath;
   }
 }
 
@@ -52,11 +58,11 @@ function parseLedgerText(args: ParseLedgerTextArgs): Rename[] {
   } catch (caughtError) {
     const yamlMessage =
       caughtError instanceof Error ? caughtError.message : String(caughtError);
-    throw new RenameLedgerError(
-      "ledger-parse",
-      `failed to parse ${ledgerPath}: ${yamlMessage}`,
-      ledgerPath,
-    );
+    throw new RenameLedgerError({
+      code: "ledger-parse",
+      message: `failed to parse ${ledgerPath}: ${yamlMessage}`,
+      context: { ledgerPath },
+    });
   }
   if (parsedYaml === null || parsedYaml === undefined) return [];
 
@@ -86,9 +92,9 @@ function ledgerErrorFromZod(args: LedgerErrorFromZodArgs): RenameLedgerError {
       ? firstIssue.path.join(".")
       : "<root>";
   const issueMessage = firstIssue?.message ?? "invalid";
-  return new RenameLedgerError(
-    "ledger-shape",
-    `${args.ledgerPath} @ ${issuePath}: ${issueMessage}`,
-    args.ledgerPath,
-  );
+  return new RenameLedgerError({
+    code: "ledger-shape",
+    message: `${args.ledgerPath} @ ${issuePath}: ${issueMessage}`,
+    context: { ledgerPath: args.ledgerPath },
+  });
 }

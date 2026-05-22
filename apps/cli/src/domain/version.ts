@@ -20,10 +20,12 @@ export function parseVersion(rawText: string): Version {
   } catch (caughtError) {
     const reason =
       caughtError instanceof Error ? caughtError.message : String(caughtError);
-    throw new DvError(
-      "version-parse",
-      `invalid semver '${rawText}': ${reason}`,
-    );
+    throw new DvError({
+      code: "version-parse",
+      message: `invalid semver '${rawText}': ${reason}`,
+      context: { rawText },
+      cause: caughtError,
+    });
   }
 }
 

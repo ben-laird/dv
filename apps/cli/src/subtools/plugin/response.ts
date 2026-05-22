@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { PluginError } from "../../domain/errors.ts";
+import { DvError } from "../../domain/errors.ts";
 
 // Zod schemas for plugin Op responses, per specs/schemas/plugin-responses.json.
 // One schema per Op; the runner pipes raw stdout through the matching
@@ -174,12 +174,12 @@ export function parsePluginResponse<T>(args: ParsePluginResponseArgs<T>): T {
   const { rawStdout, pluginPath, opName, responseSchema } = args;
   const trimmedStdout = rawStdout.trim();
   if (trimmedStdout.length === 0) {
-    throw new PluginError(
-      "plugin-bad-response",
-      `${opName} produced empty stdout`,
-      pluginPath,
-      opName,
-    );
+    throw new DvError({
+      code: "plugin-bad-response",
+      message: `${opName} produced empty stdout`,
+      hint: "the plugin must write a JSON response to stdout — check that it isn't writing to stderr or silently exiting",
+      context: { pluginPath, opName },
+    });
   }
 
   let parsedJson: unknown;
@@ -188,23 +188,23 @@ export function parsePluginResponse<T>(args: ParsePluginResponseArgs<T>): T {
   } catch (caughtError) {
     const parserMessage =
       caughtError instanceof Error ? caughtError.message : String(caughtError);
-    throw new PluginError(
-      "plugin-bad-response",
-      `${opName} stdout is not valid JSON: ${parserMessage}`,
-      pluginPath,
-      opName,
-    );
+    throw new DvError({
+      code: "plugin-bad-response",
+      message: `${opName} stdout is not valid JSON: ${parserMessage}`,
+      hint: "ensure no log lines leak onto stdout; logs belong on stderr",
+      context: { pluginPath, opName },
+      cause: caughtError,
+    });
   }
 
   if (args.acceptStructuredFailure !== true) {
     const envelopeAttempt = pluginErrorEnvelopeSchema.safeParse(parsedJson);
     if (envelopeAttempt.success) {
-      throw new PluginError(
-        "plugin-error",
-        `${opName} reported failure: ${envelopeAttempt.data.error}`,
-        pluginPath,
-        opName,
-      );
+      throw new DvError({
+        code: "plugin-error",
+        message: `${opName} reported failure: ${envelopeAttempt.data.error}`,
+        context: { pluginPath, opName },
+      });
     }
   }
 
@@ -216,12 +216,12 @@ export function parsePluginResponse<T>(args: ParsePluginResponseArgs<T>): T {
         ? firstIssue.path.join(".")
         : "<root>";
     const issueMessage = firstIssue?.message ?? "unknown shape error";
-    throw new PluginError(
-      "plugin-bad-response",
-      `${opName} response @ ${issueLocation}: ${issueMessage}`,
-      pluginPath,
-      opName,
-    );
+    throw new DvError({
+      code: "plugin-bad-response",
+      message: `${opName} response @ ${issueLocation}: ${issueMessage}`,
+      hint: `compare the plugin's output to specs/schemas/plugin-responses.json (op: ${opName})`,
+      context: { pluginPath, opName },
+    });
   }
   return validatedResponse.data;
 }

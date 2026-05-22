@@ -1,4 +1,5 @@
 import type { Config, PluginAssignment } from "../domain/config.ts";
+import { DvError } from "../domain/errors.ts";
 import type { Package } from "../domain/package.ts";
 import type { Version } from "../domain/version.ts";
 import { configPath, loadConfig, recordsPath } from "../subtools/config/mod.ts";
@@ -131,9 +132,8 @@ export async function runStatus(
 function isConfigNotFound(caughtError: unknown): boolean {
   if (caughtError instanceof Deno.errors.NotFound) return true;
   if (
-    caughtError instanceof Error &&
-    "code" in caughtError &&
-    (caughtError as { code: unknown }).code === "config-not-found"
+    caughtError instanceof DvError &&
+    caughtError.kind.code === "config-not-found"
   ) {
     return true;
   }

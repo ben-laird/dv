@@ -1,5 +1,5 @@
 import { join } from "@std/path";
-import { PluginError } from "../../domain/errors.ts";
+import { DvError } from "../../domain/errors.ts";
 import type { ResolvedPlugin } from "../discovery/resolve.ts";
 
 // Invokes a single plugin Op per specs/plugin-contract.md.
@@ -57,20 +57,22 @@ export async function invokeOp(args: InvokeOpArgs): Promise<InvokeOpResult> {
   } catch (caughtError) {
     if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
     if (caughtError instanceof Deno.errors.NotFound) {
-      throw new PluginError(
-        "plugin-not-executable",
-        `plugin executable not found: ${executablePath}`,
-        executablePath,
-        opName,
-      );
+      throw new DvError({
+        code: "plugin-not-executable",
+        message: `plugin executable not found: ${executablePath}`,
+        hint: "check the plugin path; for directory plugins the op name must exist as a child file",
+        context: { pluginPath: executablePath, opName },
+        cause: caughtError,
+      });
     }
     if (caughtError instanceof Deno.errors.PermissionDenied) {
-      throw new PluginError(
-        "plugin-not-executable",
-        `plugin not executable (chmod +x?): ${executablePath}`,
-        executablePath,
-        opName,
-      );
+      throw new DvError({
+        code: "plugin-not-executable",
+        message: `plugin not executable (chmod +x?): ${executablePath}`,
+        hint: "run `chmod +x` on the plugin file",
+        context: { pluginPath: executablePath, opName },
+        cause: caughtError,
+      });
     }
     throw caughtError;
   }
@@ -87,12 +89,17 @@ export async function invokeOp(args: InvokeOpArgs): Promise<InvokeOpResult> {
   } catch (caughtError) {
     if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
     if (abortController.signal.aborted) {
-      throw new PluginError(
-        "plugin-timeout",
-        `plugin ${opName} timed out after ${args.timeoutMs}ms`,
-        executablePath,
-        opName,
-      );
+      throw new DvError({
+        code: "plugin-timeout",
+        message: `plugin ${opName} timed out after ${args.timeoutMs}ms`,
+        hint: "raise the per-Op timeout in config (e.g. discovery.plugins[i].timeout) or speed up the plugin",
+        context: {
+          pluginPath: executablePath,
+          opName,
+          timeoutMs: args.timeoutMs ?? 0,
+        },
+        cause: caughtError,
+      });
     }
     throw caughtError;
   }
@@ -102,12 +109,16 @@ export async function invokeOp(args: InvokeOpArgs): Promise<InvokeOpResult> {
   const rawStderr = new TextDecoder().decode(processOutput.stderr);
   if (!processOutput.success) {
     const stderrDetail = rawStderr.trim() || `exit ${processOutput.code}`;
-    throw new PluginError(
-      "plugin-exit-nonzero",
-      `plugin ${opName} failed (exit ${processOutput.code}): ${stderrDetail}`,
-      executablePath,
-      opName,
-    );
+    throw new DvError({
+      code: "plugin-exit-nonzero",
+      message: `plugin ${opName} failed (exit ${processOutput.code}): ${stderrDetail}`,
+      hint: "check the plugin's stderr above for the underlying error",
+      context: {
+        pluginPath: executablePath,
+        opName,
+        exitCode: processOutput.code,
+      },
+    });
   }
   return { rawStdout, rawStderr };
 }

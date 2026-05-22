@@ -1,6 +1,6 @@
 import { assertEquals, assertRejects } from "@std/assert";
 import { join } from "@std/path";
-import { ConfigError } from "../../domain/errors.ts";
+import { DvError } from "../../domain/errors.ts";
 import { loadConfig } from "./parse.ts";
 
 interface WithConfigDirectoryArgs {
@@ -107,11 +107,7 @@ Deno.test("loadConfig rejects an unknown top-level key (typo guard)", async () =
 
       // When loadConfig parses it
       // Then it rejects with a ConfigError mentioning the offending key
-      await assertRejects(
-        () => loadConfig(configFilePath),
-        ConfigError,
-        "bogus",
-      );
+      await assertRejects(() => loadConfig(configFilePath), DvError, "bogus");
     },
   });
 });
@@ -131,11 +127,7 @@ discovery:
 
       // When loadConfig parses it
       // Then ConfigError reports the bad key path
-      await assertRejects(
-        () => loadConfig(configFilePath),
-        ConfigError,
-        "typo",
-      );
+      await assertRejects(() => loadConfig(configFilePath), DvError, "typo");
     },
   });
 });
@@ -155,11 +147,7 @@ discovery:
 
       // When loadConfig parses it
       // Then ConfigError surfaces the missing field
-      await assertRejects(
-        () => loadConfig(configFilePath),
-        ConfigError,
-        "match",
-      );
+      await assertRejects(() => loadConfig(configFilePath), DvError, "match");
     },
   });
 });
@@ -208,11 +196,7 @@ Deno.test("loadConfig rejects an extends chain that loops back on itself", async
 
       // When loadConfig is called on either side
       // Then ConfigError flags the cycle
-      await assertRejects(
-        () => loadConfig(aConfigFilePath),
-        ConfigError,
-        "cycle",
-      );
+      await assertRejects(() => loadConfig(aConfigFilePath), DvError, "cycle");
     },
   });
 });
@@ -225,7 +209,7 @@ Deno.test("loadConfig surfaces a structured config-not-found error when the file
   // Then it rejects with ConfigError carrying the config-not-found message
   await assertRejects(
     () => loadConfig(missingConfigPath),
-    ConfigError,
+    DvError,
     "config not found",
   );
 });

@@ -114,7 +114,7 @@ Deno.test("mintTag throws DvError('git-tag-failed') when a tag with the same nam
         }),
       DvError,
     );
-    assertEquals(caughtError.code, "git-tag-failed");
+    assertEquals(caughtError.kind.code, "git-tag-failed");
   } finally {
     await fixture.cleanup();
   }

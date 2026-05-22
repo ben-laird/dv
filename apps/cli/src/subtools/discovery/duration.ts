@@ -1,4 +1,4 @@
-import { ConfigError } from "../../domain/errors.ts";
+import { DvError } from "../../domain/errors.ts";
 
 // Parses durations of the form "60s", "5m", "500ms", "1h" (the config
 // schema's $defs/duration). "none" is handled by callers, not here.
@@ -13,10 +13,12 @@ interface ParseDurationMsArgs {
 export function parseDurationMs(args: ParseDurationMsArgs): number {
   const matchedDuration = DURATION_REGEX.exec(args.durationString);
   if (!matchedDuration) {
-    throw new ConfigError(
-      "config-shape",
-      `${args.breadcrumb} must look like '60s', '5m', '500ms', '1h'; got '${args.durationString}'`,
-    );
+    throw new DvError({
+      code: "config-shape",
+      message: `${args.breadcrumb} must look like '60s', '5m', '500ms', '1h'; got '${args.durationString}'`,
+      hint: "use one of the supported units: ms, s, m, h",
+      context: {},
+    });
   }
   const numericQuantity = Number(matchedDuration[1]);
   switch (matchedDuration[2]) {
@@ -29,9 +31,10 @@ export function parseDurationMs(args: ParseDurationMsArgs): number {
     case "h":
       return numericQuantity * 3_600_000;
     default:
-      throw new ConfigError(
-        "config-shape",
-        `unreachable: malformed duration unit in '${args.durationString}'`,
-      );
+      throw new DvError({
+        code: "config-shape",
+        message: `unreachable: malformed duration unit in '${args.durationString}'`,
+        context: {},
+      });
   }
 }

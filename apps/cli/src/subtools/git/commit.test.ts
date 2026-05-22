@@ -94,7 +94,7 @@ Deno.test("commitChanges throws DvError('git-commit-failed') with nothing staged
         }),
       DvError,
     );
-    assertEquals(caughtError.code, "git-commit-failed");
+    assertEquals(caughtError.kind.code, "git-commit-failed");
   } finally {
     await fixture.cleanup();
   }

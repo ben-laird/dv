@@ -34,10 +34,10 @@ export async function commitChanges(
   }).output();
   if (!commitResult.success) {
     const stderrText = new TextDecoder().decode(commitResult.stderr).trim();
-    throw new DvError(
-      "git-commit-failed",
-      `failed to commit: ${stderrText || `exit ${commitResult.code}`}`,
-    );
+    throw new DvError({
+      code: "git-commit-failed",
+      message: `failed to commit: ${stderrText || `exit ${commitResult.code}`}`,
+    });
   }
 
   const revParseResult = await new Deno.Command("git", {
@@ -46,10 +46,10 @@ export async function commitChanges(
     stderr: "piped",
   }).output();
   if (!revParseResult.success) {
-    throw new DvError(
-      "git-rev-parse-failed",
-      "commit succeeded but rev-parse HEAD failed",
-    );
+    throw new DvError({
+      code: "git-rev-parse-failed",
+      message: "commit succeeded but rev-parse HEAD failed",
+    });
   }
   const commitSha = new TextDecoder().decode(revParseResult.stdout).trim();
   return { commitSha };

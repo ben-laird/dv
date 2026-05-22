@@ -22,9 +22,11 @@ export async function pushTags(args: PushTagsArgs): Promise<void> {
   }).output();
   if (!pushResult.success) {
     const stderrText = new TextDecoder().decode(pushResult.stderr).trim();
-    throw new DvError(
-      "git-push-failed",
-      `failed to push tags (${args.tagNames.join(", ")}): ${stderrText || `exit ${pushResult.code}`}`,
-    );
+    throw new DvError({
+      code: "git-push-failed",
+      message: `failed to push tags (${args.tagNames.join(", ")}): ${stderrText || `exit ${pushResult.code}`}`,
+      hint: "check that the `origin` remote exists and the tags don't already exist there",
+      context: { tagNames: args.tagNames },
+    });
   }
 }

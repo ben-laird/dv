@@ -21,9 +21,9 @@ export async function stageFiles(args: StageFilesArgs): Promise<void> {
   }).output();
   if (!stageResult.success) {
     const stderrText = new TextDecoder().decode(stageResult.stderr).trim();
-    throw new DvError(
-      "git-stage-failed",
-      `failed to stage files: ${stderrText || `exit ${stageResult.code}`}`,
-    );
+    throw new DvError({
+      code: "git-stage-failed",
+      message: `failed to stage files: ${stderrText || `exit ${stageResult.code}`}`,
+    });
   }
 }

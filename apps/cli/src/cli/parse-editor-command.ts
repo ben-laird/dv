@@ -23,16 +23,19 @@ export interface EditorCommandSpec {
 export function parseEditorCommand(rawEditorValue: string): EditorCommandSpec {
   const tokens = tokenize(rawEditorValue);
   if (tokens.length === 0) {
-    throw new DvError(
-      "editor-parse",
-      "EDITOR / VISUAL value is empty or whitespace-only",
-    );
+    throw new DvError({
+      code: "editor-parse",
+      message: "EDITOR / VISUAL value is empty or whitespace-only",
+    });
   }
   const [commandToken, ...argumentTokens] = tokens;
   if (commandToken === undefined) {
     // Unreachable given the length check above, but the narrowing
     // keeps the type system honest without a non-null assertion.
-    throw new DvError("editor-parse", "EDITOR resolved to no tokens");
+    throw new DvError({
+      code: "editor-parse",
+      message: "EDITOR resolved to no tokens",
+    });
   }
   return { command: commandToken, commandArgs: argumentTokens };
 }
@@ -69,10 +72,10 @@ function tokenize(rawInput: string): string[] {
     if (char === "\\") {
       const nextChar = rawInput[index + 1];
       if (nextChar === undefined) {
-        throw new DvError(
-          "editor-parse",
-          "trailing backslash with nothing to escape",
-        );
+        throw new DvError({
+          code: "editor-parse",
+          message: "trailing backslash with nothing to escape",
+        });
       }
       currentToken += nextChar;
       isBuildingToken = true;
@@ -115,7 +118,10 @@ function consumeSingleQuoted(args: ConsumeQuotedArgs): number {
     if (char !== undefined) args.appendChar(char);
     cursor += 1;
   }
-  throw new DvError("editor-parse", "unterminated single quote");
+  throw new DvError({
+    code: "editor-parse",
+    message: "unterminated single quote",
+  });
 }
 
 function consumeDoubleQuoted(args: ConsumeQuotedArgs): number {
@@ -129,10 +135,10 @@ function consumeDoubleQuoted(args: ConsumeQuotedArgs): number {
     if (char === "\\") {
       const nextChar = args.rawInput[cursor + 1];
       if (nextChar === undefined) {
-        throw new DvError(
-          "editor-parse",
-          "trailing backslash inside double quotes",
-        );
+        throw new DvError({
+          code: "editor-parse",
+          message: "trailing backslash inside double quotes",
+        });
       }
       if (nextChar === '"' || nextChar === "\\" || nextChar === "\n") {
         args.appendChar(nextChar);
@@ -149,5 +155,8 @@ function consumeDoubleQuoted(args: ConsumeQuotedArgs): number {
     if (char !== undefined) args.appendChar(char);
     cursor += 1;
   }
-  throw new DvError("editor-parse", "unterminated double quote");
+  throw new DvError({
+    code: "editor-parse",
+    message: "unterminated double quote",
+  });
 }

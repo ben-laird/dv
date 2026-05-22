@@ -1,5 +1,6 @@
 import { ensureDir } from "@std/fs";
 import { dirname, join } from "@std/path";
+import { DvError } from "../domain/errors.ts";
 import { CONFIG_DIR, configPath, recordsPath } from "../subtools/config/mod.ts";
 import { requireRepoRoot } from "../subtools/git/repo-root.ts";
 
@@ -71,7 +72,12 @@ async function ensureDirCreated(path: string): Promise<boolean> {
   try {
     const stat = await Deno.lstat(path);
     if (!stat.isDirectory) {
-      throw new Error(`${path} exists but is not a directory`);
+      throw new DvError({
+        code: "init-not-a-directory",
+        message: `${path} exists but is not a directory`,
+        hint: "remove the conflicting file or run `dv init` in a clean directory",
+        context: { path },
+      });
     }
     return false;
   } catch (err) {

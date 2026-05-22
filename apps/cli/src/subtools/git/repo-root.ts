@@ -16,10 +16,12 @@ export async function findRepoRoot(): Promise<string | null> {
     output = await cmd.output();
   } catch (err) {
     if (err instanceof Deno.errors.NotFound) {
-      throw new DvError(
-        "git-missing",
-        "git is required but was not found on PATH",
-      );
+      throw new DvError({
+        code: "git-missing",
+        message: "git is required but was not found on PATH",
+        hint: "install git from https://git-scm.com/ and ensure it's on PATH",
+        cause: err,
+      });
     }
     throw err;
   }
@@ -30,10 +32,11 @@ export async function findRepoRoot(): Promise<string | null> {
 export async function requireRepoRoot(): Promise<string> {
   const root = await findRepoRoot();
   if (!root) {
-    throw new DvError(
-      "not-a-git-repo",
-      "not inside a git repository (dv requires git)",
-    );
+    throw new DvError({
+      code: "not-a-git-repo",
+      message: "not inside a git repository (dv requires git)",
+      hint: "run `git init` first; dv assumes a git working tree",
+    });
   }
   return root;
 }

@@ -136,17 +136,19 @@ async function collectRecordInputs(
   }
 
   if (!Deno.stdout.isTerminal()) {
-    throw new DvError(
-      "add-flags-required",
-      "non-TTY mode requires --type, --packages, and --message",
-    );
+    throw new DvError({
+      code: "add-flags-required",
+      message: "non-TTY mode requires --type, --packages, and --message",
+      hint: "pass --type, --packages, and --message (or pipe stdin with --message=-)",
+    });
   }
 
   if (args.discoveredPackages.length === 0) {
-    throw new DvError(
-      "add-no-packages",
-      "no packages discovered — configure `discovery.plugins` first",
-    );
+    throw new DvError({
+      code: "add-no-packages",
+      message: "no packages discovered — configure `discovery.plugins` first",
+      hint: "add a discovery plugin assignment in .changelog/config.yaml",
+    });
   }
 
   const interactiveAnswers = promptForRecordInputs({
@@ -165,7 +167,10 @@ async function collectRecordInputs(
     }));
 
   if (recordBody.trim().length === 0) {
-    throw new DvError("add-empty-body", "empty body — no record file written");
+    throw new DvError({
+      code: "add-empty-body",
+      message: "empty body — no record file written",
+    });
   }
 
   return {
@@ -193,10 +198,12 @@ function validatePackageReferences(args: ValidatePackageReferencesArgs): void {
     }
   }
   if (unknownReferences.length > 0) {
-    throw new DvError(
-      "add-unknown-package",
-      `unknown package(s): ${unknownReferences.join(", ")}`,
-    );
+    throw new DvError({
+      code: "add-unknown-package",
+      message: `unknown package(s): ${unknownReferences.join(", ")}`,
+      hint: "check package names against `dv status`; add a rename via `dv rename` if a package was renamed",
+      context: { unknownPackages: unknownReferences },
+    });
   }
 }
 
@@ -220,10 +227,11 @@ async function chooseUnusedRecordPath(
       throw caughtError;
     }
   }
-  throw new DvError(
-    "add-slug-exhausted",
-    `could not find an unused slug after ${MAX_SLUG_RETRIES} attempts`,
-  );
+  throw new DvError({
+    code: "add-slug-exhausted",
+    message: `could not find an unused slug after ${MAX_SLUG_RETRIES} attempts`,
+    context: { attempts: MAX_SLUG_RETRIES },
+  });
 }
 
 interface StageWithGitArgs {

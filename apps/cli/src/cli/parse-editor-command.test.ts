@@ -88,12 +88,12 @@ Deno.test("parseEditorCommand throws DvError('editor-parse') for an empty value"
   // Then DvError surfaces with the documented code so the caller can
   // fall back to the platform default
   const caughtEmpty = assertThrows(() => parseEditorCommand(""), DvError);
-  assertEquals(caughtEmpty.code, "editor-parse");
+  assertEquals(caughtEmpty.kind.code, "editor-parse");
   const caughtWhitespace = assertThrows(
     () => parseEditorCommand("   "),
     DvError,
   );
-  assertEquals(caughtWhitespace.code, "editor-parse");
+  assertEquals(caughtWhitespace.kind.code, "editor-parse");
 });
 
 Deno.test("parseEditorCommand throws DvError('editor-parse') for an unterminated single quote", () => {
@@ -104,7 +104,7 @@ Deno.test("parseEditorCommand throws DvError('editor-parse') for an unterminated
     () => parseEditorCommand("vim -c 'set ft=markdown"),
     DvError,
   );
-  assertEquals(caughtError.code, "editor-parse");
+  assertEquals(caughtError.kind.code, "editor-parse");
 });
 
 Deno.test("parseEditorCommand throws DvError('editor-parse') for an unterminated double quote", () => {
@@ -115,7 +115,7 @@ Deno.test("parseEditorCommand throws DvError('editor-parse') for an unterminated
     () => parseEditorCommand('"/path/with space/editor'),
     DvError,
   );
-  assertEquals(caughtError.code, "editor-parse");
+  assertEquals(caughtError.kind.code, "editor-parse");
 });
 
 Deno.test("parseEditorCommand throws DvError('editor-parse') for a trailing backslash with nothing to escape", () => {
@@ -127,5 +127,5 @@ Deno.test("parseEditorCommand throws DvError('editor-parse') for a trailing back
     () => parseEditorCommand("code --wait\\"),
     DvError,
   );
-  assertEquals(caughtError.code, "editor-parse");
+  assertEquals(caughtError.kind.code, "editor-parse");
 });

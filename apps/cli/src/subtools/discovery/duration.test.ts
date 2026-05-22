@@ -1,5 +1,5 @@
 import { assertEquals, assertThrows } from "@std/assert";
-import { ConfigError } from "../../domain/errors.ts";
+import { DvError } from "../../domain/errors.ts";
 import { parseDurationMs } from "./duration.ts";
 
 Deno.test("parseDurationMs accepts every documented unit suffix", () => {
@@ -26,7 +26,7 @@ Deno.test("parseDurationMs rejects strings that don't match the duration regex",
   const malformedDurationInputs = ["60", "five seconds", "60d", "", "1.5s"];
 
   // When parseDurationMs is called for each malformed value
-  // Then each call throws ConfigError
+  // Then each call throws DvError
   for (const malformedDurationInput of malformedDurationInputs) {
     assertThrows(
       () =>
@@ -34,7 +34,7 @@ Deno.test("parseDurationMs rejects strings that don't match the duration regex",
           durationString: malformedDurationInput,
           breadcrumb: "x.timeout",
         }),
-      ConfigError,
+      DvError,
     );
   }
 });

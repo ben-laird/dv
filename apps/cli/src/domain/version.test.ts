@@ -24,7 +24,7 @@ Deno.test("parseVersion throws DvError with code 'version-parse' on garbage inpu
   // When parsed
   // Then a DvError surfaces with the documented code
   const caught = assertThrows(() => parseVersion(rawText), DvError);
-  assertEquals(caught.code, "version-parse");
+  assertEquals(caught.kind.code, "version-parse");
 });
 
 Deno.test("compareVersions orders versions by semver precedence", () => {

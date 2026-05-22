@@ -61,7 +61,7 @@ Deno.test("assertCleanTree throws DvError('dirty-tree') when an untracked file e
       () => assertCleanTree({ repoRootPath: fixture.repoRootPath }),
       DvError,
     );
-    assertEquals(caughtError.code, "dirty-tree");
+    assertEquals(caughtError.kind.code, "dirty-tree");
   } finally {
     await fixture.cleanup();
   }
@@ -94,7 +94,7 @@ Deno.test("assertCleanTree throws DvError('dirty-tree') when a tracked file is m
       () => assertCleanTree({ repoRootPath: fixture.repoRootPath }),
       DvError,
     );
-    assertEquals(caughtError.code, "dirty-tree");
+    assertEquals(caughtError.kind.code, "dirty-tree");
   } finally {
     await fixture.cleanup();
   }

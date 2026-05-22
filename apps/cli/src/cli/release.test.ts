@@ -433,7 +433,7 @@ Deno.test("runRelease in a non-TTY context without --yes throws DvError('confirm
         }),
       DvError,
     );
-    assertEquals(caughtError.code, "confirmation-required");
+    assertEquals(caughtError.kind.code, "confirmation-required");
     const tags = await listTagsInRepo(fixture.repoRootPath);
     assertEquals(tags, []);
   } finally {

@@ -2,7 +2,7 @@ import { dirname, isAbsolute, resolve } from "@std/path";
 import { parse as parseYaml } from "@std/yaml";
 import type { z } from "zod";
 import type { Config } from "../../domain/config.ts";
-import { ConfigError } from "../../domain/errors.ts";
+import { DvError } from "../../domain/errors.ts";
 import { defaults } from "./defaults.ts";
 import { type ParsedConfigLayer, parsedConfigLayerSchema } from "./schema.ts";
 
@@ -37,10 +37,12 @@ async function loadExtendsChain(
 ): Promise<ParsedConfigLayer[]> {
   const { configFilePath, visitedPaths } = args;
   if (visitedPaths.has(configFilePath)) {
-    throw new ConfigError(
-      "extends-cycle",
-      `extends chain has a cycle through ${configFilePath}`,
-    );
+    throw new DvError({
+      code: "extends-cycle",
+      message: `extends chain has a cycle through ${configFilePath}`,
+      hint: "remove the circular `extends:` entry; v1 supports local paths only",
+      context: { configFilePath },
+    });
   }
   visitedPaths.add(configFilePath);
 
@@ -68,10 +70,12 @@ async function readFileOrConfigError(configFilePath: string): Promise<string> {
     return await Deno.readTextFile(configFilePath);
   } catch (caughtError) {
     if (caughtError instanceof Deno.errors.NotFound) {
-      throw new ConfigError(
-        "config-not-found",
-        `config not found: ${configFilePath}`,
-      );
+      throw new DvError({
+        code: "config-not-found",
+        message: `config not found: ${configFilePath}`,
+        hint: "run `dv init` to scaffold .changelog/config.yaml",
+        context: { configFilePath },
+      });
     }
     throw caughtError;
   }
@@ -90,10 +94,12 @@ function parseYamlAsLayer(args: ParseYamlAsLayerArgs): ParsedConfigLayer {
   } catch (caughtError) {
     const yamlMessage =
       caughtError instanceof Error ? caughtError.message : String(caughtError);
-    throw new ConfigError(
-      "config-parse",
-      `failed to parse ${configFilePath}: ${yamlMessage}`,
-    );
+    throw new DvError({
+      code: "config-parse",
+      message: `failed to parse ${configFilePath}: ${yamlMessage}`,
+      context: { configFilePath },
+      cause: caughtError,
+    });
   }
   if (parsedYaml === null || parsedYaml === undefined) {
     return {} as ParsedConfigLayer;
@@ -121,25 +127,35 @@ interface ConfigErrorFromZodArgs {
   configFilePath: string;
 }
 
-function configErrorFromZod(args: ConfigErrorFromZodArgs): ConfigError {
+function configErrorFromZod(args: ConfigErrorFromZodArgs): DvError {
   const firstIssue = args.issues[0];
   if (!firstIssue) {
-    return new ConfigError("config-shape", `${args.configFilePath}: invalid`);
+    return new DvError({
+      code: "config-shape",
+      message: `${args.configFilePath}: invalid`,
+      context: { configFilePath: args.configFilePath },
+    });
   }
   const pathSegmentDescription =
     firstIssue.path.length > 0 ? firstIssue.path.join(".") : "<root>";
-  const issueCode =
-    firstIssue.code === "unrecognized_keys"
-      ? "config-unknown-key"
-      : "config-shape";
   const unrecognizedDetail =
     firstIssue.code === "unrecognized_keys"
       ? ` (keys: ${firstIssue.keys.join(", ")})`
       : "";
-  return new ConfigError(
-    issueCode,
-    `${args.configFilePath} @ ${pathSegmentDescription}: ${firstIssue.message}${unrecognizedDetail}`,
-  );
+  const message = `${args.configFilePath} @ ${pathSegmentDescription}: ${firstIssue.message}${unrecognizedDetail}`;
+  if (firstIssue.code === "unrecognized_keys") {
+    return new DvError({
+      code: "config-unknown-key",
+      message,
+      hint: "check the config schema at specs/schemas/config.json",
+      context: { configFilePath: args.configFilePath },
+    });
+  }
+  return new DvError({
+    code: "config-shape",
+    message,
+    context: { configFilePath: args.configFilePath },
+  });
 }
 
 function mergeIntoDefaults(layeredParsedConfigs: ParsedConfigLayer[]): Config {

@@ -34,10 +34,10 @@ export function promptForRecordInputs(
       discoveredPackages: args.discoveredPackages,
     });
   if (packageNames.length === 0) {
-    throw new DvError(
-      "add-no-packages-selected",
-      "no packages selected — aborting",
-    );
+    throw new DvError({
+      code: "add-no-packages-selected",
+      message: "no packages selected — aborting",
+    });
   }
   return { changeType, packageNames };
 }
@@ -49,7 +49,10 @@ function promptForChangeType(): ChangeType {
     { clear: true },
   );
   if (selectedLabel === null) {
-    throw new DvError("add-aborted", "no change type chosen — aborting");
+    throw new DvError({
+      code: "add-aborted",
+      message: "no change type chosen — aborting",
+    });
   }
   return selectedLabel as ChangeType;
 }
@@ -65,7 +68,10 @@ function promptForPackages(args: PromptForPackagesArgs): string[] {
     { clear: true },
   );
   if (selectedNames === null) {
-    throw new DvError("add-aborted", "no packages chosen — aborting");
+    throw new DvError({
+      code: "add-aborted",
+      message: "no packages chosen — aborting",
+    });
   }
   return selectedNames;
 }

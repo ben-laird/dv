@@ -53,10 +53,10 @@ export async function listTagsMatching(
   }).output();
   if (!listResult.success) {
     const stderrText = new TextDecoder().decode(listResult.stderr).trim();
-    throw new DvError(
-      "git-tag-list-failed",
-      `failed to list tags: ${stderrText || `exit ${listResult.code}`}`,
-    );
+    throw new DvError({
+      code: "git-tag-list-failed",
+      message: `failed to list tags: ${stderrText || `exit ${listResult.code}`}`,
+    });
   }
   const stdoutText = new TextDecoder().decode(listResult.stdout);
   return stdoutText

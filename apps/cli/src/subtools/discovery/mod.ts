@@ -1,5 +1,5 @@
 import type { Config, PluginAssignment } from "../../domain/config.ts";
-import { ConfigError } from "../../domain/errors.ts";
+import { DvError } from "../../domain/errors.ts";
 import type { Package } from "../../domain/package.ts";
 import { invokeOp, parseDiscoverResponse } from "../plugin/mod.ts";
 import { parseDurationMs } from "./duration.ts";
@@ -42,10 +42,16 @@ export async function discoverPackages(
         previouslyClaimed &&
         previouslyClaimed.plugin !== discoveredPackage.plugin
       ) {
-        throw new ConfigError(
-          "package-conflict",
-          `package path '${discoveredPackage.path}' is claimed by both '${previouslyClaimed.plugin}' and '${discoveredPackage.plugin}'`,
-        );
+        throw new DvError({
+          code: "package-conflict",
+          message: `package path '${discoveredPackage.path}' is claimed by both '${previouslyClaimed.plugin}' and '${discoveredPackage.plugin}'`,
+          hint: "narrow one plugin's `match` globs so the path is owned by only one plugin",
+          context: {
+            path: discoveredPackage.path,
+            pluginA: previouslyClaimed.plugin,
+            pluginB: discoveredPackage.plugin,
+          },
+        });
       }
       if (!previouslyClaimed) {
         claimedPackagesByPath.set(normalizedPackagePath, discoveredPackage);
@@ -76,10 +82,12 @@ async function runDiscoveryAssignment(
   });
   const { positiveGlobs, negativeGlobs } = splitMatch(pluginAssignment.match);
   if (positiveGlobs.length === 0) {
-    throw new ConfigError(
-      "config-shape",
-      `${assignmentBreadcrumb}: 'match' has no positive globs`,
-    );
+    throw new DvError({
+      code: "config-shape",
+      message: `${assignmentBreadcrumb}: 'match' has no positive globs`,
+      hint: "add at least one non-negated glob (e.g. 'apps/**') to `match`",
+      context: {},
+    });
   }
   const opTimeoutMs = parseDurationMs({
     durationString: pluginAssignment.timeout ?? DEFAULT_FAST_OP_TIMEOUT,

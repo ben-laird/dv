@@ -1,5 +1,5 @@
 import { assertEquals, assertThrows } from "@std/assert";
-import { PluginError } from "../../domain/errors.ts";
+import { DvError } from "../../domain/errors.ts";
 import {
   parseDiscoverResponse,
   parseReadVersionResponse,
@@ -29,10 +29,10 @@ Deno.test("parseDiscoverResponse rejects an empty stdout as a bad response", () 
   const emptyStdout = "";
 
   // When the response is parsed
-  // Then it throws PluginError mentioning the empty stdout
+  // Then it throws DvError mentioning the empty stdout
   assertThrows(
     () => parseDiscoverResponse({ rawStdout: emptyStdout, pluginPath: "/x" }),
-    PluginError,
+    DvError,
     "empty",
   );
 });
@@ -42,10 +42,10 @@ Deno.test("parseDiscoverResponse rejects non-JSON stdout", () => {
   const garbageStdout = "not json";
 
   // When the response is parsed
-  // Then PluginError surfaces the JSON parse failure
+  // Then DvError surfaces the JSON parse failure
   assertThrows(
     () => parseDiscoverResponse({ rawStdout: garbageStdout, pluginPath: "/x" }),
-    PluginError,
+    DvError,
     "valid JSON",
   );
 });
@@ -55,14 +55,14 @@ Deno.test("parseDiscoverResponse rejects a JSON object without 'packages'", () =
   const missingPackagesStdout = `{"ok": true}`;
 
   // When the response is parsed
-  // Then PluginError points at the schema violation
+  // Then DvError points at the schema violation
   assertThrows(
     () =>
       parseDiscoverResponse({
         rawStdout: missingPackagesStdout,
         pluginPath: "/x",
       }),
-    PluginError,
+    DvError,
   );
 });
 
@@ -71,14 +71,14 @@ Deno.test("parseDiscoverResponse surfaces a plugin's structured error envelope",
   const errorEnvelopeStdout = `{"ok":false,"error":"manifest gone"}`;
 
   // When the response is parsed
-  // Then the envelope's message becomes the PluginError reason
+  // Then the envelope's message becomes the DvError reason
   assertThrows(
     () =>
       parseDiscoverResponse({
         rawStdout: errorEnvelopeStdout,
         pluginPath: "/x",
       }),
-    PluginError,
+    DvError,
     "manifest gone",
   );
 });
@@ -88,14 +88,14 @@ Deno.test("parseDiscoverResponse rejects a package entry missing a required fiel
   const partialPackageStdout = `{"packages":[{"name":"core"}]}`;
 
   // When the response is parsed
-  // Then PluginError flags the missing field
+  // Then DvError flags the missing field
   assertThrows(
     () =>
       parseDiscoverResponse({
         rawStdout: partialPackageStdout,
         pluginPath: "/x",
       }),
-    PluginError,
+    DvError,
   );
 });
 
@@ -132,14 +132,14 @@ Deno.test("parseReadVersionResponse rejects a non-SemVer version string", () => 
   const garbageVersionStdout = `{"version":"v1.2-beta"}`;
 
   // When parsed
-  // Then PluginError flags the regex violation before parseVersion runs
+  // Then DvError flags the regex violation before parseVersion runs
   assertThrows(
     () =>
       parseReadVersionResponse({
         rawStdout: garbageVersionStdout,
         pluginPath: "/x",
       }),
-    PluginError,
+    DvError,
     "read-version",
   );
 });
@@ -163,7 +163,7 @@ Deno.test("parseWriteVersionResponse rejects ok:false (use the error envelope in
   const wrongOkStdout = `{"ok":false}`;
 
   // When parsed
-  // Then PluginError surfaces — write-version's success contract is
+  // Then DvError surfaces — write-version's success contract is
   // strict `ok: true`; signaling failure goes through the error envelope
   assertThrows(
     () =>
@@ -171,7 +171,7 @@ Deno.test("parseWriteVersionResponse rejects ok:false (use the error envelope in
         rawStdout: wrongOkStdout,
         pluginPath: "/x",
       }),
-    PluginError,
+    DvError,
   );
 });
 
@@ -210,14 +210,14 @@ Deno.test("parseUpdateDependencyResponse rejects a response missing `changed`", 
   const missingChangedStdout = `{"ok":true}`;
 
   // When parsed
-  // Then PluginError flags the missing field
+  // Then DvError flags the missing field
   assertThrows(
     () =>
       parseUpdateDependencyResponse({
         rawStdout: missingChangedStdout,
         pluginPath: "/x",
       }),
-    PluginError,
+    DvError,
     "update-dependency",
   );
 });
@@ -228,14 +228,14 @@ Deno.test("parseUpdateDependencyResponse rejects ok:false (failures go through t
   const wrongOkStdout = `{"ok":false,"changed":false}`;
 
   // When parsed
-  // Then PluginError surfaces — ok must be strict literal true
+  // Then DvError surfaces — ok must be strict literal true
   assertThrows(
     () =>
       parseUpdateDependencyResponse({
         rawStdout: wrongOkStdout,
         pluginPath: "/x",
       }),
-    PluginError,
+    DvError,
   );
 });
 
@@ -285,7 +285,7 @@ Deno.test("parseReleaseResponse accepts {ok:false, message:'...'} as a structure
   });
 
   // Then the failure surfaces as data the caller can aggregate into
-  // a summary — NOT a thrown PluginError
+  // a summary — NOT a thrown DvError
   assertEquals(validatedResponse.ok, false);
   assertEquals(validatedResponse.message, "jsr: package name taken");
 });
@@ -295,14 +295,14 @@ Deno.test("parseReleaseResponse rejects shapes missing the required `ok` field",
   const missingOkStdout = `{"published":true}`;
 
   // When parsed
-  // Then PluginError surfaces — `ok` is the only required field
+  // Then DvError surfaces — `ok` is the only required field
   assertThrows(
     () =>
       parseReleaseResponse({
         rawStdout: missingOkStdout,
         pluginPath: "/x",
       }),
-    PluginError,
+    DvError,
   );
 });
 
@@ -311,7 +311,7 @@ Deno.test("parseReleaseResponse rejects unknown extra fields (strict shape)", ()
   const extraFieldStdout = `{"ok":true,"unsupported":"value"}`;
 
   // When parsed
-  // Then PluginError surfaces — typos and forward-compat probing
+  // Then DvError surfaces — typos and forward-compat probing
   // should fail loudly rather than silently
   assertThrows(
     () =>
@@ -319,6 +319,6 @@ Deno.test("parseReleaseResponse rejects unknown extra fields (strict shape)", ()
         rawStdout: extraFieldStdout,
         pluginPath: "/x",
       }),
-    PluginError,
+    DvError,
   );
 });

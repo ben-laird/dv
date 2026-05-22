@@ -35,11 +35,15 @@ function indexEdgesByFrom(ledger: Rename[]): Map<string, Rename> {
   const edgesByFrom = new Map<string, Rename>();
   for (const ledgerEntry of ledger) {
     if (edgesByFrom.has(ledgerEntry.from)) {
-      throw new RenameLedgerError(
-        "ledger-duplicate-edge",
-        `rename ledger has two outgoing edges from '${ledgerEntry.from}' — the closure must be functional (one current name per old reference)`,
-        ".changelog/renames.yaml",
-      );
+      throw new RenameLedgerError({
+        code: "ledger-duplicate-edge",
+        message: `rename ledger has two outgoing edges from '${ledgerEntry.from}' — the closure must be functional (one current name per old reference)`,
+        hint: "remove the duplicate `from: ...` entry in .changelog/renames.yaml",
+        context: {
+          ledgerPath: ".changelog/renames.yaml",
+          from: ledgerEntry.from,
+        },
+      });
     }
     edgesByFrom.set(ledgerEntry.from, ledgerEntry);
   }
@@ -61,11 +65,15 @@ function walkRenameChain(args: WalkRenameChainArgs): string {
     const nextEdge = edgesByFrom.get(currentNode);
     if (nextEdge === undefined) return currentNode;
     if (visited.has(nextEdge.to)) {
-      throw new RenameLedgerError(
-        "ledger-cycle",
-        `rename ledger has a cycle: '${nextEdge.to}' was already visited starting from '${startReference}'`,
-        ".changelog/renames.yaml",
-      );
+      throw new RenameLedgerError({
+        code: "ledger-cycle",
+        message: `rename ledger has a cycle: '${nextEdge.to}' was already visited starting from '${startReference}'`,
+        hint: "break the cycle by deleting one of the edges in .changelog/renames.yaml",
+        context: {
+          ledgerPath: ".changelog/renames.yaml",
+          startReference,
+        },
+      });
     }
     visited.add(nextEdge.to);
     currentNode = nextEdge.to;

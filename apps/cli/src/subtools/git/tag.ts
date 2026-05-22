@@ -42,9 +42,11 @@ export async function mintTag(args: MintTagArgs): Promise<void> {
   }).output();
   if (!tagResult.success) {
     const stderrText = new TextDecoder().decode(tagResult.stderr).trim();
-    throw new DvError(
-      "git-tag-failed",
-      `failed to mint tag '${args.tag}': ${stderrText || `exit ${tagResult.code}`}`,
-    );
+    throw new DvError({
+      code: "git-tag-failed",
+      message: `failed to mint tag '${args.tag}': ${stderrText || `exit ${tagResult.code}`}`,
+      hint: "the tag may already exist; check `git tag -l` and consider --force",
+      context: { tag: args.tag },
+    });
   }
 }

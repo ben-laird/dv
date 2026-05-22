@@ -1,7 +1,7 @@
 import { assertEquals, assertRejects } from "@std/assert";
 import { join } from "@std/path";
 import type { Config } from "../../domain/config.ts";
-import { ConfigError } from "../../domain/errors.ts";
+import { DvError } from "../../domain/errors.ts";
 import { defaults } from "../config/defaults.ts";
 import { discoverPackages } from "./mod.ts";
 
@@ -158,10 +158,10 @@ Deno.test("discoverPackages rejects a package path claimed by two plugins", asyn
     ];
 
     // When discoverPackages runs
-    // Then it rejects with a ConfigError naming the conflict
+    // Then it rejects with a DvError naming the conflict
     await assertRejects(
       () => discoverPackages({ config, repoRootPath: testRepoRoot }),
-      ConfigError,
+      DvError,
       "claimed by both",
     );
   } finally {
@@ -179,10 +179,10 @@ Deno.test("discoverPackages fails fast when the plugin executable does not exist
     });
 
     // When discoverPackages runs
-    // Then it rejects with a ConfigError before invoking anything
+    // Then it rejects with a DvError before invoking anything
     await assertRejects(
       () => discoverPackages({ config, repoRootPath: testRepoRoot }),
-      ConfigError,
+      DvError,
       "plugin not found",
     );
   } finally {

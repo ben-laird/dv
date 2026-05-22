@@ -133,10 +133,12 @@ async function launchEditorProcess(
     stderr: "inherit",
   }).output();
   if (!editorResult.success) {
-    throw new DvError(
-      "editor-failed",
-      `editor '${editorCommand}' exited ${editorResult.code}`,
-    );
+    throw new DvError({
+      code: "editor-failed",
+      message: `editor '${editorCommand}' exited ${editorResult.code}`,
+      hint: "save (don't discard) the file in your editor; non-zero exit aborts the record",
+      context: { command: editorCommand, exitCode: editorResult.code },
+    });
   }
 }
 
@@ -165,12 +167,13 @@ function resolveEditorCommand(
       // silently to vi/notepad — that would mask user intent.
       if (
         caughtError instanceof DvError &&
-        caughtError.code === "editor-parse"
+        caughtError.kind.code === "editor-parse"
       ) {
-        throw new DvError(
-          "editor-parse",
-          `${sourceLabel}='${candidateValue}' did not parse: ${caughtError.message}`,
-        );
+        throw new DvError({
+          code: "editor-parse",
+          message: `${sourceLabel}='${candidateValue}' did not parse: ${caughtError.message}`,
+          cause: caughtError,
+        });
       }
       throw caughtError;
     }

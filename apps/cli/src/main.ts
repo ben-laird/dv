@@ -271,7 +271,14 @@ function resolveColorEnabled(args: ResolveColorEnabledArgs): boolean {
   return Deno.stdout.isTerminal();
 }
 
-function reportDvError(caughtError: unknown): void {
+function reportDvError(
+  caughtError: unknown,
+  _ctx: { mode: "human" | "json" },
+): void {
+  // EC7 will route through @seshat/cli's renderCliError for proper
+  // human-vs-JSON output. For now keep the minimal `dv: <message>`
+  // line so the framework's wrapped CliError still surfaces something
+  // useful.
   if (caughtError instanceof DvError) {
     console.error(`dv: ${caughtError.message}`);
     return;

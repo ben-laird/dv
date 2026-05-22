@@ -284,7 +284,7 @@ Deno.test("runVersion fails with code 'dirty-tree' when there are uncommitted ch
         }),
       DvError,
     );
-    assertEquals(caughtError.code, "dirty-tree");
+    assertEquals(caughtError.kind.code, "dirty-tree");
   } finally {
     await fixture.cleanup();
   }
@@ -314,7 +314,7 @@ Deno.test("runVersion halts on an Unresolved Reference unless --prune is passed"
         }),
       DvError,
     );
-    assertEquals(caughtError.code, "unresolved-reference");
+    assertEquals(caughtError.kind.code, "unresolved-reference");
     const versionText = await Deno.readTextFile(fixture.versionFilePath);
     assertEquals(versionText.trim(), "1.4.2");
   } finally {

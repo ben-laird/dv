@@ -24,16 +24,18 @@ export async function assertCleanTree(
   }).output();
   if (!statusResult.success) {
     const stderrText = new TextDecoder().decode(statusResult.stderr).trim();
-    throw new DvError(
-      "git-status-failed",
-      `failed to read working tree status: ${stderrText || `exit ${statusResult.code}`}`,
-    );
+    throw new DvError({
+      code: "git-status-failed",
+      message: `failed to read working tree status: ${stderrText || `exit ${statusResult.code}`}`,
+    });
   }
   const porcelainOutput = new TextDecoder().decode(statusResult.stdout);
   if (porcelainOutput.trim().length > 0) {
-    throw new DvError(
-      "dirty-tree",
-      "working tree is not clean — commit or stash changes before running `dv version`",
-    );
+    throw new DvError({
+      code: "dirty-tree",
+      message:
+        "working tree is not clean — commit or stash changes before running `dv version`",
+      hint: "commit or stash your changes, or run with --allow-dirty if your config permits",
+    });
   }
 }
