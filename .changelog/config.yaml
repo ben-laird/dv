@@ -1,15 +1,23 @@
 # dv dogfooding itself.
 #
-# This repo is a single Deno package, so once an example plugin exists that
-# can read/write the version in deno.json, uncomment the block below and dv
-# will manage its own releases.
+# This repo is a monorepo:
+#   apps/cli      — the dv CLI (Deno)
+#   apps/docs     — the VitePress docs site (Node)
+#   packages/*    — shared Deno libs (none yet)
+#
+# Once the corresponding example plugins exist, uncomment the block below
+# and dv will manage its own releases.
 #
 # discovery:
 #   plugins:
-#     - match: "."
+#     - match: "apps/cli"
+#       use: ./examples/plugins/deno
+#     - match: "apps/docs"
+#       use: ./examples/plugins/npm
+#     - match: "packages/*"
 #       use: ./examples/plugins/deno
 #
 # tagging:
-#   format: "v{version}"      # single package — no package-name prefix needed
+#   format: "{package-name}@{version}"
 #
 # Records you author with `dv add` land in .changelog/records/.
