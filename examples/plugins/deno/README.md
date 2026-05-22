@@ -36,14 +36,20 @@ discovery:
   convention. Manifests with no `imports` map, or no entry for the named
   dependency, return `{ ok: true, changed: false }` — the documented no-op
   path of the cascade.
-
-`release` lands in M5, alongside its subtool. The Plugin still conforms —
-`dv plugin verify` only checks Ops the plugin actually declares.
+- `release` — **stub** that reports `{ok: true, published: false}` with a
+  message naming the package + version it would have published. Real
+  plugins replace this with `deno publish`, `npm publish`, `cargo publish`,
+  `gh release create`, posts to Slack, etc. The stub exists so `dv release`
+  can complete the tag-minting + plugin-dispatch path end-to-end without
+  actually pushing to a registry. Per `specs/plugin-contract.md`, a
+  release-op failure does NOT roll back the tag — the plugin's job is to
+  be idempotent (or at least safe to re-run via `dv release --force`).
 
 ## How
 
 Directory-form plugin: each Op lives in its own executable named for the Op
-(`./discover`, `./read-version`, `./write-version`, `./update-dependency`),
-per `specs/plugin-contract.md` § Plugin shape. JSON-over-stdio. Set the
-executable bit (`chmod +x`) when you copy a fresh Op file into place — dv
-surfaces a clear PluginError if it isn't executable.
+(`./discover`, `./read-version`, `./write-version`, `./update-dependency`,
+`./release`), per `specs/plugin-contract.md` § Plugin shape.
+JSON-over-stdio. Set the executable bit (`chmod +x`) when you copy a fresh
+Op file into place — dv surfaces a clear PluginError if it isn't
+executable.
