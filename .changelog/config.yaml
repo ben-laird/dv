@@ -1,0 +1,15 @@
+# dv dogfooding itself.
+#
+# This repo is a single Deno package, so once an example plugin exists that
+# can read/write the version in deno.json, uncomment the block below and dv
+# will manage its own releases.
+#
+# discovery:
+#   plugins:
+#     - match: "."
+#       use: ./examples/plugins/deno
+#
+# tagging:
+#   format: "v{version}"      # single package — no package-name prefix needed
+#
+# Records you author with `dv add` land in .changelog/records/.
