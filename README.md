@@ -51,19 +51,22 @@ can be reviewed in a "Release PR" before tags get cut and publishes fire.
 
 ## Status
 
-Milestones 1 and 2 ship: `dv init`, `dv status`, plugin-driven package
-discovery, `dv add` (interactive + flag-driven), and `dv validate`. The
-rest of v1 — version bumps, CHANGELOG rendering, tagging, and release —
-is in flight per [specs/v1-scope.md](specs/v1-scope.md).
+Milestones 1, 2, and 3 ship: `dv init`, `dv status`, plugin-driven package
+discovery, `dv add` (interactive + flag-driven), `dv validate`, and
+`dv version` (read-version → bump → CHANGELOG → delete records → commit).
+The rest of v1 — constraint cascading, tagging, and release — is in flight
+per [specs/v1-scope.md](specs/v1-scope.md).
 
 Try it from the repo:
 
 ```sh
 deno task install                                # adds `dv` to your PATH
-dv status                                        # discover packages
+dv status                                        # show pending bumps
 dv add --type fix --packages @seshat/dv \
        --message "Demo record"                   # file a Record
 dv validate                                      # lint records + config
+dv version --dry-run                             # preview the version commit
+dv version                                       # apply: bump, CHANGELOG, commit
 ```
 
 Contributing: see [CONVENTIONS.md](CONVENTIONS.md) for toolchain (Biome +

@@ -7,6 +7,7 @@ import { runAdd } from "./cli/add.ts";
 import { runInit } from "./cli/init.ts";
 import { runStatus } from "./cli/status.ts";
 import { runValidate } from "./cli/validate.ts";
+import { runVersion } from "./cli/version.ts";
 import { CHANGE_TYPES, isChangeType } from "./domain/change-type.ts";
 import { DvError } from "./domain/errors.ts";
 import { configPath, recordsPath } from "./subtools/config/mod.ts";
@@ -18,10 +19,11 @@ Usage:
   dv status [--json]                   Show what dv would do (read-only)
   dv add [--type T --packages P …]     File a Record (interactive or flag-driven)
   dv validate [--json]                 Lint records and config (CI-friendly)
+  dv version [--dry-run --prune …]     Consume Records → bump, CHANGELOG, commit
   dv --help                            Show this message
   dv --version                         Show the dv version
 
-Milestones 1 and 2 are landing; the rest of v1 follows specs/v1-scope.md.
+Milestones 1–3 are landing; the rest of v1 follows specs/v1-scope.md.
 `;
 
 const DV_VERSION = "0.0.0";
@@ -47,6 +49,8 @@ export async function main(argv: string[]): Promise<number> {
         return await runAddCommand(subcommandArgv);
       case "validate":
         return await runValidateCommand(subcommandArgv);
+      case "version":
+        return await runVersionCommand(subcommandArgv);
       default:
         console.error(`dv: unknown command '${subcommandName}'`);
         console.error(`run 'dv --help' for usage`);
@@ -197,6 +201,56 @@ async function runValidateCommand(subcommandArgv: string[]): Promise<number> {
     colorEnabled,
   });
   return validateResult.exitCode;
+}
+
+async function runVersionCommand(subcommandArgv: string[]): Promise<number> {
+  const parsedFlags = parseArgs(subcommandArgv, {
+    boolean: [
+      "dry-run",
+      "no-dry-run",
+      "no-commit",
+      "prune",
+      "yes",
+      "json",
+      "color",
+      "no-color",
+      "help",
+    ],
+    alias: { h: "help", y: "yes" },
+    unknown: (flagName) => {
+      if (flagName.startsWith("-")) {
+        console.error(`dv version: unknown flag '${flagName}'`);
+        Deno.exit(2);
+      }
+      return true;
+    },
+  });
+  if (parsedFlags.help) {
+    console.log(
+      "Usage: dv version [--dry-run] [--no-commit] [--prune] [--yes] [--json]",
+    );
+    return 0;
+  }
+  const dryRunOverride =
+    parsedFlags["no-dry-run"] === true
+      ? false
+      : parsedFlags["dry-run"] === true
+        ? true
+        : undefined;
+  const colorEnabled = resolveColorEnabled({
+    forceColor: parsedFlags.color === true,
+    suppressColor: parsedFlags["no-color"] === true,
+    emitJson: parsedFlags.json === true,
+  });
+  await runVersion({
+    dryRun: dryRunOverride,
+    noCommit: parsedFlags["no-commit"] === true,
+    prune: parsedFlags.prune === true,
+    emitJson: parsedFlags.json === true,
+    colorEnabled,
+    yes: parsedFlags.yes === true,
+  });
+  return 0;
 }
 
 function expandCommaSeparated(

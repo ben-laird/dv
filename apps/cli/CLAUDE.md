@@ -12,13 +12,23 @@ tasks. The repo's shared imports, fmt, and lint live in the root `deno.json`.
 `dv` is built as the subtool decomposition from `specs/design.md`. One module
 per capability; commands compose them and hold no domain logic of their own.
 
+- `src/subtools/plugin` — JSON-over-stdio runner + per-Op response schemas.
+  Used by every subtool that talks to a plugin (discovery, versioning,
+  later publishing).
 - `src/subtools/discovery` — run discover plugins, resolve the Package set.
 - `src/subtools/records` — author, parse, and validate Records.
-- `src/subtools/versioning` — the **pure algebra**: `classify`, `apply`,
-  `aggregate`, bump-join (`specs/language.md` § Operations). No IO here.
-- `src/subtools/changelog` — render CHANGELOG sections (Keep a Changelog).
-- `src/subtools/tagging` — Tag formatting + git tag IO.
-- `src/subtools/publishing` — invoke the release plugin.
+- `src/subtools/renames` — load the rename ledger, build the reflexive-
+  transitive closure resolver (Algebra §8).
+- `src/subtools/versioning` — the **pure algebra** (`classify`, `apply`,
+  `aggregateBumps`, `joinBumps`) plus `buildVersionPlan` and the
+  per-Package `read-version` / `write-version` invokers. Algebra files
+  do no IO.
+- `src/subtools/changelog` — render Keep a Changelog sections from Records
+  and splice them into per-Package CHANGELOG.md files.
+- `src/subtools/git` — the shared substrate: clean-tree assertion, stage,
+  commit. Git is not a capability of its own (specs/design.md).
+- `src/subtools/tagging` — Tag formatting + git tag IO (M5).
+- `src/subtools/publishing` — invoke the release plugin (M5).
 - `src/cli/` — one thin orchestration per command (`init`, `add`, `status`,
   `validate`, `version`, `release`, `v1`, `rename`, `plugin …`).
 
