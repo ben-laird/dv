@@ -1,0 +1,169 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:dv:schema:v1:config",
+  "title": "dv config (.changelog/config.yaml)",
+  "description": "v1 draft. Subtool-organized configuration for dv. Keys are kebab-case. See docs/config-format.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "extends": {
+      "description": "Local path(s) to base configs, merged first-to-last. Top-level only; no HTTPS sources in v1.",
+      "oneOf": [
+        { "type": "string" },
+        { "type": "array", "items": { "type": "string" } }
+      ]
+    },
+    "discovery": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "plugins": {
+          "type": "array",
+          "description": "Plugin assignments. The sole source of truth for which paths are Packages.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["match", "use"],
+            "properties": {
+              "match": {
+                "description": "Glob or list of globs (gitignore-style negation with '!').",
+                "oneOf": [
+                  { "type": "string" },
+                  { "type": "array", "items": { "type": "string" } }
+                ]
+              },
+              "use": {
+                "type": "string",
+                "description": "Path to a plugin executable, or a builtin name."
+              },
+              "timeout": {
+                "$ref": "#/$defs/duration",
+                "default": "60s",
+                "description": "Max wall-clock for this plugin's fast ops."
+              }
+            }
+          }
+        },
+        "use-gitignore": {
+          "type": "boolean",
+          "default": true,
+          "description": "Honor .gitignore during discovery."
+        }
+      }
+    },
+    "changesets": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The changesets subtool (authoring Records).",
+      "properties": {
+        "auto-stage": {
+          "type": "boolean",
+          "default": true,
+          "description": "git add the Record file created by `dv add`."
+        }
+      }
+    },
+    "changelog": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "format": { "type": "string", "default": "keep-a-changelog" },
+        "location": {
+          "type": "string",
+          "default": "{package}/CHANGELOG.md",
+          "description": "Template for per-Package CHANGELOG path."
+        }
+      }
+    },
+    "tagging": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "format": {
+          "type": "string",
+          "default": "{package}@{version}",
+          "description": "Template for per-Package git Tags."
+        }
+      }
+    },
+    "publishing": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "plugin": {
+          "type": "string",
+          "description": "Executable invoked per Package after tagging (the release Op)."
+        },
+        "timeout": {
+          "oneOf": [
+            { "$ref": "#/$defs/duration" },
+            { "const": "none" }
+          ],
+          "default": "none",
+          "description": "Max wall-clock for the release Op. Default none — publishing is slow."
+        }
+      }
+    },
+    "git": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "require-clean-tree": { "type": "boolean", "default": true },
+        "sign": {
+          "enum": ["auto", true, false],
+          "default": "auto",
+          "description": "auto honors git's own signing config; true/false force or disable."
+        },
+        "auto-commit": { "type": "boolean", "default": true },
+        "commit-message-template": {
+          "type": "string",
+          "description": "Supports {summary} and {details}."
+        },
+        "auto-push": { "type": "boolean", "default": false },
+        "push-sequence": {
+          "enum": ["publish-then-push", "push-then-publish"],
+          "default": "publish-then-push"
+        }
+      }
+    },
+    "safety": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "dry-run-by-default": {
+          "type": "boolean",
+          "default": false,
+          "description": "Flip destructive commands to dry-run unless --no-dry-run."
+        }
+      }
+    },
+    "overrides": {
+      "type": "array",
+      "description": "First-match-wins per-Package overrides of a subset of settings.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["match"],
+        "properties": {
+          "match": {
+            "oneOf": [
+              { "type": "string" },
+              { "type": "array", "items": { "type": "string" } }
+            ]
+          },
+          "changelog": { "$ref": "#/properties/changelog" },
+          "tagging": { "$ref": "#/properties/tagging" },
+          "publishing": { "$ref": "#/properties/publishing" },
+          "plugin-use": { "type": "string" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "duration": {
+      "type": "string",
+      "pattern": "^[0-9]+(ms|s|m|h)$",
+      "description": "A duration like 60s, 5m, 500ms."
+    }
+  }
+}

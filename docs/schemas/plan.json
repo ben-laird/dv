@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:dv:schema:v1:plan",
+  "title": "dv Plan",
+  "description": "v1 draft. The side-effect-free Plan emitted by `dv status --json` and `dv version|release --dry-run --json`. A pure function of repo state (see docs/language.md Algebra §7).",
+  "type": "object",
+  "required": ["schema", "command", "pending", "awaitingRelease"],
+  "properties": {
+    "schema": {
+      "const": "urn:dv:schema:v1:plan",
+      "description": "Schema id, for consumers pinning a version."
+    },
+    "command": {
+      "enum": ["status", "version", "release"],
+      "description": "Which command produced this Plan."
+    },
+    "pending": {
+      "type": "array",
+      "description": "Per-Package bumps that `dv version` would apply.",
+      "items": {
+        "type": "object",
+        "required": ["package", "currentVersion", "projectedVersion", "bump"],
+        "properties": {
+          "package": { "type": "string" },
+          "currentVersion": { "$ref": "#/$defs/semver" },
+          "projectedVersion": { "$ref": "#/$defs/semver" },
+          "bump": { "enum": ["patch", "minor", "major"] },
+          "stability": { "enum": ["Unstable", "Stable"] },
+          "changeCounts": {
+            "type": "object",
+            "properties": {
+              "feat": { "type": "integer" },
+              "fix": { "type": "integer" },
+              "breaking": { "type": "integer" }
+            }
+          },
+          "records": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Record filenames feeding this bump."
+          },
+          "constraintUpdates": {
+            "type": "array",
+            "description": "Dependents whose constraint on this Package would be rewritten.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "dependent": { "type": "string" },
+                "newConstraint": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "awaitingRelease": {
+      "type": "array",
+      "description": "Packages whose current Version has no Tag (what `dv release` would tag).",
+      "items": {
+        "type": "object",
+        "required": ["package", "version", "tag"],
+        "properties": {
+          "package": { "type": "string" },
+          "version": { "$ref": "#/$defs/semver" },
+          "tag": { "type": "string", "description": "The Tag that would be minted." },
+          "firstStable": {
+            "type": "boolean",
+            "description": "True if this is the Package's first 1.0.0 (celebrated)."
+          }
+        }
+      }
+    },
+    "unresolvedReferences": {
+      "type": "array",
+      "description": "Records pointing at no current Package (halt `dv version` unless --prune).",
+      "items": {
+        "type": "object",
+        "properties": {
+          "record": { "type": "string" },
+          "reference": { "type": "string" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "semver": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$"
+    }
+  }
+}

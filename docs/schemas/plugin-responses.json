@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:dv:schema:v1:plugin-responses",
+  "title": "dv plugin per-op responses",
+  "description": "v1 draft. The stdout JSON payload dv expects from each plugin Op. `dv plugin verify` checks responses against these. See docs/plugin-contract.md.",
+  "$defs": {
+    "error": {
+      "type": "object",
+      "required": ["ok", "error"],
+      "properties": {
+        "ok": { "const": false },
+        "error": { "type": "string", "description": "Human-readable failure reason." }
+      },
+      "description": "Optional structured error any Op may emit on stdout (alongside a non-zero exit)."
+    },
+    "semver": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$"
+    },
+    "discover": {
+      "title": "discover response",
+      "description": "Packages this plugin claims under the matched paths.",
+      "type": "object",
+      "required": ["packages"],
+      "properties": {
+        "packages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "path"],
+            "properties": {
+              "name": { "type": "string" },
+              "path": { "type": "string", "description": "Directory relative to repo root." }
+            }
+          }
+        }
+      }
+    },
+    "read-version": {
+      "title": "read-version response",
+      "type": "object",
+      "required": ["version"],
+      "properties": {
+        "version": { "$ref": "#/$defs/semver" }
+      }
+    },
+    "write-version": {
+      "title": "write-version response",
+      "description": "Acknowledgement that the manifest was updated.",
+      "type": "object",
+      "required": ["ok"],
+      "properties": {
+        "ok": { "const": true }
+      }
+    },
+    "update-dependency": {
+      "title": "update-dependency response",
+      "description": "Acknowledgement that a dependent's constraint was rewritten.",
+      "type": "object",
+      "required": ["ok"],
+      "properties": {
+        "ok": { "const": true },
+        "changed": {
+          "type": "boolean",
+          "description": "Whether a constraint was actually modified (false if not present)."
+        }
+      }
+    },
+    "release": {
+      "title": "release response",
+      "description": "Result of publishing one Package.",
+      "type": "object",
+      "required": ["ok"],
+      "properties": {
+        "ok": { "type": "boolean" },
+        "published": { "type": "boolean" },
+        "skipped": {
+          "type": "boolean",
+          "description": "True when already published (idempotent re-run)."
+        },
+        "message": { "type": "string" }
+      }
+    }
+  },
+  "oneOf": [
+    { "$ref": "#/$defs/discover" },
+    { "$ref": "#/$defs/read-version" },
+    { "$ref": "#/$defs/write-version" },
+    { "$ref": "#/$defs/update-dependency" },
+    { "$ref": "#/$defs/release" },
+    { "$ref": "#/$defs/error" }
+  ]
+}
