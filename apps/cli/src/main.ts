@@ -88,9 +88,10 @@ const addCommand = defineCommand({
     links: { kind: "collect" },
     stage: { kind: "boolean" },
     "no-stage": { kind: "boolean" },
+    editor: { kind: "string" },
   },
   usage:
-    "Usage: dv add [--type <t>] [--packages <p>...] [--message <m>] [--links <url>...] [--notes <text>] [--stage | --no-stage]",
+    "Usage: dv add [--type <t>] [--packages <p>...] [--message <m>] [--links <url>...] [--notes <text>] [--stage | --no-stage] [--editor <cmd>]",
   run: async ({ flags }) => {
     const rawChangeType = flags.type;
     if (rawChangeType !== undefined && !isChangeType(rawChangeType)) {
@@ -115,6 +116,7 @@ const addCommand = defineCommand({
       links,
       notes: flags.notes,
       stageOverride,
+      editorOverride: flags.editor,
     });
     const relativeRecordPath = relative(
       addResult.repoRootPath,

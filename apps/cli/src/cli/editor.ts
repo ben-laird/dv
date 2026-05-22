@@ -18,6 +18,10 @@ import { parseEditorCommand } from "./parse-editor-command.ts";
 interface OpenEditorForRecordBodyArgs {
   changeType: ChangeType;
   packageNames: string[];
+  // Overrides $EDITOR / $VISUAL for this invocation only. Passed via
+  // `dv add --editor "<cmd>"` so the user can try a one-off editor
+  // without touching their shell rc.
+  editorOverride?: string;
 }
 
 export async function openEditorForRecordBody(
@@ -30,7 +34,10 @@ export async function openEditorForRecordBody(
   });
   try {
     await Deno.writeTextFile(temporaryFilePath, editorTemplate);
-    await launchEditorProcess({ filePath: temporaryFilePath });
+    await launchEditorProcess({
+      filePath: temporaryFilePath,
+      editorOverride: args.editorOverride,
+    });
     const afterEdit = await Deno.readTextFile(temporaryFilePath);
     return stripHtmlComments(afterEdit).trim();
   } finally {
@@ -63,13 +70,14 @@ An empty body aborts without writing the file.
 
 interface LaunchEditorProcessArgs {
   filePath: string;
+  editorOverride?: string;
 }
 
 async function launchEditorProcess(
   args: LaunchEditorProcessArgs,
 ): Promise<void> {
   const { command: editorCommand, commandArgs: editorArgs } =
-    resolveEditorCommand();
+    resolveEditorCommand({ editorOverride: args.editorOverride });
   const fullArgs = [...editorArgs, args.filePath];
   const editorResult = await new Deno.Command(editorCommand, {
     args: fullArgs,
@@ -90,22 +98,31 @@ interface EditorCommandSpec {
   commandArgs: string[];
 }
 
-function resolveEditorCommand(): EditorCommandSpec {
-  const envEditor = Deno.env.get("EDITOR") ?? Deno.env.get("VISUAL");
-  if (envEditor !== undefined && envEditor.trim().length > 0) {
+interface ResolveEditorCommandArgs {
+  editorOverride?: string;
+}
+
+function resolveEditorCommand(
+  args: ResolveEditorCommandArgs,
+): EditorCommandSpec {
+  const candidateValue =
+    args.editorOverride ?? Deno.env.get("EDITOR") ?? Deno.env.get("VISUAL");
+  const sourceLabel = args.editorOverride !== undefined ? "--editor" : "EDITOR";
+  if (candidateValue !== undefined && candidateValue.trim().length > 0) {
     try {
-      return parseEditorCommand(envEditor);
+      return parseEditorCommand(candidateValue);
     } catch (caughtError) {
-      // Fall through to the platform default on a parse failure so a
-      // malformed EDITOR doesn't deadlock dv. The original error is
-      // re-thrown with context so the user sees the actual problem.
+      // Re-throw with context so the user sees both the source of the
+      // bad value (--editor flag vs EDITOR/VISUAL env var) and what
+      // they actually passed. A malformed value should NOT fall back
+      // silently to vi/notepad — that would mask user intent.
       if (
         caughtError instanceof DvError &&
         caughtError.code === "editor-parse"
       ) {
         throw new DvError(
           "editor-parse",
-          `EDITOR='${envEditor}' did not parse: ${caughtError.message}`,
+          `${sourceLabel}='${candidateValue}' did not parse: ${caughtError.message}`,
         );
       }
       throw caughtError;

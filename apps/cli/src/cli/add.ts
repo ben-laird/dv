@@ -35,6 +35,11 @@ export interface RunAddOptions {
   // Override `records.auto-stage` for this invocation.
   stageOverride?: boolean;
 
+  // Override $EDITOR / $VISUAL for this invocation. Honored only when
+  // the editor template is actually launched (i.e. no --message). Same
+  // POSIX-shell parsing as the env var.
+  editorOverride?: string;
+
   // Test seam: deterministic slug generation.
   slugRandomSource?: SlugRandomSource;
 }
@@ -153,6 +158,7 @@ async function collectRecordInputs(
     (await openEditorForRecordBody({
       changeType: interactiveAnswers.changeType,
       packageNames: interactiveAnswers.packageNames,
+      editorOverride: args.options.editorOverride,
     }));
 
   if (recordBody.trim().length === 0) {
