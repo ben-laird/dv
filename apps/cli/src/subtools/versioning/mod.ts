@@ -14,6 +14,7 @@ export { aggregateBumps } from "./aggregate.ts";
 export { applyBump } from "./apply.ts";
 export { joinBumps } from "./bump-join.ts";
 export { classify } from "./classify.ts";
+export { renderCommitMessage } from "./commit-message.ts";
 export {
   type BuildVersionPlanArgs,
   buildVersionPlan,
