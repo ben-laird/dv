@@ -1,10 +1,13 @@
----
-type: feat
-packages:
-  - '@seshat/dv'
----
+# History
 
-# Add opt-in HISTORY.md long-form release notes
+Long-form release notes for this Package. Each version section carries
+one h3 subsection per Record consumed during that release, with the
+Record's body prose verbatim. For terse one-line bullets, see
+CHANGELOG.md.
+
+## [0.3.0] - 2026-05-22
+
+### Add opt-in HISTORY.md long-form release notes
 
 A new `history` subtool writes a per-Package `HISTORY.md` alongside
 `CHANGELOG.md` when `history.enabled: true` in
