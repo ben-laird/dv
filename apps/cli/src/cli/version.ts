@@ -25,6 +25,7 @@ import { loadRenameLedger, renamesPath } from "../subtools/renames/mod.ts";
 import {
   buildVersionPlan,
   invokeReadVersion,
+  invokeUpdateDependency,
   invokeWriteVersion,
   type PackageCurrentVersionEntry,
   type Plan,
@@ -60,6 +61,17 @@ export interface RunVersionResult {
   commitSha: string | null;
   bumpedPackageCount: number;
   consumedRecordCount: number;
+  cascadedUpdates: CascadedUpdate[];
+}
+
+// A single actual constraint rewrite the cascade pass executed (the
+// plugin reported changed:true). The dependentPath is relative to
+// repoRootPath and gets pushed into touchedPaths so the rewrite lands
+// in the version commit.
+interface CascadedUpdate {
+  bumpedPackage: string;
+  dependent: string;
+  dependentPath: string;
 }
 
 export async function runVersion(
@@ -135,6 +147,7 @@ export async function runVersion(
       commitSha: null,
       bumpedPackageCount: 0,
       consumedRecordCount: 0,
+      cascadedUpdates: [],
     };
   }
 
@@ -149,6 +162,7 @@ export async function runVersion(
         plan,
         prune: options.prune,
       }),
+      cascadedUpdates: [],
     };
   }
 
@@ -228,6 +242,25 @@ export async function runVersion(
     touchedPaths.push(relative(repoRootPath, recordPath));
   }
 
+  // Constraint cascade (language.md Algebra §9): for each bumped
+  // Package, ask every other discovered Package to rewrite its
+  // constraint. Plugins report changed:false when the dependent
+  // doesn't carry the dep — that's the documented no-op path.
+  //
+  // Order matters: this pass MUST run after every invokeWriteVersion
+  // above. If a dependent is itself in pending, its own version was
+  // already written; the cascade then composes a constraint rewrite
+  // on top of the already-bumped manifest.
+  const cascadedUpdates = await runCascadePass({
+    plan,
+    discoveredPackageByName,
+    resolvedPluginsByUseString,
+    repoRootPath,
+  });
+  for (const update of cascadedUpdates) {
+    touchedPaths.push(update.dependentPath);
+  }
+
   await stageFiles({ repoRootPath, paths: touchedPaths });
 
   const shouldCommit = loadedConfig.git.autoCommit && !options.noCommit;
@@ -249,6 +282,7 @@ export async function runVersion(
     plan,
     commitSha,
     staged: !shouldCommit,
+    cascadedUpdates,
     colorEnabled: options.colorEnabled,
   });
 
@@ -257,7 +291,49 @@ export async function runVersion(
     commitSha,
     bumpedPackageCount: plan.pending.length,
     consumedRecordCount: consumedRecordFilenames.size,
+    cascadedUpdates,
   };
+}
+
+interface RunCascadePassArgs {
+  plan: Plan;
+  discoveredPackageByName: Map<string, Package>;
+  resolvedPluginsByUseString: Map<string, ResolvedPlugin>;
+  repoRootPath: string;
+}
+
+async function runCascadePass(
+  args: RunCascadePassArgs,
+): Promise<CascadedUpdate[]> {
+  const actualUpdates: CascadedUpdate[] = [];
+  for (const pendingEntry of args.plan.pending) {
+    for (const constraintUpdate of pendingEntry.constraintUpdates) {
+      const dependentPkg = args.discoveredPackageByName.get(
+        constraintUpdate.dependent,
+      );
+      if (dependentPkg === undefined) continue;
+      const dependentPlugin = args.resolvedPluginsByUseString.get(
+        dependentPkg.plugin,
+      );
+      if (dependentPlugin === undefined) continue;
+      const { changed } = await invokeUpdateDependency({
+        repoRootPath: args.repoRootPath,
+        pkg: dependentPkg,
+        resolvedPlugin: dependentPlugin,
+        dependencyName: pendingEntry.package,
+        newVersion: parseVersion(pendingEntry.projectedVersion),
+        timeoutMs: DEFAULT_FAST_OP_TIMEOUT_MS,
+      });
+      if (changed) {
+        actualUpdates.push({
+          bumpedPackage: pendingEntry.package,
+          dependent: dependentPkg.name,
+          dependentPath: dependentPkg.path,
+        });
+      }
+    }
+  }
+  return actualUpdates;
 }
 
 interface ResolveAllPluginsArgs {
@@ -405,6 +481,7 @@ interface RenderHumanSummaryArgs {
   plan: Plan;
   commitSha: string | null;
   staged: boolean;
+  cascadedUpdates: CascadedUpdate[];
   colorEnabled: boolean;
 }
 
@@ -423,6 +500,18 @@ function renderHumanSummary(args: RenderHumanSummaryArgs): void {
     }${args.commitSha ? `, committed ${styler.dim(args.commitSha.slice(0, 7))}` : args.staged ? `, ${styler.dim("staged for review")}` : ""}`,
   );
   for (const line of summaryLines) console.log(line);
+  if (args.cascadedUpdates.length > 0) {
+    const dependentNames = [
+      ...new Set(args.cascadedUpdates.map((update) => update.dependent)),
+    ].join(", ");
+    console.log(
+      `  ${styler.dim(
+        `↳ updated ${args.cascadedUpdates.length} dependent constraint${
+          args.cascadedUpdates.length === 1 ? "" : "s"
+        } (${dependentNames})`,
+      )}`,
+    );
+  }
 }
 
 interface Styler {

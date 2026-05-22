@@ -1,5 +1,5 @@
 import { assertEquals, assertRejects, assertStringIncludes } from "@std/assert";
-import { join } from "@std/path";
+import { fromFileUrl, join, resolve } from "@std/path";
 import { DvError } from "../domain/errors.ts";
 import { runVersion } from "./version.ts";
 
@@ -434,6 +434,295 @@ Deno.test("status --json and version --dry-run --json produce the same Plan modu
     statusPlan.command = "x";
     versionPlan.command = "x";
     assertEquals(statusPlan, versionPlan);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+// === Cascade fixture (M4) ===
+//
+// A two-package fixture that points at the real `examples/plugins/deno`
+// plugin. Each package gets its own `packages/<name>/deno.json` with a
+// name + version field; one of them carries an `imports` map naming the
+// other so the cascade has a real constraint to rewrite.
+
+interface SetUpCascadeFixtureArgs {
+  // The dependent package's initial `imports` map. Pass undefined for
+  // no-deps cases. Keys are package names; values are full specifiers
+  // like "jsr:pkg-a@^1.0.0".
+  dependentImports?: Record<string, string>;
+  // Records to drop into .changelog/records/.
+  recordFiles?: Record<string, string>;
+  // The two packages share these initial versions; default 1.0.0 each.
+  initialVersionA?: string;
+  initialVersionB?: string;
+}
+
+interface CascadeFixtureResult {
+  repoRootPath: string;
+  manifestPathA: string;
+  manifestPathB: string;
+  cleanup: () => Promise<void>;
+}
+
+async function setUpCascadeFixture(
+  args: SetUpCascadeFixtureArgs,
+): Promise<CascadeFixtureResult> {
+  const repoRootPath = await Deno.makeTempDir({ prefix: "dv-cascade-" });
+  const previousWorkingDirectory = Deno.cwd();
+  Deno.chdir(repoRootPath);
+
+  await new Deno.Command("git", {
+    args: ["-C", repoRootPath, "init", "-q"],
+  }).output();
+  await new Deno.Command("git", {
+    args: [
+      "-C",
+      repoRootPath,
+      "config",
+      "user.email",
+      "dv-test@example.invalid",
+    ],
+  }).output();
+  await new Deno.Command("git", {
+    args: ["-C", repoRootPath, "config", "user.name", "dv test"],
+  }).output();
+  await new Deno.Command("git", {
+    args: ["-C", repoRootPath, "config", "commit.gpgsign", "false"],
+  }).output();
+
+  // Resolve the real example plugin from this test file's location so
+  // we exercise the same Op scripts dogfooded against the dv repo.
+  const thisFileDir = fromFileUrl(new URL(".", import.meta.url));
+  const examplePluginPath = resolve(
+    thisFileDir,
+    "../../../../examples/plugins/deno",
+  );
+
+  const changelogDir = join(repoRootPath, ".changelog");
+  await Deno.mkdir(changelogDir, { recursive: true });
+  await Deno.writeTextFile(
+    join(changelogDir, "config.yaml"),
+    `discovery:
+  plugins:
+    - match: "packages/*"
+      use: ${examplePluginPath}
+`,
+  );
+
+  const recordsDir = join(changelogDir, "records");
+  await Deno.mkdir(recordsDir, { recursive: true });
+  for (const [recordFilename, recordContents] of Object.entries(
+    args.recordFiles ?? {},
+  )) {
+    await Deno.writeTextFile(join(recordsDir, recordFilename), recordContents);
+  }
+
+  const packageADir = join(repoRootPath, "packages", "pkg-a");
+  const packageBDir = join(repoRootPath, "packages", "pkg-b");
+  await Deno.mkdir(packageADir, { recursive: true });
+  await Deno.mkdir(packageBDir, { recursive: true });
+
+  const manifestPathA = join(packageADir, "deno.json");
+  const manifestPathB = join(packageBDir, "deno.json");
+  const manifestA = {
+    name: "pkg-a",
+    version: args.initialVersionA ?? "1.0.0",
+  };
+  const manifestB: {
+    name: string;
+    version: string;
+    imports?: Record<string, string>;
+  } = {
+    name: "pkg-b",
+    version: args.initialVersionB ?? "1.0.0",
+  };
+  if (args.dependentImports !== undefined) {
+    manifestB.imports = args.dependentImports;
+  }
+  await Deno.writeTextFile(
+    manifestPathA,
+    `${JSON.stringify(manifestA, null, 2)}\n`,
+  );
+  await Deno.writeTextFile(
+    manifestPathB,
+    `${JSON.stringify(manifestB, null, 2)}\n`,
+  );
+
+  await new Deno.Command("git", {
+    args: ["-C", repoRootPath, "add", "."],
+  }).output();
+  await new Deno.Command("git", {
+    args: [
+      "-C",
+      repoRootPath,
+      "commit",
+      "-m",
+      "initial",
+      "--no-gpg-sign",
+      "-q",
+    ],
+  }).output();
+
+  return {
+    repoRootPath,
+    manifestPathA,
+    manifestPathB,
+    cleanup: async () => {
+      Deno.chdir(previousWorkingDirectory);
+      await Deno.remove(repoRootPath, { recursive: true });
+    },
+  };
+}
+
+async function readManifest(manifestPath: string): Promise<{
+  name: string;
+  version: string;
+  imports?: Record<string, string>;
+}> {
+  return JSON.parse(await Deno.readTextFile(manifestPath));
+}
+
+Deno.test("runVersion cascades a constraint when a dependent imports the bumped package", async () => {
+  // Given pkg-b imports pkg-a via jsr:pkg-a@^1.0.0 and one feat record
+  // names pkg-a
+  const fixture = await setUpCascadeFixture({
+    dependentImports: { "pkg-a": "jsr:pkg-a@^1.0.0" },
+    recordFiles: {
+      "a.md": "---\ntype: feat\npackages:\n  - pkg-a\n---\n\nA feature.\n",
+    },
+  });
+
+  try {
+    // When dv version runs
+    const result = await runVersion({
+      noCommit: false,
+      prune: false,
+      emitJson: false,
+      colorEnabled: false,
+      yes: false,
+    });
+
+    // Then pkg-a's manifest carries the projected version
+    const manifestA = await readManifest(fixture.manifestPathA);
+    assertEquals(manifestA.version, "1.1.0");
+
+    // pkg-b's imports entry is rewritten to ^1.1.0; its OWN version is
+    // unchanged (Algebra §9: cascading rewrites constraints, never bumps)
+    const manifestB = await readManifest(fixture.manifestPathB);
+    assertEquals(manifestB.version, "1.0.0");
+    assertEquals(manifestB.imports?.["pkg-a"], "jsr:pkg-a@^1.1.0");
+
+    // The cascadedUpdates result names the actual rewrite
+    assertEquals(result.cascadedUpdates.length, 1);
+    assertEquals(result.cascadedUpdates[0]?.bumpedPackage, "pkg-a");
+    assertEquals(result.cascadedUpdates[0]?.dependent, "pkg-b");
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+Deno.test("runVersion --dry-run lists constraintUpdates without invoking update-dependency", async () => {
+  // Given the same two-package fixture
+  const fixture = await setUpCascadeFixture({
+    dependentImports: { "pkg-a": "jsr:pkg-a@^1.0.0" },
+    recordFiles: {
+      "a.md": "---\ntype: feat\npackages:\n  - pkg-a\n---\n\nA feature.\n",
+    },
+  });
+
+  try {
+    // When dv version --dry-run runs
+    const beforeManifestB = await Deno.readTextFile(fixture.manifestPathB);
+    const { capturedStdout } = await captureStdout(() =>
+      runVersion({
+        dryRun: true,
+        noCommit: false,
+        prune: false,
+        emitJson: false,
+        colorEnabled: false,
+        yes: false,
+      }),
+    );
+
+    // Then pkg-b's manifest is byte-for-byte unchanged on disk
+    const afterManifestB = await Deno.readTextFile(fixture.manifestPathB);
+    assertEquals(afterManifestB, beforeManifestB);
+
+    // And the human output predicts the cascade
+    assertStringIncludes(capturedStdout, "would update dependents");
+    assertStringIncludes(capturedStdout, "pkg-b");
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+Deno.test("runVersion treats changed:false from update-dependency as success (idempotence)", async () => {
+  // Given pkg-b does NOT import pkg-a
+  const fixture = await setUpCascadeFixture({
+    // no dependentImports → no constraint to rewrite
+    recordFiles: {
+      "a.md": "---\ntype: feat\npackages:\n  - pkg-a\n---\n\nA feature.\n",
+    },
+  });
+
+  try {
+    // When dv version runs
+    const beforeManifestB = await Deno.readTextFile(fixture.manifestPathB);
+    const result = await runVersion({
+      noCommit: false,
+      prune: false,
+      emitJson: false,
+      colorEnabled: false,
+      yes: false,
+    });
+
+    // Then pkg-a still bumps
+    const manifestA = await readManifest(fixture.manifestPathA);
+    assertEquals(manifestA.version, "1.1.0");
+
+    // pkg-b's manifest is byte-for-byte unchanged
+    const afterManifestB = await Deno.readTextFile(fixture.manifestPathB);
+    assertEquals(afterManifestB, beforeManifestB);
+
+    // And no cascade entries were recorded
+    assertEquals(result.cascadedUpdates, []);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+Deno.test("runVersion cascades even when the dependent is itself in pending", async () => {
+  // Given pkg-b imports pkg-a, and both packages have records
+  const fixture = await setUpCascadeFixture({
+    dependentImports: { "pkg-a": "jsr:pkg-a@^1.0.0" },
+    recordFiles: {
+      "a.md": "---\ntype: feat\npackages:\n  - pkg-a\n---\n\nA feature.\n",
+      "b.md": "---\ntype: fix\npackages:\n  - pkg-b\n---\n\nA bug fix.\n",
+    },
+  });
+
+  try {
+    // When dv version runs
+    const result = await runVersion({
+      noCommit: false,
+      prune: false,
+      emitJson: false,
+      colorEnabled: false,
+      yes: false,
+    });
+
+    // Then pkg-b ends up with both its own new version AND the
+    // rewritten constraint on pkg-a — proving the cascade ran AFTER
+    // pkg-b's write-version
+    const manifestB = await readManifest(fixture.manifestPathB);
+    assertEquals(manifestB.version, "1.0.1");
+    assertEquals(manifestB.imports?.["pkg-a"], "jsr:pkg-a@^1.1.0");
+
+    // Both packages bumped; one cascade actually changed something
+    assertEquals(result.bumpedPackageCount, 2);
+    assertEquals(result.cascadedUpdates.length, 1);
+    assertEquals(result.cascadedUpdates[0]?.dependent, "pkg-b");
   } finally {
     await fixture.cleanup();
   }
