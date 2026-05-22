@@ -1,0 +1,184 @@
+import { assertEquals } from "@std/assert";
+import type { Package } from "../../domain/package.ts";
+import type { Record as DvRecord } from "../../domain/record.ts";
+import type { Rename } from "../../domain/rename.ts";
+import { parseVersion } from "../../domain/version.ts";
+import { buildVersionPlan, type PackageCurrentVersionEntry } from "./plan.ts";
+import { rawPlanSchema } from "./plan-schema.ts";
+
+function buildPackage(name: string, path: string): Package {
+  return { name, path, plugin: "./examples/plugins/deno" };
+}
+
+function buildRecord(
+  filename: string,
+  type: DvRecord["type"],
+  packages: string[],
+): DvRecord {
+  return { filename, type, packages, links: [], body: "x" };
+}
+
+function packageVersion(
+  packageName: string,
+  versionText: string,
+): PackageCurrentVersionEntry {
+  return { packageName, currentVersion: parseVersion(versionText) };
+}
+
+Deno.test("buildVersionPlan returns an empty plan when no records are pending", () => {
+  // Given a single discovered package with a known version but no records
+  const discoveredPackages = [buildPackage("core", "packages/core")];
+  const packageCurrentVersions = [packageVersion("core", "1.4.2")];
+
+  // When the plan is built
+  const plan = buildVersionPlan({
+    command: "status",
+    discoveredPackages,
+    parsedRecords: [],
+    renameLedger: [],
+    packageCurrentVersions,
+  });
+
+  // Then pending is empty and the Plan still validates against the schema
+  assertEquals(plan.pending, []);
+  assertEquals(plan.unresolvedReferences, []);
+  assertEquals(plan.awaitingRelease, []);
+  rawPlanSchema.parse(plan);
+});
+
+Deno.test("buildVersionPlan aggregates records into per-Package projected versions", () => {
+  // Given two packages and three records (two on core, one on cli)
+  const discoveredPackages = [
+    buildPackage("core", "packages/core"),
+    buildPackage("cli", "packages/cli"),
+  ];
+  const parsedRecords: DvRecord[] = [
+    buildRecord("a.md", "feat", ["core"]),
+    buildRecord("b.md", "fix", ["core"]),
+    buildRecord("c.md", "fix", ["cli"]),
+  ];
+  const packageCurrentVersions = [
+    packageVersion("core", "1.4.2"),
+    packageVersion("cli", "0.8.0"),
+  ];
+
+  // When the plan is built
+  const plan = buildVersionPlan({
+    command: "version",
+    discoveredPackages,
+    parsedRecords,
+    renameLedger: [],
+    packageCurrentVersions,
+  });
+
+  // Then pending entries appear in package-name order with the bumps the
+  // algebra prescribes
+  assertEquals(plan.pending.length, 2);
+  assertEquals(plan.pending[0]?.package, "cli");
+  assertEquals(plan.pending[0]?.currentVersion, "0.8.0");
+  assertEquals(plan.pending[0]?.projectedVersion, "0.8.1");
+  assertEquals(plan.pending[0]?.bump, "patch");
+  assertEquals(plan.pending[1]?.package, "core");
+  assertEquals(plan.pending[1]?.currentVersion, "1.4.2");
+  assertEquals(plan.pending[1]?.projectedVersion, "1.5.0");
+  assertEquals(plan.pending[1]?.bump, "minor");
+  assertEquals(plan.pending[1]?.records, ["a.md", "b.md"]);
+  assertEquals(plan.pending[1]?.changeCounts, { feat: 1, fix: 1, breaking: 0 });
+  rawPlanSchema.parse(plan);
+});
+
+Deno.test("buildVersionPlan resolves package references through the rename ledger", () => {
+  // Given a record naming an old package name and a ledger that maps it
+  const discoveredPackages = [buildPackage("engine", "packages/engine")];
+  const parsedRecords: DvRecord[] = [buildRecord("a.md", "feat", ["core"])];
+  const renameLedger: Rename[] = [{ from: "core", to: "engine", at: "1.0.0" }];
+  const packageCurrentVersions = [packageVersion("engine", "1.2.3")];
+
+  // When the plan is built
+  const plan = buildVersionPlan({
+    command: "version",
+    discoveredPackages,
+    parsedRecords,
+    renameLedger,
+    packageCurrentVersions,
+  });
+
+  // Then the bump lands on the current package, not the old name
+  assertEquals(plan.pending.length, 1);
+  assertEquals(plan.pending[0]?.package, "engine");
+  assertEquals(plan.pending[0]?.projectedVersion, "1.3.0");
+  assertEquals(plan.unresolvedReferences, []);
+});
+
+Deno.test("buildVersionPlan reports Unresolved References for records pointing at no Package", () => {
+  // Given a record naming an undiscovered package with no rename edge
+  const discoveredPackages = [buildPackage("core", "packages/core")];
+  const parsedRecords: DvRecord[] = [buildRecord("a.md", "fix", ["mystery"])];
+  const packageCurrentVersions = [packageVersion("core", "1.0.0")];
+
+  // When the plan is built
+  const plan = buildVersionPlan({
+    command: "version",
+    discoveredPackages,
+    parsedRecords,
+    renameLedger: [],
+    packageCurrentVersions,
+  });
+
+  // Then the reference is reported (status/dry-run can show it) and no
+  // bump lands
+  assertEquals(plan.pending.length, 0);
+  assertEquals(plan.unresolvedReferences, [
+    { record: "a.md", reference: "mystery" },
+  ]);
+});
+
+Deno.test("buildVersionPlan caps Unstable breaking changes at minor (Algebra §3)", () => {
+  // Given a breaking record on a pre-1.0 package
+  const discoveredPackages = [buildPackage("core", "packages/core")];
+  const parsedRecords: DvRecord[] = [buildRecord("a.md", "feat!", ["core"])];
+  const packageCurrentVersions = [packageVersion("core", "0.4.2")];
+
+  // When the plan is built
+  const plan = buildVersionPlan({
+    command: "version",
+    discoveredPackages,
+    parsedRecords,
+    renameLedger: [],
+    packageCurrentVersions,
+  });
+
+  // Then the projected version stays in 0.x — the cap forbids 1.0.0
+  assertEquals(plan.pending[0]?.bump, "minor");
+  assertEquals(plan.pending[0]?.stability, "Unstable");
+  assertEquals(plan.pending[0]?.projectedVersion, "0.5.0");
+});
+
+Deno.test("buildVersionPlan produces JSON that validates against rawPlanSchema", () => {
+  // Given a mixed input set
+  const discoveredPackages = [
+    buildPackage("core", "packages/core"),
+    buildPackage("cli", "packages/cli"),
+  ];
+  const parsedRecords: DvRecord[] = [
+    buildRecord("a.md", "feat", ["core"]),
+    buildRecord("b.md", "fix!", ["cli"]),
+  ];
+  const packageCurrentVersions = [
+    packageVersion("core", "1.0.0"),
+    packageVersion("cli", "0.3.0"),
+  ];
+
+  // When built and round-tripped through JSON
+  const plan = buildVersionPlan({
+    command: "status",
+    discoveredPackages,
+    parsedRecords,
+    renameLedger: [],
+    packageCurrentVersions,
+  });
+  const roundTripped = JSON.parse(JSON.stringify(plan));
+
+  // Then the JSON round trip is contract-valid
+  rawPlanSchema.parse(roundTripped);
+});
