@@ -2,22 +2,18 @@
 #
 # This repo is a monorepo:
 #   apps/cli      — the dv CLI (Deno)
-#   apps/docs     — the VitePress docs site (Node)
+#   apps/docs     — the VitePress docs site (Node, no published name)
 #   packages/*    — shared Deno libs (none yet)
 #
-# Once the corresponding example plugins exist, uncomment the block below
-# and dv will manage its own releases.
-#
-# discovery:
-#   plugins:
-#     - match: "apps/cli"
-#       use: ./examples/plugins/deno
-#     - match: "apps/docs"
-#       use: ./examples/plugins/npm
-#     - match: "packages/*"
-#       use: ./examples/plugins/deno
-#
-# tagging:
-#   format: "{package-name}@{version}"
-#
+# The example Deno plugin claims every workspace member with a `name` field
+# in its deno.json. apps/docs is intentionally name-less and is silently
+# skipped (specs/config-format.md § Matching rules).
+
+discovery:
+  plugins:
+    - match:
+        - "apps/*"
+        - "packages/*"
+      use: ./examples/plugins/deno
+
 # Records you author with `dv add` land in .changelog/records/.
