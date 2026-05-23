@@ -11,8 +11,27 @@ cross-cutting work that doesn't fit a single spec section.
 
 ## v1 product scope
 
-Out of scope for v1, but architecturally accommodated — see the full
-list with rationale in [specs/v1-scope.md § Deferred to
+### Commands still to implement
+
+These are spec'd in [specs/cli.md](specs/cli.md) as v1 commands — not
+deferred, just not built yet. Listed here so they don't get lost
+between milestone-class pieces of work.
+
+- **`dv v1 <package>`** — gated, celebrated 0.x → 1.0.0 promotion.
+  No Record type can produce 1.0.0; this is the one command that
+  can. Up next as of this writing.
+- **`dv rename <from> <to>`** — append a lineage edge to the rename
+  ledger so an old name resolves to a new one. Pure bookkeeping;
+  never touches the package itself.
+- **`dv plugin invoke <plugin> <op>`** — single-Op debugger for
+  plugin authors. Sets up the env vars, pipes stdin, prints stdout.
+- **`dv plugin verify <plugin>`** — conformance check against
+  `specs/schemas/plugin-responses.json` per Op the plugin declares.
+
+### Deferred to later (architecturally accommodated)
+
+Out of scope for v1 — see the full list with rationale in
+[specs/v1-scope.md § Deferred to
 later](specs/v1-scope.md#deferred-to-later). Highlights:
 
 - First-party plugins (Cargo, npm, pyproject, etc.) promoted from

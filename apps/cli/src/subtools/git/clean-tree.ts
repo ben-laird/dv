@@ -35,7 +35,7 @@ export async function assertCleanTree(
       code: "dirty-tree",
       message:
         "working tree is not clean — commit or stash changes before running `dv version`",
-      hint: "commit or stash your changes, or run with --allow-dirty if your config permits",
+      hint: "commit or stash your changes, or pass --allow-dirty to skip this check",
     });
   }
 }

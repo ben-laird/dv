@@ -210,17 +210,25 @@ const versionCommand = defineCommand({
     "no-commit": { kind: "boolean" },
     prune: { kind: "boolean" },
     yes: { kind: "boolean", alias: "y" },
+    "allow-dirty": { kind: "boolean" },
+    "no-allow-dirty": { kind: "boolean" },
     json: { kind: "boolean" },
     color: { kind: "boolean" },
     "no-color": { kind: "boolean" },
   },
   usage:
-    "Usage: dv version [--dry-run] [--no-commit] [--prune] [--yes] [--json]",
+    "Usage: dv version [--dry-run] [--no-commit] [--prune] [--yes] [--allow-dirty] [--json]",
   run: async ({ flags }) => {
     const dryRunOverride =
       flags["no-dry-run"] === true
         ? false
         : flags["dry-run"] === true
+          ? true
+          : undefined;
+    const allowDirtyOverride =
+      flags["no-allow-dirty"] === true
+        ? false
+        : flags["allow-dirty"] === true
           ? true
           : undefined;
     const colorEnabled = resolveColorEnabled({
@@ -235,6 +243,7 @@ const versionCommand = defineCommand({
       emitJson: flags.json === true,
       colorEnabled,
       yes: flags.yes === true,
+      allowDirty: allowDirtyOverride,
     });
     return 0;
   },
@@ -248,12 +257,14 @@ const releaseCommand = defineCommand({
     push: { kind: "boolean" },
     "no-push": { kind: "boolean" },
     yes: { kind: "boolean", alias: "y" },
+    "allow-dirty": { kind: "boolean" },
+    "no-allow-dirty": { kind: "boolean" },
     json: { kind: "boolean" },
     color: { kind: "boolean" },
     "no-color": { kind: "boolean" },
   },
   usage:
-    "Usage: dv release [--dry-run] [--force] [--push | --no-push] [--yes] [--json]",
+    "Usage: dv release [--dry-run] [--force] [--push | --no-push] [--yes] [--allow-dirty] [--json]",
   run: async ({ flags }) => {
     const dryRunOverride =
       flags["no-dry-run"] === true
@@ -265,6 +276,12 @@ const releaseCommand = defineCommand({
       flags["no-push"] === true
         ? false
         : flags.push === true
+          ? true
+          : undefined;
+    const allowDirtyOverride =
+      flags["no-allow-dirty"] === true
+        ? false
+        : flags["allow-dirty"] === true
           ? true
           : undefined;
     const colorEnabled = resolveColorEnabled({
@@ -279,6 +296,7 @@ const releaseCommand = defineCommand({
       yes: flags.yes === true,
       emitJson: flags.json === true,
       colorEnabled,
+      allowDirty: allowDirtyOverride,
     });
     // Non-zero exit when any release Op failed (push failures throw
     // and surface through the framework's reportError hook).

@@ -55,6 +55,10 @@ export interface RunReleaseOptions {
   yes: boolean;
   emitJson: boolean;
   colorEnabled: boolean;
+  // Tri-state: undefined → honor `git.require-clean-tree`. true →
+  // skip the check. false → force it on. Flag pair: `--allow-dirty`
+  // / `--no-allow-dirty`.
+  allowDirty?: boolean;
 }
 
 export interface ReleaseOpOutcome {
@@ -84,7 +88,13 @@ export async function runRelease(
   const effectiveDryRun = options.dryRun ?? loadedConfig.safety.dryRunByDefault;
   const effectivePush = options.push ?? loadedConfig.git.autoPush;
 
-  if (!effectiveDryRun && loadedConfig.git.requireCleanTree) {
+  const effectiveRequireCleanTree =
+    options.allowDirty === true
+      ? false
+      : options.allowDirty === false
+        ? true
+        : loadedConfig.git.requireCleanTree;
+  if (!effectiveDryRun && effectiveRequireCleanTree) {
     await assertCleanTree({ repoRootPath });
   }
 

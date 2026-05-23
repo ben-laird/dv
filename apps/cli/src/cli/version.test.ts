@@ -290,6 +290,46 @@ Deno.test("runVersion fails with code 'dirty-tree' when there are uncommitted ch
   }
 });
 
+Deno.test("runVersion with allowDirty: true skips the clean-tree check and bumps anyway", async () => {
+  // Given a repo with a feat record AND a stray uncommitted file —
+  // the same setup that triggers 'dirty-tree' above
+  const fixture = await setUpFixture({
+    initialVersion: "1.4.2",
+    recordFiles: {
+      "a.md": "---\ntype: feat\npackages:\n  - core\n---\n\nA feature.\n",
+    },
+  });
+  await Deno.writeTextFile(join(fixture.repoRootPath, "stray.txt"), "junk");
+
+  try {
+    // When dv version runs with allowDirty: true (the runtime form of
+    // the --allow-dirty CLI flag)
+    const { result } = await captureStdout(() =>
+      runVersion({
+        noCommit: false,
+        prune: false,
+        emitJson: false,
+        colorEnabled: false,
+        yes: false,
+        allowDirty: true,
+      }),
+    );
+
+    // Then the bump completes — the dirty tree is intentionally
+    // permitted and the version is rolled forward
+    assertEquals(result.bumpedPackageCount, 1);
+    const versionText = await Deno.readTextFile(fixture.versionFilePath);
+    assertEquals(versionText.trim(), "1.5.0");
+    // And the stray file is still untracked (we didn't touch it)
+    const strayStillThere = await Deno.readTextFile(
+      join(fixture.repoRootPath, "stray.txt"),
+    );
+    assertEquals(strayStillThere, "junk");
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
 Deno.test("runVersion halts on an Unresolved Reference unless --prune is passed", async () => {
   // Given a record referencing an unknown package
   const fixture = await setUpFixture({

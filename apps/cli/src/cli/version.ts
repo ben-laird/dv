@@ -65,6 +65,11 @@ export interface RunVersionOptions {
   // `--yes` is accepted as a no-op in M3 (dv version doesn't prompt);
   // wired here so the flag is forward-compatible with later milestones.
   yes: boolean;
+  // Tri-state: undefined → honor `git.require-clean-tree` config (the
+  // default). true → skip the check regardless. false → force the
+  // check on even when config says otherwise. The flag pair on the
+  // command line is `--allow-dirty` / `--no-allow-dirty`.
+  allowDirty?: boolean;
 }
 
 export interface RunVersionResult {
@@ -94,7 +99,19 @@ export async function runVersion(
 
   const effectiveDryRun = options.dryRun ?? loadedConfig.safety.dryRunByDefault;
 
-  if (!effectiveDryRun && loadedConfig.git.requireCleanTree) {
+  // Clean-tree gate. The flag wins over config (parity rule):
+  //   --allow-dirty       → skip the check
+  //   --no-allow-dirty    → force the check on
+  //   neither             → honor `git.require-clean-tree`
+  // Dry-run skips the check unconditionally — nothing on disk
+  // changes in dry mode, so a dirty tree is harmless.
+  const effectiveRequireCleanTree =
+    options.allowDirty === true
+      ? false
+      : options.allowDirty === false
+        ? true
+        : loadedConfig.git.requireCleanTree;
+  if (!effectiveDryRun && effectiveRequireCleanTree) {
     await assertCleanTree({ repoRootPath });
   }
 
