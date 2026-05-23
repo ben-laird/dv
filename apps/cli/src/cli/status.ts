@@ -18,6 +18,7 @@ import {
   type PackageCurrentVersionEntry,
   type Plan,
 } from "../subtools/versioning/mod.ts";
+import { makeStyler, type Styler } from "./styler.ts";
 
 // `dv status` is a read-only preview of `dv version` (specs/cli.md §
 // dv status). It shares the Plan builder with `dv version --dry-run` so
@@ -265,7 +266,7 @@ function renderHumanStatus(args: RenderHumanStatusArgs): void {
       );
     const changeCountSummary = formatChangeCounts(pendingEntry.changeCounts);
     console.log(
-      `  ${styler.bold(paddedPackageName)}  ${versionTransition}  ${styler.bold(
+      `  ${styler.bold(paddedPackageName)}  ${versionTransition}  ${styler.magenta(
         pendingEntry.bump,
       )}  ${styler.dim(`(${changeCountSummary})`)}`,
     );
@@ -282,7 +283,7 @@ function renderHumanStatus(args: RenderHumanStatusArgs): void {
   if (plan.unresolvedReferences.length > 0) {
     console.log("");
     console.log(
-      `${styler.bold("Unresolved references")} — ${plan.unresolvedReferences.length} (halt ${styler.cyan(
+      `${styler.yellow(styler.bold("Unresolved references"))} — ${plan.unresolvedReferences.length} (halt ${styler.cyan(
         "`dv version`",
       )} unless ${styler.cyan("--prune")}):`,
     );
@@ -325,9 +326,11 @@ function renderAwaitingReleaseTable(
 ): void {
   const { awaitingRelease, styler } = args;
   console.log(
-    `${styler.bold("Awaiting release")} — ${awaitingRelease.length} package${
-      awaitingRelease.length === 1 ? "" : "s"
-    } (run ${styler.cyan("`dv release`")}):`,
+    `${styler.bold("Awaiting release")} — ${styler.yellow(
+      `${awaitingRelease.length} package${
+        awaitingRelease.length === 1 ? "" : "s"
+      }`,
+    )} (run ${styler.cyan("`dv release`")}):`,
   );
   const nameColumnWidth = Math.max(
     ...awaitingRelease.map((entry) => entry.package.length),
@@ -341,7 +344,7 @@ function renderAwaitingReleaseTable(
     const paddedName = entry.package.padEnd(nameColumnWidth);
     const paddedVersion = entry.version.padEnd(versionColumnWidth);
     const firstStableMarker = entry.firstStable
-      ? ` ${styler.bold("(first stable!)")}`
+      ? ` ${styler.yellow(styler.bold("(first stable!)"))}`
       : "";
     console.log(
       `  ${styler.bold(paddedName)}  ${paddedVersion}  ${styler.dim(`would tag ${entry.tag}`)}${firstStableMarker}`,
@@ -382,7 +385,7 @@ interface RenderRecordFailureFooterArgs {
 function renderRecordFailureFooter(args: RenderRecordFailureFooterArgs): void {
   console.log("");
   console.log(
-    `${args.styler.dim(
+    `${args.styler.red(
       `${args.failureCount} record file${args.failureCount === 1 ? "" : "s"} failed to parse`,
     )} — run ${args.styler.cyan("`dv validate`")} to see details.`,
   );
@@ -399,25 +402,4 @@ function formatChangeCounts(changeCounts: {
   if (changeCounts.breaking > 0)
     segments.push(`${changeCounts.breaking} breaking`);
   return segments.join(", ");
-}
-
-interface Styler {
-  bold(text: string): string;
-  dim(text: string): string;
-  cyan(text: string): string;
-}
-
-function makeStyler(colorEnabled: boolean): Styler {
-  if (!colorEnabled) {
-    return {
-      bold: (text) => text,
-      dim: (text) => text,
-      cyan: (text) => text,
-    };
-  }
-  return {
-    bold: (text) => `\x1b[1m${text}\x1b[22m`,
-    dim: (text) => `\x1b[2m${text}\x1b[22m`,
-    cyan: (text) => `\x1b[36m${text}\x1b[39m`,
-  };
 }

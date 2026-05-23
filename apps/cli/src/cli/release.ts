@@ -23,6 +23,7 @@ import {
   type PackageCurrentVersionEntry,
   type Plan,
 } from "../subtools/versioning/mod.ts";
+import { makeStyler } from "./styler.ts";
 
 // `dv release` per specs/cli.md § dv release. Phase two of the
 // release pipeline: mint a per-Package git Tag for every Package
@@ -490,7 +491,7 @@ function renderHumanPlan(args: RenderHumanPlanArgs): void {
   console.log(`${styler.bold("Plan (dry-run)")}:`);
   for (const entry of args.plan.awaitingRelease) {
     const firstStableMarker = entry.firstStable
-      ? ` ${styler.bold("(first stable!)")}`
+      ? ` ${styler.yellow(styler.bold("(first stable!)"))}`
       : "";
     console.log(
       `  ${styler.bold(entry.package)} ${entry.version} → tag ${entry.tag}${firstStableMarker}`,
@@ -526,7 +527,7 @@ function renderHumanSummary(args: RenderHumanSummaryArgs): void {
     segments.push(`pushed ${args.pushedTagNames.length}`);
   }
   console.log("");
-  console.log(`${styler.bold("✓")} ${segments.join(", ")}`);
+  console.log(`${styler.green(styler.bold("✓"))} ${segments.join(", ")}`);
 
   // First-stable celebration — per Algebra §3 no Record can produce
   // 1.0.0, so a tag at exactly 1.0.0 with no prior history is the
@@ -538,7 +539,7 @@ function renderHumanSummary(args: RenderHumanSummaryArgs): void {
     console.log("");
     for (const entry of firstStableEntries) {
       console.log(
-        `  ${styler.bold("🎉")} ${entry.package} promoted to 1.0.0 — first stable release`,
+        `  ${styler.yellow(`🎉 ${entry.package} promoted to 1.0.0 — first stable release`)}`,
       );
     }
   }
@@ -550,30 +551,9 @@ function renderHumanSummary(args: RenderHumanSummaryArgs): void {
     console.log("");
     for (const outcome of failedOutcomes) {
       console.log(
-        `  ${styler.dim(`✗ ${outcome.package} (${outcome.tag})`)}: ${outcome.message ?? "release op failed"}`,
+        `  ${styler.red(`✗ ${outcome.package} (${outcome.tag})`)}: ${outcome.message ?? "release op failed"}`,
       );
     }
   }
   console.log("");
-}
-
-interface Styler {
-  bold(text: string): string;
-  dim(text: string): string;
-  cyan(text: string): string;
-}
-
-function makeStyler(colorEnabled: boolean): Styler {
-  if (!colorEnabled) {
-    return {
-      bold: (text) => text,
-      dim: (text) => text,
-      cyan: (text) => text,
-    };
-  }
-  return {
-    bold: (text) => `\x1b[1m${text}\x1b[22m`,
-    dim: (text) => `\x1b[2m${text}\x1b[22m`,
-    cyan: (text) => `\x1b[36m${text}\x1b[39m`,
-  };
 }

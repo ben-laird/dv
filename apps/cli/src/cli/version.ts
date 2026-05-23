@@ -37,6 +37,7 @@ import {
   type PlanPending,
   renderCommitMessage,
 } from "../subtools/versioning/mod.ts";
+import { makeStyler } from "./styler.ts";
 
 // `dv version` per specs/cli.md § dv version. Consumes pending Records
 // and (per Package) applies the aggregated Bump, rewrites the manifest
@@ -509,7 +510,7 @@ function renderHumanPlan(args: RenderHumanPlanArgs): void {
   console.log(`${styler.bold("Plan (dry-run)")}:`);
   for (const pending of args.plan.pending) {
     console.log(
-      `  ${styler.bold(pending.package)} ${pending.currentVersion} → ${pending.projectedVersion} (${pending.bump})`,
+      `  ${styler.bold(pending.package)} ${pending.currentVersion} → ${pending.projectedVersion} (${styler.magenta(pending.bump)})`,
     );
     if (pending.constraintUpdates.length > 0) {
       const dependentNames = pending.constraintUpdates
@@ -523,7 +524,7 @@ function renderHumanPlan(args: RenderHumanPlanArgs): void {
   if (args.plan.unresolvedReferences.length > 0) {
     console.log("");
     console.log(
-      `${styler.bold("Unresolved references")} (halt without ${styler.cyan(
+      `${styler.yellow(styler.bold("Unresolved references"))} (halt without ${styler.cyan(
         "--prune",
       )}):`,
     );
@@ -550,12 +551,12 @@ function renderHumanSummary(args: RenderHumanSummaryArgs): void {
   const summaryLines: string[] = [];
   for (const pending of args.plan.pending as PlanPending[]) {
     summaryLines.push(
-      `  ${styler.bold(pending.package)} ${pending.currentVersion} → ${pending.projectedVersion} (${pending.bump})`,
+      `  ${styler.bold(pending.package)} ${pending.currentVersion} → ${pending.projectedVersion} (${styler.magenta(pending.bump)})`,
     );
   }
   console.log("");
   console.log(
-    `${styler.bold("✓")} versioned ${bumpedPackageCount} package${
+    `${styler.green(styler.bold("✓"))} versioned ${bumpedPackageCount} package${
       bumpedPackageCount === 1 ? "" : "s"
     }${args.commitSha ? `, committed ${styler.dim(args.commitSha.slice(0, 7))}` : args.staged ? `, ${styler.dim("staged for review")}` : ""}`,
   );
@@ -574,25 +575,4 @@ function renderHumanSummary(args: RenderHumanSummaryArgs): void {
     );
   }
   console.log("");
-}
-
-interface Styler {
-  bold(text: string): string;
-  dim(text: string): string;
-  cyan(text: string): string;
-}
-
-function makeStyler(colorEnabled: boolean): Styler {
-  if (!colorEnabled) {
-    return {
-      bold: (text) => text,
-      dim: (text) => text,
-      cyan: (text) => text,
-    };
-  }
-  return {
-    bold: (text) => `\x1b[1m${text}\x1b[22m`,
-    dim: (text) => `\x1b[2m${text}\x1b[22m`,
-    cyan: (text) => `\x1b[36m${text}\x1b[39m`,
-  };
 }
