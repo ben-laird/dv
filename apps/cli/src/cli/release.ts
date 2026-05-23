@@ -23,6 +23,11 @@ import {
   type PackageCurrentVersionEntry,
   type Plan,
 } from "../subtools/versioning/mod.ts";
+import {
+  makeLiveProgressReporter,
+  makeSilentProgressReporter,
+  type ProgressReporter,
+} from "./progress.ts";
 import { makeStyler } from "./styler.ts";
 
 // `dv release` per specs/cli.md § dv release. Phase two of the
@@ -163,27 +168,61 @@ export async function runRelease(
     tagFormatTemplate: loadedConfig.tagging.format,
   });
 
+  // Progress reporter — live to stderr in human mode, silent under
+  // --json so machine consumers don't get progress noise on stderr.
+  // Column widths are computed from the worklist + known op labels
+  // so the lines align across the whole run.
+  const releaseOpLabels = ["mint-tag", "release", "push"];
+  const progressReporter: ProgressReporter = options.emitJson
+    ? makeSilentProgressReporter()
+    : makeLiveProgressReporter({
+        colorEnabled: options.colorEnabled,
+        packageColumnWidth: Math.max(
+          ...workList.map((entry) => entry.pkg.name.length),
+          0,
+        ),
+        operationColumnWidth: Math.max(
+          ...releaseOpLabels.map((label) => label.length),
+          0,
+        ),
+      });
+
   // Mint tags for entries that don't yet have one. The cascade-pass
   // order (publish-then-push vs push-then-publish) only controls
   // when push happens; minting is always first.
   const mintedTagNames: string[] = [];
   const reusedTagNames: string[] = [];
   for (const entry of workList) {
-    const alreadyTagged = await tagExists({
-      repoRootPath,
-      tag: entry.tag,
+    const mintStep = progressReporter.start({
+      packageName: entry.pkg.name,
+      operationName: "mint-tag",
     });
-    if (alreadyTagged) {
-      reusedTagNames.push(entry.tag);
-      continue;
+    try {
+      const alreadyTagged = await tagExists({
+        repoRootPath,
+        tag: entry.tag,
+      });
+      if (alreadyTagged) {
+        reusedTagNames.push(entry.tag);
+        mintStep.done();
+        continue;
+      }
+      await mintTag({
+        repoRootPath,
+        tag: entry.tag,
+        message: `Release ${entry.tag}`,
+        sign: loadedConfig.git.sign,
+      });
+      mintedTagNames.push(entry.tag);
+      mintStep.done();
+    } catch (caughtError) {
+      mintStep.fail(
+        caughtError instanceof Error
+          ? caughtError.message
+          : String(caughtError),
+      );
+      throw caughtError;
     }
-    await mintTag({
-      repoRootPath,
-      tag: entry.tag,
-      message: `Release ${entry.tag}`,
-      sign: loadedConfig.git.sign,
-    });
-    mintedTagNames.push(entry.tag);
   }
 
   const allTagsThisRun = [...mintedTagNames, ...reusedTagNames];
@@ -191,8 +230,22 @@ export async function runRelease(
   const pushedTagNames: string[] = [];
 
   if (effectivePush && pushSequence === "push-then-publish") {
-    await pushTags({ repoRootPath, tagNames: allTagsThisRun });
-    pushedTagNames.push(...allTagsThisRun);
+    const pushStep = progressReporter.start({
+      packageName: "",
+      operationName: "push",
+    });
+    try {
+      await pushTags({ repoRootPath, tagNames: allTagsThisRun });
+      pushedTagNames.push(...allTagsThisRun);
+      pushStep.done();
+    } catch (caughtError) {
+      pushStep.fail(
+        caughtError instanceof Error
+          ? caughtError.message
+          : String(caughtError),
+      );
+      throw caughtError;
+    }
   }
 
   const releaseOpOutcomes = await runReleasePhase({
@@ -201,11 +254,26 @@ export async function runRelease(
     resolvedPluginsByUseString,
     repoRootPath,
     timeoutMs: resolvePublishingTimeoutMs(loadedConfig.publishing.timeout),
+    progressReporter,
   });
 
   if (effectivePush && pushSequence !== "push-then-publish") {
-    await pushTags({ repoRootPath, tagNames: allTagsThisRun });
-    pushedTagNames.push(...allTagsThisRun);
+    const pushStep = progressReporter.start({
+      packageName: "",
+      operationName: "push",
+    });
+    try {
+      await pushTags({ repoRootPath, tagNames: allTagsThisRun });
+      pushedTagNames.push(...allTagsThisRun);
+      pushStep.done();
+    } catch (caughtError) {
+      pushStep.fail(
+        caughtError instanceof Error
+          ? caughtError.message
+          : String(caughtError),
+      );
+      throw caughtError;
+    }
   }
 
   if (options.emitJson) {
@@ -354,6 +422,7 @@ interface RunReleasePhaseArgs {
   resolvedPluginsByUseString: Map<string, ResolvedPlugin>;
   repoRootPath: string;
   timeoutMs?: number;
+  progressReporter: ProgressReporter;
 }
 
 async function runReleasePhase(
@@ -361,10 +430,15 @@ async function runReleasePhase(
 ): Promise<ReleaseOpOutcome[]> {
   const outcomes: ReleaseOpOutcome[] = [];
   for (const entry of args.workList) {
+    const releaseStep = args.progressReporter.start({
+      packageName: entry.pkg.name,
+      operationName: "release",
+    });
     const resolvedPlugin = args.resolvedPluginsByUseString.get(
       entry.pkg.plugin,
     );
     if (resolvedPlugin === undefined) {
+      releaseStep.fail(`no resolved plugin for '${entry.pkg.plugin}'`);
       outcomes.push({
         package: entry.pkg.name,
         tag: entry.tag,
@@ -382,6 +456,11 @@ async function runReleasePhase(
         gitTag: entry.tag,
         timeoutMs: args.timeoutMs,
       });
+      if (response.ok) {
+        releaseStep.done();
+      } else {
+        releaseStep.fail(response.message);
+      }
       outcomes.push({
         package: entry.pkg.name,
         tag: entry.tag,
@@ -398,6 +477,7 @@ async function runReleasePhase(
         caughtError instanceof Error
           ? caughtError.message
           : String(caughtError);
+      releaseStep.fail(message);
       outcomes.push({
         package: entry.pkg.name,
         tag: entry.tag,

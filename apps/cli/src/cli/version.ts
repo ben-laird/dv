@@ -37,6 +37,11 @@ import {
   type PlanPending,
   renderCommitMessage,
 } from "../subtools/versioning/mod.ts";
+import {
+  makeLiveProgressReporter,
+  makeSilentProgressReporter,
+  type ProgressReporter,
+} from "./progress.ts";
 import { makeStyler } from "./styler.ts";
 
 // `dv version` per specs/cli.md § dv version. Consumes pending Records
@@ -204,6 +209,25 @@ export async function runVersion(
   const dateString = todayDateString();
   const touchedPaths: string[] = [];
 
+  // Progress reporter — live to stderr in human mode, silent under
+  // --json. Column widths are precomputed from the per-package
+  // names + known op labels (write-version is the longest) so the
+  // lines align across the whole run.
+  const versionOpLabels = ["write-version", "changelog", "cascade", "commit"];
+  const progressReporter: ProgressReporter = options.emitJson
+    ? makeSilentProgressReporter()
+    : makeLiveProgressReporter({
+        colorEnabled: options.colorEnabled,
+        packageColumnWidth: Math.max(
+          ...plan.pending.map((entry) => entry.package.length),
+          0,
+        ),
+        operationColumnWidth: Math.max(
+          ...versionOpLabels.map((label) => label.length),
+          0,
+        ),
+      });
+
   for (const pendingEntry of plan.pending) {
     const pkg = discoveredPackageByName.get(pendingEntry.package);
     if (pkg === undefined) {
@@ -219,13 +243,27 @@ export async function runVersion(
         message: `no resolved plugin for '${pkg.plugin}'`,
       });
     }
-    await invokeWriteVersion({
-      repoRootPath,
-      pkg,
-      resolvedPlugin,
-      newVersion: parseVersion(pendingEntry.projectedVersion),
-      timeoutMs: DEFAULT_FAST_OP_TIMEOUT_MS,
+    const writeStep = progressReporter.start({
+      packageName: pkg.name,
+      operationName: "write-version",
     });
+    try {
+      await invokeWriteVersion({
+        repoRootPath,
+        pkg,
+        resolvedPlugin,
+        newVersion: parseVersion(pendingEntry.projectedVersion),
+        timeoutMs: DEFAULT_FAST_OP_TIMEOUT_MS,
+      });
+      writeStep.done();
+    } catch (caughtError) {
+      writeStep.fail(
+        caughtError instanceof Error
+          ? caughtError.message
+          : String(caughtError),
+      );
+      throw caughtError;
+    }
     touchedPaths.push(pkg.path);
 
     const recordsForPackage = pendingEntry.records.map((recordFilename) => {
@@ -238,44 +276,58 @@ export async function runVersion(
       }
       return record;
     });
-    const newSection = renderReleaseSection({
-      newVersion: pendingEntry.projectedVersion,
-      bump: pendingEntry.bump,
-      records: recordsForPackage,
-      dateString,
+    const changelogStep = progressReporter.start({
+      packageName: pkg.name,
+      operationName: "changelog",
     });
-    const changelogPath = resolveOutputPathFromTemplate({
-      package: pkg,
-      locationTemplate: loadedConfig.changelog.location,
-      newVersion: pendingEntry.projectedVersion,
-      repoRootPath,
-    });
-    await upsertChangelogSection({ changelogPath, newSection });
-    touchedPaths.push(relative(repoRootPath, changelogPath));
-
-    // Opt-in HISTORY.md — long-form companion document. Off by
-    // default; users enable via `history.enabled: true` in
-    // .changelog/config.yaml. CHANGELOG bullets stay terse per Keep
-    // a Changelog; HISTORY carries the full Record body prose under
-    // h3 subsections so agents and humans get the narrative arc
-    // behind each version.
-    if (loadedConfig.history.enabled) {
-      const historySection = renderHistorySection({
+    try {
+      const newSection = renderReleaseSection({
         newVersion: pendingEntry.projectedVersion,
+        bump: pendingEntry.bump,
         records: recordsForPackage,
         dateString,
       });
-      const historyPath = resolveOutputPathFromTemplate({
+      const changelogPath = resolveOutputPathFromTemplate({
         package: pkg,
-        locationTemplate: loadedConfig.history.location,
+        locationTemplate: loadedConfig.changelog.location,
         newVersion: pendingEntry.projectedVersion,
         repoRootPath,
       });
-      await upsertHistorySection({
-        historyPath,
-        newSection: historySection,
-      });
-      touchedPaths.push(relative(repoRootPath, historyPath));
+      await upsertChangelogSection({ changelogPath, newSection });
+      touchedPaths.push(relative(repoRootPath, changelogPath));
+
+      // Opt-in HISTORY.md — long-form companion document. Off by
+      // default; users enable via `history.enabled: true` in
+      // .changelog/config.yaml. CHANGELOG bullets stay terse per Keep
+      // a Changelog; HISTORY carries the full Record body prose under
+      // h3 subsections so agents and humans get the narrative arc
+      // behind each version.
+      if (loadedConfig.history.enabled) {
+        const historySection = renderHistorySection({
+          newVersion: pendingEntry.projectedVersion,
+          records: recordsForPackage,
+          dateString,
+        });
+        const historyPath = resolveOutputPathFromTemplate({
+          package: pkg,
+          locationTemplate: loadedConfig.history.location,
+          newVersion: pendingEntry.projectedVersion,
+          repoRootPath,
+        });
+        await upsertHistorySection({
+          historyPath,
+          newSection: historySection,
+        });
+        touchedPaths.push(relative(repoRootPath, historyPath));
+      }
+      changelogStep.done();
+    } catch (caughtError) {
+      changelogStep.fail(
+        caughtError instanceof Error
+          ? caughtError.message
+          : String(caughtError),
+      );
+      throw caughtError;
     }
   }
 
@@ -306,12 +358,25 @@ export async function runVersion(
   // above. If a dependent is itself in pending, its own version was
   // already written; the cascade then composes a constraint rewrite
   // on top of the already-bumped manifest.
-  const cascadedUpdates = await runCascadePass({
-    plan,
-    discoveredPackageByName,
-    resolvedPluginsByUseString,
-    repoRootPath,
+  const cascadeStep = progressReporter.start({
+    packageName: "",
+    operationName: "cascade",
   });
+  let cascadedUpdates: CascadedUpdate[];
+  try {
+    cascadedUpdates = await runCascadePass({
+      plan,
+      discoveredPackageByName,
+      resolvedPluginsByUseString,
+      repoRootPath,
+    });
+    cascadeStep.done();
+  } catch (caughtError) {
+    cascadeStep.fail(
+      caughtError instanceof Error ? caughtError.message : String(caughtError),
+    );
+    throw caughtError;
+  }
   for (const update of cascadedUpdates) {
     touchedPaths.push(update.dependentPath);
   }
@@ -321,17 +386,31 @@ export async function runVersion(
   const shouldCommit = loadedConfig.git.autoCommit && !options.noCommit;
   let commitSha: string | null = null;
   if (shouldCommit) {
-    const message = renderCommitMessage({
-      plan,
-      template: loadedConfig.git.commitMessageTemplate,
-      prunedUnresolved: options.prune && plan.unresolvedReferences.length > 0,
+    const commitStep = progressReporter.start({
+      packageName: "",
+      operationName: "commit",
     });
-    const commitResult = await commitChanges({
-      repoRootPath,
-      message,
-      sign: loadedConfig.git.sign,
-    });
-    commitSha = commitResult.commitSha;
+    try {
+      const message = renderCommitMessage({
+        plan,
+        template: loadedConfig.git.commitMessageTemplate,
+        prunedUnresolved: options.prune && plan.unresolvedReferences.length > 0,
+      });
+      const commitResult = await commitChanges({
+        repoRootPath,
+        message,
+        sign: loadedConfig.git.sign,
+      });
+      commitSha = commitResult.commitSha;
+      commitStep.done();
+    } catch (caughtError) {
+      commitStep.fail(
+        caughtError instanceof Error
+          ? caughtError.message
+          : String(caughtError),
+      );
+      throw caughtError;
+    }
   }
 
   renderHumanSummary({
