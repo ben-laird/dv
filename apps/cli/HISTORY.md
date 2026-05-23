@@ -5,6 +5,8 @@ one h3 subsection per Record consumed during that release, with the
 Record's body prose verbatim. For terse one-line bullets, see
 CHANGELOG.md.
 
+## [1.0.0] - 2026-05-23
+
 ## [0.3.0] - 2026-05-22
 
 ### Add opt-in HISTORY.md long-form release notes

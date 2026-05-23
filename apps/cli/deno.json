@@ -1,6 +1,6 @@
 {
   "name": "@seshat/dv",
-  "version": "0.3.0",
+  "version": "1.0.0",
   "exports": "./src/main.ts",
   "tasks": {
     "dv": "deno run -A src/main.ts",
