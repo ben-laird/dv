@@ -11,6 +11,7 @@ import {
 import { join, relative } from "@std/path";
 import { runAdd } from "./cli/add.ts";
 import { runInit } from "./cli/init.ts";
+import { runMigrateConfig } from "./cli/migrate.ts";
 import { runRelease } from "./cli/release.ts";
 import { runStatus } from "./cli/status.ts";
 import { runV1 } from "./cli/v1.ts";
@@ -30,6 +31,7 @@ Usage:
   dv version [--dry-run --prune …]     Consume Records → bump, CHANGELOG, commit
   dv release [--dry-run --push --yes]  Mint per-Package tags + fire release plugins
   dv v1 <package> [--yes …]            Promote a 0.x Package to 1.0.0 (the stability promise)
+  dv migrate config [--dry-run]        Rewrite .dv/config.yaml to the current schema shape
   dv --help                            Show this message
   dv --version                         Show the dv version
 
@@ -362,6 +364,55 @@ const v1Command = defineCommand({
   },
 });
 
+// `dv migrate` is a compound subcommand (`dv migrate config` is
+// the only one in v1). Multi-level subcommand dispatch isn't a
+// framework feature yet — when `dv plugin invoke` / `dv plugin
+// verify` land, the framework will grow proper nested dispatch
+// and this can simplify. For now we accept the subcommand as the
+// first positional argument and validate by hand.
+const migrateCommand = defineCommand({
+  flags: {
+    "dry-run": { kind: "boolean" },
+    json: { kind: "boolean" },
+    color: { kind: "boolean" },
+    "no-color": { kind: "boolean" },
+  },
+  usage: "Usage: dv migrate config [--dry-run] [--json]",
+  run: async ({ argv, flags }) => {
+    const subcommand = argv[0];
+    if (subcommand === undefined) {
+      console.error(
+        "dv migrate: missing subcommand (only `dv migrate config` is supported in v1)",
+      );
+      console.error("run 'dv migrate --help' for usage");
+      return 2;
+    }
+    if (subcommand !== "config") {
+      console.error(
+        `dv migrate: unknown subcommand '${subcommand}' (only \`dv migrate config\` is supported in v1)`,
+      );
+      return 2;
+    }
+    if (argv.length > 1) {
+      console.error(
+        `dv migrate config: unexpected arguments: ${argv.slice(1).join(" ")}`,
+      );
+      return 2;
+    }
+    const colorEnabled = resolveColorEnabled({
+      forceColor: flags.color === true,
+      suppressColor: flags["no-color"] === true,
+      emitJson: flags.json === true,
+    });
+    await runMigrateConfig({
+      dryRun: flags["dry-run"] === true,
+      emitJson: flags.json === true,
+      colorEnabled,
+    });
+    return 0;
+  },
+});
+
 function expandCommaSeparated(
   rawValues: string[] | undefined,
 ): string[] | undefined {
@@ -474,6 +525,7 @@ export function main(argv: string[]): Promise<number> {
       version: versionCommand,
       release: releaseCommand,
       v1: v1Command,
+      migrate: migrateCommand,
     },
     reportError: makeReportDvError(detectedMode),
   });

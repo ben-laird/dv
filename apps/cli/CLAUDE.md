@@ -29,8 +29,14 @@ per capability; commands compose them and hold no domain logic of their own.
   commit. Git is not a capability of its own (specs/design.md).
 - `src/subtools/tagging` — Tag formatting + git tag IO (M5).
 - `src/subtools/publishing` — invoke the release plugin (M5).
+- `src/subtools/config-migrations` — ordered step registry that
+  rewrites `.dv/config.yaml` between dv schema versions. Each
+  breaking config change ships one `step-*.ts` here; the runner
+  composes them. Text-in / text-out per step so user comments
+  survive — round-tripping through @std/yaml would destroy them.
+  Powers `dv migrate config`.
 - `src/cli/` — one thin orchestration per command (`init`, `add`, `status`,
-  `validate`, `version`, `release`, `v1`, `rename`, `plugin …`).
+  `validate`, `version`, `release`, `v1`, `migrate`, `rename`, `plugin …`).
 
 ## Invariants to preserve
 
