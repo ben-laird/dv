@@ -3,7 +3,12 @@ import { DvError } from "../domain/errors.ts";
 import type { Package } from "../domain/package.ts";
 import type { Version } from "../domain/version.ts";
 import { DV_TAGLINE, DV_VERSION } from "../dv-version.ts";
-import { configPath, loadConfig, recordsPath } from "../subtools/config/mod.ts";
+import {
+  CONFIG_DIR,
+  configPath,
+  loadConfig,
+  recordsPath,
+} from "../subtools/config/mod.ts";
 import { discoverPackages } from "../subtools/discovery/mod.ts";
 import {
   type ResolvedPlugin,
@@ -69,7 +74,7 @@ export async function runStatus(
       console.log(
         `${styler.dim("no config found")} — run ${styler.cyan(
           "`dv init`",
-        )} to scaffold .changelog/config.yaml`,
+        )} to scaffold ${CONFIG_DIR}/config.yaml`,
       );
     }
     return { plan: null, configMissing: true };
@@ -216,7 +221,7 @@ function renderHumanStatus(args: RenderHumanStatusArgs): void {
     console.log(styler.dim("no packages tracked"));
     console.log(
       `  configure ${styler.cyan("discovery.plugins")} in ${styler.cyan(
-        ".changelog/config.yaml",
+        `${CONFIG_DIR}/config.yaml`,
       )} to add some.`,
     );
     console.log("");

@@ -6,7 +6,7 @@ maintained dependency (`examples/CLAUDE.md`).
 
 ## Wiring it up
 
-`.changelog/config.yaml`:
+`.dv/config.yaml`:
 
 ```yaml
 discovery:

@@ -20,7 +20,7 @@ the target.
   way to grok the pipeline
 - `specs/cli.md` — per-command reference (synopsis, flags, examples)
 - `specs/record-format.md` — the user-facing record file format
-- `specs/config-format.md` — `.changelog/config.yaml` reference
+- `specs/config-format.md` — `.dv/config.yaml` reference
 - `specs/plugin-contract.md` — extension surface (any executable can be a plugin)
 - `specs/schemas/` — versioned JSON Schema drafts: config, plugin-responses, plan
 - `specs/v1-scope.md` — what's in v1, what's deferred, in what order to build
@@ -76,7 +76,7 @@ These are not up for re-litigation without explicit conversation:
   no record type can produce). See `specs/design.md`.
 - **Renames are declared, never guessed.** Heuristic rename detection is
   avoided (dangerous for release lineage). An explicit append-only
-  ledger (`.changelog/renames.yaml`, writable via `dv rename`) resolves
+  ledger (`.dv/renames.yaml`, writable via `dv rename`) resolves
   references and enables history stitching. Unresolved references (vanished
   package, no rename entry) halt `dv version`; `--prune` drops them.
   `dv rename` is bookkeeping-only — it never touches the actual package.

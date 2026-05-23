@@ -7,7 +7,7 @@ are fixed here.
 
 | File                    | Contract                                                                                       |
 | ----------------------- | ---------------------------------------------------------------------------------------------- |
-| `config.json`           | `.changelog/config.yaml` structure. See [config-format.md](../config-format.md).               |
+| `config.json`           | `.dv/config.yaml` structure. See [config-format.md](../config-format.md).               |
 | `plugin-responses.json` | Per-Op response payloads. See [plugin-contract.md](../plugin-contract.md).                     |
 | `plan.json`             | The Plan emitted by `dv status` and `--dry-run`. See [language.md](../language.md) Algebra §7. |
 | `cli-error.json`        | The error envelope emitted under `--json` mode on a non-zero exit.                             |

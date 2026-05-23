@@ -58,7 +58,7 @@ per capability; commands compose them and hold no domain logic of their own.
   (tests).
 - Model the domains from `language.md` as types — `Bump` as a 3-value union,
   `Stability`, `ChangeType` — so the compiler enforces the lexicon.
-- **Zod** validates every contract boundary: `.changelog/config.yaml`, plugin
+- **Zod** validates every contract boundary: `.dv/config.yaml`, plugin
   stdio JSON, the Plan emitted by `--json`. Hand-rolled validation is a
   regression. JSON Schemas under `specs/schemas/` are **generated** from the
   Zod source via `deno task schemas:generate`; `deno task schemas:check`

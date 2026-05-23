@@ -343,6 +343,6 @@
     }
   },
   "additionalProperties": false,
-  "title": "dv config (.changelog/config.yaml)",
+  "title": "dv config (.dv/config.yaml)",
   "description": "Subtool-organized configuration for dv. Keys are kebab-case. See specs/config-format.md."
 }

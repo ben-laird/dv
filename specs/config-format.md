@@ -1,6 +1,6 @@
 # Config file format
 
-`dv` is configured by `.changelog/config.yaml` at the repo root. This
+`dv` is configured by `.dv/config.yaml` at the repo root. This
 document is the canonical reference for that file.
 
 The config is organized by **subtool** — `dv` is built as a set of

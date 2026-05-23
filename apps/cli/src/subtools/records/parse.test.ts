@@ -16,7 +16,7 @@ Add OAuth device flow.
   // When parseRecord parses it
   const parsedRecord = parseRecord({
     fileContents: validRecordContents,
-    recordPath: "/repo/.changelog/records/quiet-cats-sneeze.md",
+    recordPath: "/repo/.dv/records/quiet-cats-sneeze.md",
   });
 
   // Then frontmatter fields land on the typed Record and the body is trimmed

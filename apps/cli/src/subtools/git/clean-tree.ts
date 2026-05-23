@@ -3,7 +3,7 @@ import { DvError } from "../../domain/errors.ts";
 // Verifies the working tree is clean before `dv version` runs (specs/
 // config-format.md § git.require-clean-tree). The check uses
 // `git status --porcelain=v1`: any non-empty output indicates modified,
-// staged, or untracked files. Files inside `.changelog/records/` count —
+// staged, or untracked files. Files inside `.dv/records/` count —
 // they're how the user got here; the user committing first is the
 // expected workflow.
 //

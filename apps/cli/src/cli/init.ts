@@ -19,7 +19,7 @@ const STARTER_CONFIG = `# dv configuration. See https://dv.dev/schema/v1.yaml fo
 #   format: "{package}@{version}"
 `;
 
-// A directory-local .gitignore so .changelog/ stays clean even when an
+// A directory-local .gitignore so .dv/ stays clean even when an
 // interactive editor (e.g. VSCode) crashes mid-`dv add`, leaving a
 // stray temp file behind. Git honors nested .gitignores recursively
 // (same as `.git/info/exclude` works for git's own internals). dv

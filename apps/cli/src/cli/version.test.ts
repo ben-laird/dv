@@ -6,7 +6,7 @@ import { runVersion } from "./version.ts";
 // Integration tests for `dv version` against temp git repos. Each
 // fixture sets up a real git working tree with a shell plugin that
 // implements `discover`, `read-version`, and `write-version`, and a
-// `.changelog/` directory the test populates.
+// `.dv/` directory the test populates.
 
 interface SetUpRepoArgs {
   configYaml?: string;
@@ -48,7 +48,7 @@ async function setUpFixture(args: SetUpRepoArgs): Promise<SetUpRepoResult> {
     args: ["-C", repoRootPath, "config", "commit.gpgsign", "false"],
   }).output();
 
-  const changelogDir = join(repoRootPath, ".changelog");
+  const changelogDir = join(repoRootPath, ".dv");
   await Deno.mkdir(changelogDir, { recursive: true });
   const configYaml =
     args.configYaml ??
@@ -221,7 +221,7 @@ Deno.test("runVersion bumps the manifest, prepends the CHANGELOG, deletes the re
     assertStringIncludes(changelogText, "- Patch the parser.");
 
     // And both record files are gone
-    const recordsDir = join(fixture.repoRootPath, ".changelog", "records");
+    const recordsDir = join(fixture.repoRootPath, ".dv", "records");
     const remainingRecords: string[] = [];
     for await (const entry of Deno.readDir(recordsDir)) {
       if (entry.name.endsWith(".md")) remainingRecords.push(entry.name);
@@ -349,7 +349,7 @@ Deno.test("runVersion --prune drops Unresolved References and succeeds", async (
     // Then the bump lands and both records are deleted (the orphan
     // because --prune, the real one because it was consumed)
     assertEquals(result.bumpedPackageCount, 1);
-    const recordsDir = join(fixture.repoRootPath, ".changelog", "records");
+    const recordsDir = join(fixture.repoRootPath, ".dv", "records");
     const remainingRecords: string[] = [];
     for await (const entry of Deno.readDir(recordsDir)) {
       if (entry.name.endsWith(".md")) remainingRecords.push(entry.name);
@@ -451,7 +451,7 @@ interface SetUpCascadeFixtureArgs {
   // no-deps cases. Keys are package names; values are full specifiers
   // like "jsr:pkg-a@^1.0.0".
   dependentImports?: Record<string, string>;
-  // Records to drop into .changelog/records/.
+  // Records to drop into .dv/records/.
   recordFiles?: Record<string, string>;
   // The two packages share these initial versions; default 1.0.0 each.
   initialVersionA?: string;
@@ -499,7 +499,7 @@ async function setUpCascadeFixture(
     "../../../../examples/plugins/deno",
   );
 
-  const changelogDir = join(repoRootPath, ".changelog");
+  const changelogDir = join(repoRootPath, ".dv");
   await Deno.mkdir(changelogDir, { recursive: true });
   await Deno.writeTextFile(
     join(changelogDir, "config.yaml"),
@@ -863,7 +863,7 @@ Deno.test("runVersion's HISTORY.md prepends new sections above existing ones acr
     // tree check passes for the second run — matches what a user
     // would do filing a record on a new PR)
     await Deno.writeTextFile(
-      join(fixture.repoRootPath, ".changelog", "records", "second.md"),
+      join(fixture.repoRootPath, ".dv", "records", "second.md"),
       "---\ntype: fix\npackages:\n  - core\n---\n\n# Second change\n\nSecond prose.\n",
     );
     await new Deno.Command("git", {

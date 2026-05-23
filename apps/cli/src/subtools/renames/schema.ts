@@ -27,7 +27,7 @@ export const renameLedgerEntrySchema = z
 
 export const renameLedgerSchema = z.array(renameLedgerEntrySchema).meta({
   id: "urn:dv:schema:v1:rename-ledger",
-  title: "dv rename ledger (.changelog/renames.yaml)",
+  title: "dv rename ledger (.dv/renames.yaml)",
   description:
     "Append-only ledger of Package renames. Resolution follows the reflexive-transitive closure of these edges (specs/language.md Algebra §8).",
 });

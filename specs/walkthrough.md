@@ -26,26 +26,26 @@ dashboard is `Stable` (`≥ 1.0`). `dv` treats each Package on its own terms.
 
 ```
 $ dv init
-created .changelog/config.yaml
-created .changelog/records/
+created .dv/config.yaml
+created .dv/records/
 ```
 
 ## 2. Configure discovery
 
 `dv` finds Packages by running Plugins against path globs. Point the Rust
 crates at a `cargo` Plugin and the dashboard at an `npm` Plugin, and set a
-release Plugin for publishing. Edit `.changelog/config.yaml`:
+release Plugin for publishing. Edit `.dv/config.yaml`:
 
 ```yaml
 discovery:
   plugins:
     - match: "packages/*"
-      use: ./.changelog/plugins/cargo
+      use: ./.dv/plugins/cargo
     - match: "tools/*"
-      use: ./.changelog/plugins/npm
+      use: ./.dv/plugins/npm
 
 publishing:
-  plugin: ./.changelog/plugins/publish
+  plugin: ./.dv/plugins/publish
 ```
 
 (The example Plugins shipped with `dv` are copyable starting points — see
@@ -69,11 +69,11 @@ is one Record:
 ```
 $ dv add --type feat --packages acme-core \
          --message "Add streaming parser for large manifests"
-created .changelog/records/brave-otters-wander.md
+created .dv/records/brave-otters-wander.md
 
 $ dv add --type fix --packages acme-cli \
          --message "Exit non-zero when no input file is given"
-created .changelog/records/quiet-cats-sneeze.md
+created .dv/records/quiet-cats-sneeze.md
 ```
 
 A Record is just a committed markdown file. `brave-otters-wander.md`:
@@ -141,7 +141,7 @@ $ dv version
 - Add streaming parser for large manifests
 ```
 
-The consumed Records are gone from `.changelog/records/`, and the whole thing
+The consumed Records are gone from `.dv/records/`, and the whole thing
 is one commit — the **Release PR**. Open it, review it, merge it.
 
 ## 6. Release (phase two)

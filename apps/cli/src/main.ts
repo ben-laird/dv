@@ -22,7 +22,7 @@ import { CONFIG_DIR, configPath, recordsPath } from "./subtools/config/mod.ts";
 const USAGE_TEXT = `dv — language-agnostic, git-native changelog CLI
 
 Usage:
-  dv init                              Scaffold .changelog/config.yaml + records/
+  dv init                              Scaffold .dv/config.yaml + records/
   dv status [--json]                   Show what dv would do (read-only)
   dv add [--type T --packages P …]     File a Record (interactive or flag-driven)
   dv validate [--json]                 Lint records and config (CI-friendly)
@@ -108,7 +108,7 @@ const initCommand = defineCommand({
       );
     }
     if (initResult.gitignoreCreated) {
-      console.log("created .changelog/.gitignore");
+      console.log(`created ${CONFIG_DIR}/.gitignore`);
     }
     return 0;
   },

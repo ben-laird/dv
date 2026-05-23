@@ -8,7 +8,7 @@ entries.
 ## Location
 
 ```
-.changelog/
+.dv/
   config.yaml
   renames.yaml        # optional — package rename ledger (see below)
   records/
@@ -17,7 +17,7 @@ entries.
     ...
 ```
 
-The `.changelog/records/` directory holds pending records. When
+The `.dv/records/` directory holds pending records. When
 `dv version` runs, all files there are consumed and the directory is
 emptied.
 
@@ -123,7 +123,7 @@ When a package is renamed, records authored under its old name still
 reference it. Rather than guess at renames heuristically (see `design.md`
 § Package renames and deletions for why that's avoided), `dv` resolves
 references through an explicit, append-only ledger at
-`.changelog/renames.yaml`:
+`.dv/renames.yaml`:
 
 ```yaml
 - from: core
@@ -153,7 +153,7 @@ record with `--prune` if the package was genuinely deleted).
 - `type` is one of the allowed values
 - Every package in `packages` is known to the config (after applying
   `renames.yaml`)
-- File is in `.changelog/records/` (not nested deeper)
+- File is in `.dv/records/` (not nested deeper)
 - Body is non-empty
 
 Validation runs in CI and as a pre-commit hook (opt-in).

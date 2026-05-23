@@ -60,5 +60,5 @@ Deno.test("rawConfigLayerSchema can be rendered as a Draft 2020-12 JSON Schema",
   );
   assertEquals(generatedJsonSchema.type, "object");
   assertEquals(generatedJsonSchema.additionalProperties, false);
-  assertEquals(generatedJsonSchema.title, "dv config (.changelog/config.yaml)");
+  assertEquals(generatedJsonSchema.title, "dv config (.dv/config.yaml)");
 });

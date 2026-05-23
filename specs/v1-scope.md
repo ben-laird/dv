@@ -57,7 +57,7 @@ agent-specific.
 ### File formats
 
 - Record format (frontmatter + markdown body)
-- Config format (`.changelog/config.yaml`)
+- Config format (`.dv/config.yaml`)
 - Per-package `CHANGELOG.md` in Keep a Changelog style
 - Per-package git tags as `{package}@{version}` (configurable)
 

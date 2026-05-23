@@ -31,7 +31,7 @@ async function setUpRepoWithPlugin(
   }).output();
   if (!gitInitResult.success) throw new Error("git init failed");
 
-  const configDir = join(repoRootPath, ".changelog");
+  const configDir = join(repoRootPath, ".dv");
   await Deno.mkdir(configDir, { recursive: true });
   const configYaml =
     args.configYaml ??
@@ -230,8 +230,8 @@ esac`,
   }
 });
 
-Deno.test("runStatus surfaces a config-missing hint when .changelog/config.yaml is absent", async () => {
-  // Given a fresh repo with no .changelog/ directory
+Deno.test("runStatus surfaces a config-missing hint when .dv/config.yaml is absent", async () => {
+  // Given a fresh repo with no .dv/ directory
   const repoRootPath = await Deno.makeTempDir({ prefix: "dv-status-empty-" });
   const previousWorkingDirectory = Deno.cwd();
   Deno.chdir(repoRootPath);

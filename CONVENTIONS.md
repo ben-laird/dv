@@ -140,7 +140,7 @@ neither code path can rot.
 
 ## Schemas and the docs/code lockstep
 
-- Every contract surface (`.changelog/config.yaml`, plugin stdio JSON,
+- Every contract surface (`.dv/config.yaml`, plugin stdio JSON,
   the Plan emitted by `--json`) is described by a **Zod schema in
   source**. That schema is the single source of truth.
 - JSON Schema files under [specs/schemas/](specs/schemas/) are

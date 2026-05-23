@@ -28,7 +28,7 @@ async function setUpRepoWithPlugin(
   }).output();
   if (!gitInitResult.success) throw new Error("git init failed");
 
-  const configDir = join(repoRootPath, ".changelog");
+  const configDir = join(repoRootPath, ".dv");
   await Deno.mkdir(configDir, { recursive: true });
   const configYaml =
     args.configYaml ??
@@ -72,7 +72,7 @@ Deno.test("runAdd creates a Record file with the supplied fields", async () => {
       stageOverride: false, // skip `git add` so the test is hermetic
     });
 
-    // Then a Record file lands in .changelog/records/ with the inputs in frontmatter
+    // Then a Record file lands in .dv/records/ with the inputs in frontmatter
     const writtenContents = await Deno.readTextFile(addResult.recordPath);
     assertStringIncludes(writtenContents, "type: feat");
     assertStringIncludes(writtenContents, "core");
@@ -107,7 +107,7 @@ Deno.test("runAdd rejects unknown package references", async () => {
   }
 });
 
-Deno.test("runAdd resolves package references through .changelog/renames.yaml", async () => {
+Deno.test("runAdd resolves package references through .dv/renames.yaml", async () => {
   // Given a repo where the current Package is `engine` but the user
   // still refers to its old name `core` via the rename ledger
   const repo = await setUpRepoWithPlugin({
@@ -115,7 +115,7 @@ Deno.test("runAdd resolves package references through .changelog/renames.yaml", 
   });
   try {
     await Deno.writeTextFile(
-      join(repo.repoRootPath, ".changelog", "renames.yaml"),
+      join(repo.repoRootPath, ".dv", "renames.yaml"),
       `- from: core
   to: engine
   at: 1.0.0

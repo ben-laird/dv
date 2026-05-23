@@ -20,7 +20,7 @@
         "type": "string",
         "minLength": 1
       },
-      "description": "Package names this Record affects. Resolved through .changelog/renames.yaml."
+      "description": "Package names this Record affects. Resolved through .dv/renames.yaml."
     },
     "links": {
       "description": "Issue / PR URLs. Rendered in the CHANGELOG entry if present.",
@@ -39,6 +39,6 @@
     "packages"
   ],
   "additionalProperties": false,
-  "title": "dv Record (.changelog/records/*.md frontmatter)",
+  "title": "dv Record (.dv/records/*.md frontmatter)",
   "description": "YAML frontmatter for one pending Record (specs/record-format.md)."
 }

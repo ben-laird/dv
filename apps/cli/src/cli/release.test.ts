@@ -109,7 +109,7 @@ async function setUpReleaseFixture(
     examplePluginPath = overlayPluginPath;
   }
 
-  const changelogDir = join(repoRootPath, ".changelog");
+  const changelogDir = join(repoRootPath, ".dv");
   await Deno.mkdir(changelogDir, { recursive: true });
   await Deno.writeTextFile(
     join(changelogDir, "config.yaml"),

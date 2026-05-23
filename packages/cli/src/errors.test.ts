@@ -145,7 +145,7 @@ Deno.test("CliError preserves the Error.cause linkage so JS stack chains work", 
   const inner = new Error("underlying ENOENT");
   const error = new CliError({
     code: "config-not-found",
-    message: ".changelog/config.yaml is missing",
+    message: ".dv/config.yaml is missing",
     cause: inner,
   });
 

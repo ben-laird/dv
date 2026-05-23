@@ -17,7 +17,7 @@ import { parseEditorCommand } from "./parse-editor-command.ts";
 // tool. Falls back to the platform default if EDITOR / VISUAL parse
 // fails or is empty.
 //
-// Temp file location: we write inside `<repoRoot>/.changelog/` (not
+// Temp file location: we write inside `<repoRoot>/.dv/` (not
 // the OS temp dir) so editors like VSCode treat the file as part of
 // the trusted workspace and skip the "untrusted file" warning. This
 // matches git's pattern (it writes to `.git/COMMIT_EDITMSG`). A
@@ -42,7 +42,7 @@ interface OpenEditorForRecordBodyArgs {
   changeType: ChangeType;
   packageNames: string[];
   // Repo root — the temp file is created under
-  // `<repoRoot>/.changelog/` so VSCode (and similar editors) inherit
+  // `<repoRoot>/.dv/` so VSCode (and similar editors) inherit
   // workspace trust.
   repoRootPath: string;
   // Overrides $EDITOR / $VISUAL for this invocation only. Passed via

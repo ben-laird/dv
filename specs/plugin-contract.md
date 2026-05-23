@@ -68,7 +68,7 @@ constraint expressed? how is this package published?), not to reimplement
 
 ### `discover`
 
-Given a glob (from `.changelog/config.yaml`), list the packages that match.
+Given a glob (from `.dv/config.yaml`), list the packages that match.
 
 **Input:** `dv` passes the glob via `DV_DISCOVER_GLOB`.
 
@@ -204,14 +204,14 @@ case "$1" in
 esac
 ```
 
-That's a complete plugin. Drop it in `.changelog/plugins/version-file` and
+That's a complete plugin. Drop it in `.dv/plugins/version-file` and
 wire it up in `config.yaml`:
 
 ```yaml
 discovery:
   plugins:
     - match: "packages/legacy-thing"
-      use: ./.changelog/plugins/version-file
+      use: ./.dv/plugins/version-file
 ```
 
 ## Developing and testing plugins

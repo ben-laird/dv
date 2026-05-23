@@ -37,14 +37,14 @@ a flag, and vice versa. See [config-format.md](config-format.md).
 dv init
 ```
 
-Scaffolds a fresh repo: writes a starter `.changelog/config.yaml` and
-creates the `.changelog/records/` directory. Idempotent — re-running against
+Scaffolds a fresh repo: writes a starter `.dv/config.yaml` and
+creates the `.dv/records/` directory. Idempotent — re-running against
 an initialized repo is a no-op, not an error.
 
 ```
 $ dv init
-created .changelog/config.yaml
-created .changelog/records/
+created .dv/config.yaml
+created .dv/records/
 ```
 
 ---
@@ -85,7 +85,7 @@ $ dv add
 
 # non-interactive (CI, scripts, agents)
 $ dv add --type fix --packages core --message "Handle empty manifest gracefully"
-created .changelog/records/quiet-cats-sneeze.md
+created .dv/records/quiet-cats-sneeze.md
 ```
 
 ---
@@ -133,7 +133,7 @@ Awaiting release — 1 package (run `dv release`):
 dv validate [--json]
 ```
 
-Lints the `.changelog/` directory: Record frontmatter, Change Types, Package
+Lints the `.dv/` directory: Record frontmatter, Change Types, Package
 references, and config well-formedness. Safe and side-effect-free — intended
 for CI. Exits non-zero if anything is malformed.
 
@@ -243,7 +243,7 @@ About to commit core to 1.0.0 — this is a stability promise. Proceed? [y/N]
 dv rename <old> <new>
 ```
 
-Appends a lineage edge `old → new` to `.changelog/renames.yaml` so that
+Appends a lineage edge `old → new` to `.dv/renames.yaml` so that
 existing Records and release history referencing `old` resolve to `new`.
 **Bookkeeping only** — it does not move directories, edit manifests, or
 rewrite Records. Equivalent to hand-editing the ledger; the command just
@@ -252,7 +252,7 @@ is never automatic.
 
 ```
 $ dv rename core engine
-recorded rename core → engine in .changelog/renames.yaml
+recorded rename core → engine in .dv/renames.yaml
 ```
 
 ---

@@ -1,4 +1,5 @@
 import type { Rename } from "../../domain/rename.ts";
+import { CONFIG_DIR } from "../config/locations.ts";
 import { RenameLedgerError } from "./load.ts";
 
 // `resolve(ref, ledger)` from specs/language.md Algebra §8: follow the
@@ -38,9 +39,9 @@ function indexEdgesByFrom(ledger: Rename[]): Map<string, Rename> {
       throw new RenameLedgerError({
         code: "ledger-duplicate-edge",
         message: `rename ledger has two outgoing edges from '${ledgerEntry.from}' — the closure must be functional (one current name per old reference)`,
-        hint: "remove the duplicate `from: ...` entry in .changelog/renames.yaml",
+        hint: `remove the duplicate \`from: ...\` entry in ${CONFIG_DIR}/renames.yaml`,
         context: {
-          ledgerPath: ".changelog/renames.yaml",
+          ledgerPath: `${CONFIG_DIR}/renames.yaml`,
           from: ledgerEntry.from,
         },
       });
@@ -68,9 +69,9 @@ function walkRenameChain(args: WalkRenameChainArgs): string {
       throw new RenameLedgerError({
         code: "ledger-cycle",
         message: `rename ledger has a cycle: '${nextEdge.to}' was already visited starting from '${startReference}'`,
-        hint: "break the cycle by deleting one of the edges in .changelog/renames.yaml",
+        hint: `break the cycle by deleting one of the edges in ${CONFIG_DIR}/renames.yaml`,
         context: {
-          ledgerPath: ".changelog/renames.yaml",
+          ledgerPath: `${CONFIG_DIR}/renames.yaml`,
           startReference,
         },
       });

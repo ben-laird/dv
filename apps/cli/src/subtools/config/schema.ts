@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-// Zod schemas for `.changelog/config.yaml` — the in-code source of truth
+// Zod schemas for `.dv/config.yaml` — the in-code source of truth
 // for shape, used by:
 //   1. loadConfig (runtime YAML validation, in parse.ts)
 //   2. `deno task schemas:generate` (emits specs/schemas/config.json,
@@ -283,7 +283,7 @@ export const rawConfigLayerSchema = z
   .strict()
   .meta({
     id: "urn:dv:schema:v1:config",
-    title: "dv config (.changelog/config.yaml)",
+    title: "dv config (.dv/config.yaml)",
     description:
       "Subtool-organized configuration for dv. Keys are kebab-case. See specs/config-format.md.",
   });

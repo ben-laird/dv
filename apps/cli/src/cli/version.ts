@@ -298,7 +298,7 @@ export async function runVersion(
 
       // Opt-in HISTORY.md — long-form companion document. Off by
       // default; users enable via `history.enabled: true` in
-      // .changelog/config.yaml. CHANGELOG bullets stay terse per Keep
+      // .dv/config.yaml. CHANGELOG bullets stay terse per Keep
       // a Changelog; HISTORY carries the full Record body prose under
       // h3 subsections so agents and humans get the narrative arc
       // behind each version.

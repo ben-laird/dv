@@ -21,7 +21,7 @@ export const rawRecordFrontmatterSchema = z
       .array(z.string().min(1))
       .min(1)
       .describe(
-        "Package names this Record affects. Resolved through .changelog/renames.yaml.",
+        "Package names this Record affects. Resolved through .dv/renames.yaml.",
       ),
     links: z
       .array(z.string())
@@ -35,7 +35,7 @@ export const rawRecordFrontmatterSchema = z
   .strict()
   .meta({
     id: "urn:dv:schema:v1:record",
-    title: "dv Record (.changelog/records/*.md frontmatter)",
+    title: "dv Record (.dv/records/*.md frontmatter)",
     description:
       "YAML frontmatter for one pending Record (specs/record-format.md).",
   });

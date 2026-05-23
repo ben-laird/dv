@@ -24,7 +24,7 @@ async function setUpRepoForValidate(
   }).output();
   if (!gitInitResult.success) throw new Error("git init failed");
 
-  const configDir = join(repoRootPath, ".changelog");
+  const configDir = join(repoRootPath, ".dv");
   const recordsDir = join(configDir, "records");
   await Deno.mkdir(recordsDir, { recursive: true });
   await Deno.writeTextFile(

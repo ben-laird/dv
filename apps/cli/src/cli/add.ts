@@ -1,7 +1,12 @@
 import { join } from "@std/path";
 import { CHANGE_TYPES, type ChangeType } from "../domain/change-type.ts";
 import { DvError } from "../domain/errors.ts";
-import { configPath, loadConfig, recordsPath } from "../subtools/config/mod.ts";
+import {
+  CONFIG_DIR,
+  configPath,
+  loadConfig,
+  recordsPath,
+} from "../subtools/config/mod.ts";
 import { discoverPackages } from "../subtools/discovery/mod.ts";
 import { requireRepoRoot } from "../subtools/git/repo-root.ts";
 import {
@@ -18,7 +23,7 @@ import { promptForRecordInputs } from "./add-prompts.ts";
 import { openEditorForRecordBody } from "./editor.ts";
 
 // `dv add` per specs/cli.md § dv add. Creates one Record file in
-// .changelog/records/ from either flag inputs (CI / scripts / agents) or
+// .dv/records/ from either flag inputs (CI / scripts / agents) or
 // an interactive TTY flow with prompts + $EDITOR. The two paths share
 // validation: known packages, allowed Change Type, non-empty body.
 
@@ -147,7 +152,7 @@ async function collectRecordInputs(
     throw new DvError({
       code: "add-no-packages",
       message: "no packages discovered — configure `discovery.plugins` first",
-      hint: "add a discovery plugin assignment in .changelog/config.yaml",
+      hint: `add a discovery plugin assignment in ${CONFIG_DIR}/config.yaml`,
     });
   }
 

@@ -235,7 +235,7 @@ itself is a set of composable capabilities.
 ### Config format
 
 Config is **YAML, always**. No TypeScript, no JSON, no JSON-with-comments
-alternatives. `.changelog/config.yaml` is the canonical and only supported
+alternatives. `.dv/config.yaml` is the canonical and only supported
 format.
 
 Rationale:
@@ -260,7 +260,7 @@ What this forecloses, and the intentional trade-offs:
   interpolation as a future feature) cover the legitimate cases without
   needing Turing-completeness in config.
 
-Nice-to-have post-v1: ship a JSON Schema for `.changelog/config.yaml` so
+Nice-to-have post-v1: ship a JSON Schema for `.dv/config.yaml` so
 editors give autocomplete and validation. That recovers the type-safety
 ergonomics of a TS config without any of the runtime cost or portability
 debt.
@@ -455,7 +455,7 @@ alongside each `CHANGELOG.md`. HISTORY carries each Record's full body
 prose under `### Headline` subsections, grouped by version. Same per-Package
 model as CHANGELOG; complementary, not exclusive.
 
-Opt-in via `history.enabled: true` in `.changelog/config.yaml`. Defaults
+Opt-in via `history.enabled: true` in `.dv/config.yaml`. Defaults
 to off so existing dv repos see no behavior change. See
 `config-format.md` § history.
 
@@ -709,7 +709,7 @@ knows whether a rename happened, so **explicit declaration** is both more
 reliable and ergonomically fine. We trade git's "magic but fuzzy" for
 "explicit but certain."
 
-**The rename ledger.** `.changelog/renames.yaml` is an append-only record
+**The rename ledger.** `.dv/renames.yaml` is an append-only record
 of lineage (`from`, `to`, and the version the rename took effect at). `dv`
 resolves package references through it — a record referencing `core`
 resolves to `engine`. The record file is never rewritten; it stays a

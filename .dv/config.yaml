@@ -24,4 +24,4 @@ discovery:
 history:
   enabled: true
 
-# Records you author with `dv add` land in .changelog/records/.
+# Records you author with `dv add` land in .dv/records/.

@@ -48,7 +48,7 @@ ordered as `patch ⊏ minor ⊏ major`. *Not: increment, level, severity.*
 
 **Record** — a pending, committed account of one change: a Change Type, a
 set of affected Packages, and a Markdown body. Lives as one file in
-`.changelog/records/`. Called a *Record* (Seshat keeps records) precisely to
+`.dv/records/`. Called a *Record* (Seshat keeps records) precisely to
 avoid confusion with *changesets*, the external tool that inspired the
 format. *Not: changeset, change file, entry, note.*
 
@@ -68,7 +68,7 @@ text), service.*
 state lives entirely in Tags. *Not: release marker, label.*
 
 **Rename** — a recorded lineage edge `from → to` (with the Version at which
-it took effect) in the rename ledger, `.changelog/renames.yaml`. *Not:
+it took effect) in the rename ledger, `.dv/renames.yaml`. *Not:
 alias, move.*
 
 **Unresolved Reference** — a Package reference in a Record that resolves to

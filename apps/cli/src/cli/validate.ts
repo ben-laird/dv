@@ -14,7 +14,7 @@ import {
 //
 // Safe and side-effect-free — runnable in CI as a pre-merge gate. Loads
 // config + discovery + the rename ledger, parses every Record under
-// .changelog/records/, and aggregates problems (config shape, plugin
+// .dv/records/, and aggregates problems (config shape, plugin
 // failures, Record shape, body emptiness, Unresolved References) into
 // one report. Exit code is non-zero iff at least one problem was found.
 

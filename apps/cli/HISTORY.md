@@ -11,7 +11,7 @@ CHANGELOG.md.
 
 A new `history` subtool writes a per-Package `HISTORY.md` alongside
 `CHANGELOG.md` when `history.enabled: true` in
-`.changelog/config.yaml`. The two documents are complementary:
+`.dv/config.yaml`. The two documents are complementary:
 CHANGELOG stays terse per Keep a Changelog (single-line bullets);
 HISTORY carries each Record's full body prose under per-version h3
 subsections.

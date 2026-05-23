@@ -4,7 +4,7 @@ import { DvError } from "../../domain/errors.ts";
 import type { Rename } from "../../domain/rename.ts";
 import { renameLedgerSchema } from "./schema.ts";
 
-// Loads the rename ledger from .changelog/renames.yaml. Missing file is
+// Loads the rename ledger from .dv/renames.yaml. Missing file is
 // not an error — it just means "no renames yet"; we return an empty
 // ledger. Cycle detection happens at resolve time, not load time, since
 // a cycle is a *runtime* invariant violation (Algebra §8 requires a DAG

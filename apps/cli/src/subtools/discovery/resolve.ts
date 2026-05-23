@@ -1,5 +1,6 @@
 import { isAbsolute, resolve } from "@std/path";
 import { DvError } from "../../domain/errors.ts";
+import { CONFIG_DIR } from "../config/locations.ts";
 
 // Resolves a plugin `use:` string per specs/config-format.md § Plugin
 // resolution.
@@ -38,7 +39,7 @@ export async function resolvePlugin(
       throw new DvError({
         code: "plugin-not-found",
         message: `plugin not found: ${expandedAbsolutePath}`,
-        hint: "check the `use:` path in .changelog/config.yaml is correct and the file exists",
+        hint: `check the \`use:\` path in ${CONFIG_DIR}/config.yaml is correct and the file exists`,
         context: { pluginUseString },
         cause: caughtError,
       });

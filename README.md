@@ -35,7 +35,7 @@ $ dv add
 ? Describe the change (opens $EDITOR)
 ```
 
-This writes `.changelog/records/quiet-cats-sneeze.md`:
+This writes `.dv/records/quiet-cats-sneeze.md`:
 
 ```markdown
 ---
@@ -93,7 +93,7 @@ sample monorepo — then dip into the rest as needed.
 **Reference**
 - [CLI reference](specs/cli.md) — every command, flag, and example
 - [Record file format](specs/record-format.md) — the file users write
-- [Config file format](specs/config-format.md) — `.changelog/config.yaml`
+- [Config file format](specs/config-format.md) — `.dv/config.yaml`
 - [Plugin contract](specs/plugin-contract.md) — the extension surface
 - [Schemas](specs/schemas/) — versioned config, plugin-response, and Plan contracts
 

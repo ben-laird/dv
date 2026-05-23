@@ -4,9 +4,10 @@ import type { z } from "zod";
 import type { Config } from "../../domain/config.ts";
 import { DvError } from "../../domain/errors.ts";
 import { defaults } from "./defaults.ts";
+import { CONFIG_DIR } from "./locations.ts";
 import { type ParsedConfigLayer, parsedConfigLayerSchema } from "./schema.ts";
 
-// Loads `.changelog/config.yaml` (or any path), follows the extends chain,
+// Loads `.dv/config.yaml` (or any path), follows the extends chain,
 // merges per-section, and applies defaults. Each layer is validated and
 // kebab→camel transformed through `parsedConfigLayerSchema` from
 // ./schema.ts; the merger only has to read the (already-camelCased) typed
@@ -73,7 +74,7 @@ async function readFileOrConfigError(configFilePath: string): Promise<string> {
       throw new DvError({
         code: "config-not-found",
         message: `config not found: ${configFilePath}`,
-        hint: "run `dv init` to scaffold .changelog/config.yaml",
+        hint: `run \`dv init\` to scaffold ${CONFIG_DIR}/config.yaml`,
         context: { configFilePath },
       });
     }
