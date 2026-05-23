@@ -116,7 +116,8 @@ async function setUpReleaseFixture(
     `discovery:
   plugins:
     - match: "packages/*"
-      use: ${examplePluginPath}
+      use:
+        path: ${examplePluginPath}
 `,
   );
   await Deno.mkdir(join(changelogDir, "records"), { recursive: true });

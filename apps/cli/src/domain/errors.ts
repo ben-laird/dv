@@ -37,6 +37,10 @@ export type DvErrorShape =
   | { code: "config-parse"; context: { configFilePath: string } }
   | { code: "config-shape"; context: { configFilePath?: string } }
   | { code: "config-unknown-key"; context: { configFilePath: string } }
+  | {
+      code: "config-legacy-use-shape";
+      context: { configFilePath: string; legacyValue: string };
+    }
   | { code: "extends-cycle"; context: { configFilePath: string } }
 
   // === discovery + plugins =======================================
@@ -44,7 +48,11 @@ export type DvErrorShape =
       code: "package-conflict";
       context: { path: string; pluginA: string; pluginB: string };
     }
-  | { code: "plugin-not-found"; context: { pluginUseString: string } }
+  | { code: "plugin-not-found"; context: { pluginReferenceKey: string } }
+  | {
+      code: "plugin-command-not-found";
+      context: { command: string };
+    }
   | {
       code: "plugin-not-executable";
       context: { pluginPath: string; opName: string };

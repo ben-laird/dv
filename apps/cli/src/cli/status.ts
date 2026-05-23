@@ -1,4 +1,8 @@
-import type { Config, PluginAssignment } from "../domain/config.ts";
+import {
+  type Config,
+  type PluginAssignment,
+  pluginReferenceKey,
+} from "../domain/config.ts";
 import { DvError } from "../domain/errors.ts";
 import type { Package } from "../domain/package.ts";
 import type { Version } from "../domain/version.ts";
@@ -161,22 +165,21 @@ interface ReadCurrentVersionsArgs {
 export async function readCurrentVersionsForPackages(
   args: ReadCurrentVersionsArgs,
 ): Promise<PackageCurrentVersionEntry[]> {
-  const resolvedPluginsByUseString = new Map<string, ResolvedPlugin>();
+  const resolvedPluginsByKey = new Map<string, ResolvedPlugin>();
   for (const pluginAssignment of args.pluginAssignments) {
-    if (!resolvedPluginsByUseString.has(pluginAssignment.use)) {
+    const assignmentKey = pluginReferenceKey(pluginAssignment.use);
+    if (!resolvedPluginsByKey.has(assignmentKey)) {
       const resolvedPlugin = await resolvePlugin({
-        pluginUseString: pluginAssignment.use,
+        pluginReference: pluginAssignment.use,
         repoRootPath: args.repoRootPath,
       });
-      resolvedPluginsByUseString.set(pluginAssignment.use, resolvedPlugin);
+      resolvedPluginsByKey.set(assignmentKey, resolvedPlugin);
     }
   }
 
   const entries: PackageCurrentVersionEntry[] = [];
   for (const discoveredPackage of args.discoveredPackages) {
-    const resolvedPlugin = resolvedPluginsByUseString.get(
-      discoveredPackage.plugin,
-    );
+    const resolvedPlugin = resolvedPluginsByKey.get(discoveredPackage.plugin);
     if (resolvedPlugin === undefined) continue;
     const currentVersion: Version = await invokeReadVersion({
       repoRootPath: args.repoRootPath,

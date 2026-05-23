@@ -41,7 +41,7 @@ interface ConfigWithSinglePluginArgs {
 function configWithSinglePlugin(args: ConfigWithSinglePluginArgs): Config {
   const builtConfig = defaults();
   builtConfig.discovery.plugins = [
-    { match: args.matchGlob, use: args.pluginUseString },
+    { match: args.matchGlob, use: { path: args.pluginUseString } },
   ];
   return builtConfig;
 }
@@ -69,8 +69,10 @@ echo '{"packages":[{"name":"core","path":"packages/core"},{"name":"util","path":
         .map((discoveredPackage) => discoveredPackage.name)
         .sort();
       assertEquals(discoveredNames, ["core", "util"]);
+      // Each discovered Package carries the canonical PluginReference
+      // key — the same key resolveAllPlugins uses for its cache.
       assertEquals(
-        discoveredPackages.every((p) => p.plugin === "./plugin"),
+        discoveredPackages.every((p) => p.plugin === "path:./plugin"),
         true,
       );
     },
@@ -153,8 +155,8 @@ Deno.test("discoverPackages rejects a package path claimed by two plugins", asyn
     }
     const config = defaults();
     config.discovery.plugins = [
-      { match: "packages/*", use: "./plugin-a" },
-      { match: "packages/*", use: "./plugin-b" },
+      { match: "packages/*", use: { path: "./plugin-a" } },
+      { match: "packages/*", use: { path: "./plugin-b" } },
     ];
 
     // When discoverPackages runs

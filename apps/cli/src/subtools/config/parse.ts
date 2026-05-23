@@ -106,6 +106,21 @@ function parseYamlAsLayer(args: ParseYamlAsLayerArgs): ParsedConfigLayer {
     return {} as ParsedConfigLayer;
   }
 
+  // Preflight: detect the pre-1.0 string form of `use:` /
+  // `publishing.plugin:` / `overrides[].plugin-use:` before Zod
+  // rejects it as a shape error. Targeted error has a clear hint
+  // pointing at the `dv migrate config` command, where the generic
+  // shape error would just say "expected object."
+  const legacyUseShape = detectLegacyUseShape(parsedYaml);
+  if (legacyUseShape !== undefined) {
+    throw new DvError({
+      code: "config-legacy-use-shape",
+      message: `${configFilePath}: \`${legacyUseShape.path}\` is a string ('${legacyUseShape.value}'); the pre-1.0 form was removed in favor of a tagged reference (path/builtin/command)`,
+      hint: "run `dv migrate config` to rewrite the file in place",
+      context: { configFilePath, legacyValue: legacyUseShape.value },
+    });
+  }
+
   const validationResult = parsedConfigLayerSchema.safeParse(parsedYaml);
   if (!validationResult.success) {
     throw configErrorFromZod({
@@ -114,6 +129,69 @@ function parseYamlAsLayer(args: ParseYamlAsLayerArgs): ParsedConfigLayer {
     });
   }
   return validationResult.data;
+}
+
+interface LegacyUseShapeDetection {
+  // Dotted breadcrumb for the location, e.g.
+  //   "discovery.plugins[0].use"
+  //   "publishing.plugin"
+  //   "overrides[2].plugin-use"
+  path: string;
+  // The legacy string value the user wrote.
+  value: string;
+}
+
+// Walks the parsed YAML looking for the three places the pre-1.0 form
+// could appear as a bare string. Returns the first one found so the
+// error message names a specific location.
+function detectLegacyUseShape(
+  parsedYaml: unknown,
+): LegacyUseShapeDetection | undefined {
+  if (typeof parsedYaml !== "object" || parsedYaml === null) return undefined;
+  const root = parsedYaml as Record<string, unknown>;
+
+  // discovery.plugins[].use
+  const discovery = root.discovery;
+  if (typeof discovery === "object" && discovery !== null) {
+    const plugins = (discovery as Record<string, unknown>).plugins;
+    if (Array.isArray(plugins)) {
+      for (let index = 0; index < plugins.length; index++) {
+        const assignment = plugins[index];
+        if (typeof assignment !== "object" || assignment === null) continue;
+        const useValue = (assignment as Record<string, unknown>).use;
+        if (typeof useValue === "string") {
+          return { path: `discovery.plugins[${index}].use`, value: useValue };
+        }
+      }
+    }
+  }
+
+  // publishing.plugin
+  const publishing = root.publishing;
+  if (typeof publishing === "object" && publishing !== null) {
+    const pluginValue = (publishing as Record<string, unknown>).plugin;
+    if (typeof pluginValue === "string") {
+      return { path: "publishing.plugin", value: pluginValue };
+    }
+  }
+
+  // overrides[].plugin-use
+  const overrides = root.overrides;
+  if (Array.isArray(overrides)) {
+    for (let index = 0; index < overrides.length; index++) {
+      const entry = overrides[index];
+      if (typeof entry !== "object" || entry === null) continue;
+      const pluginUseValue = (entry as Record<string, unknown>)["plugin-use"];
+      if (typeof pluginUseValue === "string") {
+        return {
+          path: `overrides[${index}].plugin-use`,
+          value: pluginUseValue,
+        };
+      }
+    }
+  }
+
+  return undefined;
 }
 
 function normalizeExtendsList(

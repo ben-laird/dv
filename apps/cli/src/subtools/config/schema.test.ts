@@ -6,7 +6,7 @@ Deno.test("rawConfigLayerSchema preserves YAML's kebab-case shape verbatim", () 
   // Given a kebab-cased layer matching the documented config-format.md shape
   const kebabCasedYamlLayer = {
     discovery: {
-      plugins: [{ match: "packages/*", use: "./plugin" }],
+      plugins: [{ match: "packages/*", use: { path: "./plugin" } }],
       "use-gitignore": true,
     },
     git: { "require-clean-tree": false, "auto-commit": true },
@@ -25,7 +25,7 @@ Deno.test("parsedConfigLayerSchema pipes the raw shape through a kebab→camel t
   // Given the same kebab-cased layer
   const kebabCasedYamlLayer = {
     discovery: {
-      plugins: [{ match: "packages/*", use: "./plugin" }],
+      plugins: [{ match: "packages/*", use: { path: "./plugin" } }],
       "use-gitignore": true,
     },
     git: { "require-clean-tree": false, "auto-commit": true },

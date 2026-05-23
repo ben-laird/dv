@@ -45,8 +45,57 @@
                 "description": "A glob or list of globs (gitignore-style negation with '!')."
               },
               "use": {
-                "type": "string",
-                "description": "Path to a plugin executable (./..., /..., ~/...) or a builtin name."
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "path": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Local file or directory plugin. ./, ../, /, ~/ all accepted; relative paths resolve against the repo root."
+                      }
+                    },
+                    "required": [
+                      "path"
+                    ],
+                    "additionalProperties": false,
+                    "title": "Plugin reference (path)",
+                    "description": "A local plugin executable or directory."
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "builtin": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "First-party plugin name. v1 ships no builtins; reserved for forward compatibility."
+                      }
+                    },
+                    "required": [
+                      "builtin"
+                    ],
+                    "additionalProperties": false,
+                    "title": "Plugin reference (builtin)",
+                    "description": "A first-party plugin shipped with dv."
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "command": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Binary name to look up on $PATH. Useful for plugins installed via brew, cargo install, deno install, etc."
+                      }
+                    },
+                    "required": [
+                      "command"
+                    ],
+                    "additionalProperties": false,
+                    "title": "Plugin reference (command)",
+                    "description": "A binary resolved against $PATH."
+                  }
+                ],
+                "description": "Plugin reference. Exactly one of `path`, `builtin`, or `command` must be set."
               },
               "timeout": {
                 "description": "Max wall-clock for this plugin's fast ops (discover, read-version, write-version, update-dependency). Default 60s.",
@@ -138,8 +187,57 @@
       "type": "object",
       "properties": {
         "plugin": {
-          "description": "Executable invoked per Package after tagging (the release Op).",
-          "type": "string"
+          "description": "Plugin invoked per Package after tagging (the release Op). Same {path,builtin,command} shape as discovery.plugins[].use.",
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Local file or directory plugin. ./, ../, /, ~/ all accepted; relative paths resolve against the repo root."
+                }
+              },
+              "required": [
+                "path"
+              ],
+              "additionalProperties": false,
+              "title": "Plugin reference (path)",
+              "description": "A local plugin executable or directory."
+            },
+            {
+              "type": "object",
+              "properties": {
+                "builtin": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "First-party plugin name. v1 ships no builtins; reserved for forward compatibility."
+                }
+              },
+              "required": [
+                "builtin"
+              ],
+              "additionalProperties": false,
+              "title": "Plugin reference (builtin)",
+              "description": "A first-party plugin shipped with dv."
+            },
+            {
+              "type": "object",
+              "properties": {
+                "command": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Binary name to look up on $PATH. Useful for plugins installed via brew, cargo install, deno install, etc."
+                }
+              },
+              "required": [
+                "command"
+              ],
+              "additionalProperties": false,
+              "title": "Plugin reference (command)",
+              "description": "A binary resolved against $PATH."
+            }
+          ]
         },
         "timeout": {
           "description": "Max wall-clock for the release Op. Default 'none' — publishing is slow and variable.",
@@ -300,8 +398,57 @@
             "type": "object",
             "properties": {
               "plugin": {
-                "description": "Executable invoked per Package after tagging (the release Op).",
-                "type": "string"
+                "description": "Plugin invoked per Package after tagging (the release Op). Same {path,builtin,command} shape as discovery.plugins[].use.",
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "path": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Local file or directory plugin. ./, ../, /, ~/ all accepted; relative paths resolve against the repo root."
+                      }
+                    },
+                    "required": [
+                      "path"
+                    ],
+                    "additionalProperties": false,
+                    "title": "Plugin reference (path)",
+                    "description": "A local plugin executable or directory."
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "builtin": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "First-party plugin name. v1 ships no builtins; reserved for forward compatibility."
+                      }
+                    },
+                    "required": [
+                      "builtin"
+                    ],
+                    "additionalProperties": false,
+                    "title": "Plugin reference (builtin)",
+                    "description": "A first-party plugin shipped with dv."
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "command": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Binary name to look up on $PATH. Useful for plugins installed via brew, cargo install, deno install, etc."
+                      }
+                    },
+                    "required": [
+                      "command"
+                    ],
+                    "additionalProperties": false,
+                    "title": "Plugin reference (command)",
+                    "description": "A binary resolved against $PATH."
+                  }
+                ]
               },
               "timeout": {
                 "description": "Max wall-clock for the release Op. Default 'none' — publishing is slow and variable.",
@@ -329,8 +476,57 @@
             "description": "How release plugins are invoked after tagging (specs/config-format.md § publishing)."
           },
           "plugin-use": {
-            "description": "Override the plugin assignment for matched Packages.",
-            "type": "string"
+            "description": "Override the plugin assignment for matched Packages. Same {path,builtin,command} shape as discovery.plugins[].use.",
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Local file or directory plugin. ./, ../, /, ~/ all accepted; relative paths resolve against the repo root."
+                  }
+                },
+                "required": [
+                  "path"
+                ],
+                "additionalProperties": false,
+                "title": "Plugin reference (path)",
+                "description": "A local plugin executable or directory."
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "builtin": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "First-party plugin name. v1 ships no builtins; reserved for forward compatibility."
+                  }
+                },
+                "required": [
+                  "builtin"
+                ],
+                "additionalProperties": false,
+                "title": "Plugin reference (builtin)",
+                "description": "A first-party plugin shipped with dv."
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "command": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Binary name to look up on $PATH. Useful for plugins installed via brew, cargo install, deno install, etc."
+                  }
+                },
+                "required": [
+                  "command"
+                ],
+                "additionalProperties": false,
+                "title": "Plugin reference (command)",
+                "description": "A binary resolved against $PATH."
+              }
+            ]
           }
         },
         "required": [

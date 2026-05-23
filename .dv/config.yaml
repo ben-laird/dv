@@ -15,7 +15,8 @@ discovery:
     - match:
         - "apps/*"
         - "packages/*"
-      use: ./examples/plugins/deno
+      use:
+        path: ./examples/plugins/deno
 
 # Long-form companion to CHANGELOG.md — `dv version` writes HISTORY.md
 # alongside CHANGELOG.md when enabled. CHANGELOG stays terse (Keep a

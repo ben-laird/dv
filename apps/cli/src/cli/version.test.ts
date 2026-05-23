@@ -55,7 +55,8 @@ async function setUpFixture(args: SetUpRepoArgs): Promise<SetUpRepoResult> {
     `discovery:
   plugins:
     - match: "packages/*"
-      use: ./plugin
+      use:
+        path: ./plugin
 `;
   await Deno.writeTextFile(join(changelogDir, "config.yaml"), configYaml);
 
@@ -546,7 +547,8 @@ async function setUpCascadeFixture(
     `discovery:
   plugins:
     - match: "packages/*"
-      use: ${examplePluginPath}
+      use:
+        path: ${examplePluginPath}
 `,
   );
 
@@ -777,7 +779,8 @@ Deno.test("runVersion cascades even when the dependent is itself in pending", as
 const HISTORY_ENABLED_CONFIG = `discovery:
   plugins:
     - match: "packages/*"
-      use: ./plugin
+      use:
+        path: ./plugin
 history:
   enabled: true
 `;

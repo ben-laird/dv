@@ -1,4 +1,5 @@
 import type { Config, PluginAssignment } from "../../domain/config.ts";
+import { pluginReferenceKey } from "../../domain/config.ts";
 import { DvError } from "../../domain/errors.ts";
 import type { Package } from "../../domain/package.ts";
 import { invokeOp, parseDiscoverResponse } from "../plugin/mod.ts";
@@ -76,8 +77,9 @@ async function runDiscoveryAssignment(
 ): Promise<Package[]> {
   const { pluginAssignment, assignmentIndex, repoRootPath } = args;
   const assignmentBreadcrumb = `discovery.plugins[${assignmentIndex}]`;
+  const assignmentKey = pluginReferenceKey(pluginAssignment.use);
   const resolvedPlugin = await resolvePlugin({
-    pluginUseString: pluginAssignment.use,
+    pluginReference: pluginAssignment.use,
     repoRootPath,
   });
   const { positiveGlobs, negativeGlobs } = splitMatch(pluginAssignment.match);
@@ -129,7 +131,7 @@ async function runDiscoveryAssignment(
       claimedPackages.push({
         name: discoveredEntry.name,
         path: discoveredEntry.path,
-        plugin: pluginAssignment.use,
+        plugin: assignmentKey,
       });
     }
   }

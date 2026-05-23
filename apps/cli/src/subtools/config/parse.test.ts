@@ -50,7 +50,8 @@ Deno.test("loadConfig accepts a single-string discovery match", async () => {
 discovery:
   plugins:
     - match: "packages/*"
-      use: ./plugins/x
+      use:
+        path: ./plugins/x
 `,
     },
     testBody: async (configDirectory) => {
@@ -63,7 +64,9 @@ discovery:
       // Then the plugin assignment is preserved as-typed
       assertEquals(resolvedConfig.discovery.plugins.length, 1);
       assertEquals(resolvedConfig.discovery.plugins[0]?.match, "packages/*");
-      assertEquals(resolvedConfig.discovery.plugins[0]?.use, "./plugins/x");
+      assertEquals(resolvedConfig.discovery.plugins[0]?.use, {
+        path: "./plugins/x",
+      });
     },
   });
 });
@@ -77,7 +80,8 @@ discovery:
     - match:
         - "packages/*"
         - "!packages/legacy"
-      use: ./plugins/x
+      use:
+        path: ./plugins/x
       timeout: 5m
 `,
     },
@@ -138,7 +142,8 @@ Deno.test("loadConfig rejects a plugin assignment missing the required 'match'",
       "config.yaml": `
 discovery:
   plugins:
-    - use: ./plugins/x
+    - use:
+        path: ./plugins/x
 `,
     },
     testBody: async (configDirectory) => {
@@ -159,7 +164,8 @@ Deno.test("loadConfig walks extends chains, letting later layers override earlie
 discovery:
   plugins:
     - match: "packages/*"
-      use: ./plugins/base
+      use:
+        path: ./plugins/base
 tagging:
   format: "{package}-v{version}"
 `,
@@ -178,7 +184,9 @@ tagging:
 
       // Then base values flow through unless the local layer overrides them
       assertEquals(resolvedConfig.discovery.plugins.length, 1);
-      assertEquals(resolvedConfig.discovery.plugins[0]?.use, "./plugins/base");
+      assertEquals(resolvedConfig.discovery.plugins[0]?.use, {
+        path: "./plugins/base",
+      });
       assertEquals(resolvedConfig.tagging.format, "{version}");
     },
   });
@@ -212,4 +220,92 @@ Deno.test("loadConfig surfaces a structured config-not-found error when the file
     DvError,
     "config not found",
   );
+});
+
+Deno.test("loadConfig detects the pre-1.0 string-form `use:` and routes to config-legacy-use-shape", async () => {
+  // Given a config still using the pre-1.0 single-string form. The
+  // raw Zod error would say "expected object" — useful, but not
+  // helpful. The preflight check catches this earlier and points
+  // the user at `dv migrate config`.
+  await withConfigDirectory({
+    filesByName: {
+      "config.yaml": `
+discovery:
+  plugins:
+    - match: "packages/*"
+      use: ./plugins/legacy-form
+`,
+    },
+    testBody: async (configDirectory) => {
+      const configFilePath = join(configDirectory, "config.yaml");
+
+      const caughtError = await assertRejects(
+        () => loadConfig(configFilePath),
+        DvError,
+      );
+      assertEquals(caughtError.kind.code, "config-legacy-use-shape");
+      // The legacy value rides along in context so a migration tool
+      // (or a structured-log consumer) can recover the original.
+      if (caughtError.kind.code === "config-legacy-use-shape") {
+        assertEquals(
+          caughtError.kind.context.legacyValue,
+          "./plugins/legacy-form",
+        );
+      }
+    },
+  });
+});
+
+Deno.test("loadConfig detects legacy string-form at publishing.plugin too", async () => {
+  // Given a config with the legacy form at publishing.plugin
+  await withConfigDirectory({
+    filesByName: {
+      "config.yaml": `
+discovery:
+  plugins:
+    - match: "packages/*"
+      use:
+        path: ./plugins/x
+publishing:
+  plugin: ./scripts/release-handler
+`,
+    },
+    testBody: async (configDirectory) => {
+      const configFilePath = join(configDirectory, "config.yaml");
+      // Then the preflight fires for the publishing.plugin field, not
+      // just for discovery.plugins[].use. The message names the
+      // specific breadcrumb.
+      const caughtError = await assertRejects(
+        () => loadConfig(configFilePath),
+        DvError,
+      );
+      assertEquals(caughtError.kind.code, "config-legacy-use-shape");
+    },
+  });
+});
+
+Deno.test("loadConfig detects legacy string-form inside overrides[].plugin-use", async () => {
+  // Given an overrides entry that still uses the pre-1.0 string form
+  await withConfigDirectory({
+    filesByName: {
+      "config.yaml": `
+discovery:
+  plugins:
+    - match: "packages/*"
+      use:
+        path: ./plugins/x
+overrides:
+  - match: "packages/core"
+    plugin-use: ./scripts/special
+`,
+    },
+    testBody: async (configDirectory) => {
+      const configFilePath = join(configDirectory, "config.yaml");
+      const caughtError = await assertRejects(
+        () => loadConfig(configFilePath),
+        DvError,
+      );
+      assertEquals(caughtError.kind.code, "config-legacy-use-shape");
+    },
+  });
 });

@@ -35,7 +35,8 @@ async function setUpRepoWithPlugin(
     `discovery:
   plugins:
     - match: "packages/*"
-      use: ./plugin
+      use:
+        path: ./plugin
 `;
   await Deno.writeTextFile(join(configDir, "config.yaml"), configYaml);
 

@@ -5,10 +5,45 @@
 // Only sections needed by milestone 1 (discovery) are fully typed. The rest
 // keep loose shapes that future subtools will tighten.
 
+// Tagged plugin reference. Exactly one of `path`, `builtin`, or
+// `command` is set; the YAML parser (via the discriminated Zod schema
+// in subtools/config/schema.ts) guarantees that invariant before any
+// runtime code sees this type.
+//
+//   { path: "./scripts/foo" }       — local file or directory
+//   { builtin: "cargo" }            — first-party plugin (none in v1)
+//   { command: "my-plugin" }        — binary on $PATH
+//
+// Replaces the old `use: string` form whose kind was inferred from
+// string shape (specs/config-format.md § Plugin resolution).
+export type PluginReference =
+  | { path: string }
+  | { builtin: string }
+  | { command: string };
+
 export interface PluginAssignment {
   match: string | string[];
-  use: string;
+  use: PluginReference;
   timeout?: string;
+}
+
+// Canonical string key for a PluginReference. Used as a Map key when
+// caching `resolvePlugin` results across the assignments in a single
+// run, and as the per-Package `plugin` identifier so a Package knows
+// which assignment's plugin to invoke without having to carry the
+// reference object around.
+//
+//   { path: "./foo" }     → "path:./foo"
+//   { builtin: "cargo" }  → "builtin:cargo"
+//   { command: "x" }      → "command:x"
+//
+// Two assignments referencing the same plugin produce the same key,
+// which is what the resolve-once cache relies on. The key is not a
+// stable wire format — it's an in-process identifier.
+export function pluginReferenceKey(ref: PluginReference): string {
+  if ("path" in ref) return `path:${ref.path}`;
+  if ("builtin" in ref) return `builtin:${ref.builtin}`;
+  return `command:${ref.command}`;
 }
 
 export interface DiscoveryConfig {
@@ -40,7 +75,7 @@ export interface TaggingConfig {
 }
 
 export interface PublishingConfig {
-  plugin?: string;
+  plugin?: PluginReference;
   timeout: string;
 }
 
@@ -65,7 +100,7 @@ export interface OverrideEntry {
   history?: Partial<HistoryConfig>;
   tagging?: Partial<TaggingConfig>;
   publishing?: Partial<PublishingConfig>;
-  pluginUse?: string;
+  pluginUse?: PluginReference;
 }
 
 export interface Config {

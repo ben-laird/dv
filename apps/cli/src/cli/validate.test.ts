@@ -32,7 +32,8 @@ async function setUpRepoForValidate(
     `discovery:
   plugins:
     - match: "packages/*"
-      use: ./plugin
+      use:
+        path: ./plugin
 `,
   );
 

@@ -52,7 +52,8 @@ async function setUpFixture(
     `discovery:
   plugins:
     - match: "packages/*"
-      use: ./plugin
+      use:
+        path: ./plugin
 `,
   );
   const recordsDir = join(dvDir, "records");

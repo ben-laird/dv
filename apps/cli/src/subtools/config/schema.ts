@@ -32,14 +32,77 @@ const matchGlobSchema = z
   .union([z.string(), z.array(z.string())])
   .describe("A glob or list of globs (gitignore-style negation with '!').");
 
+// Plugin reference. Exactly one of `path`, `builtin`, or `command`
+// must be set; each variant is a single-key strict object so any
+// stray sibling key (or supplying two arms at once) is rejected. The
+// union makes the discrimination explicit in the YAML — no string-
+// shape heuristics, no ambiguity (specs/config-format.md § Plugin
+// resolution).
+//
+// The old pre-1.0 shape was a single string at `use:` whose kind was
+// inferred from the leading characters (`./...` → path, anything
+// else → builtin). That overload was removed; legacy configs are
+// detected pre-parse in parse.ts and routed to a targeted
+// `config-legacy-use-shape` error pointing at `dv migrate config`.
+const pluginPathReferenceSchema = z
+  .object({
+    path: z
+      .string()
+      .min(1)
+      .describe(
+        "Local file or directory plugin. ./, ../, /, ~/ all accepted; relative paths resolve against the repo root.",
+      ),
+  })
+  .strict()
+  .meta({
+    title: "Plugin reference (path)",
+    description: "A local plugin executable or directory.",
+  });
+
+const pluginBuiltinReferenceSchema = z
+  .object({
+    builtin: z
+      .string()
+      .min(1)
+      .describe(
+        "First-party plugin name. v1 ships no builtins; reserved for forward compatibility.",
+      ),
+  })
+  .strict()
+  .meta({
+    title: "Plugin reference (builtin)",
+    description: "A first-party plugin shipped with dv.",
+  });
+
+const pluginCommandReferenceSchema = z
+  .object({
+    command: z
+      .string()
+      .min(1)
+      .describe(
+        "Binary name to look up on $PATH. Useful for plugins installed via brew, cargo install, deno install, etc.",
+      ),
+  })
+  .strict()
+  .meta({
+    title: "Plugin reference (command)",
+    description: "A binary resolved against $PATH.",
+  });
+
+export const pluginReferenceSchema = z
+  .union([
+    pluginPathReferenceSchema,
+    pluginBuiltinReferenceSchema,
+    pluginCommandReferenceSchema,
+  ])
+  .describe(
+    "Plugin reference. Exactly one of `path`, `builtin`, or `command` must be set.",
+  );
+
 const pluginAssignmentSchema = z
   .object({
     match: matchGlobSchema,
-    use: z
-      .string()
-      .describe(
-        "Path to a plugin executable (./..., /..., ~/...) or a builtin name.",
-      ),
+    use: pluginReferenceSchema,
     timeout: durationStringSchema
       .optional()
       .describe(
@@ -150,11 +213,10 @@ const taggingSectionSchema = z
 
 const publishingSectionSchema = z
   .object({
-    plugin: z
-      .string()
+    plugin: pluginReferenceSchema
       .optional()
       .describe(
-        "Executable invoked per Package after tagging (the release Op).",
+        "Plugin invoked per Package after tagging (the release Op). Same {path,builtin,command} shape as discovery.plugins[].use.",
       ),
     timeout: z
       .union([durationStringSchema, z.literal("none")])
@@ -239,10 +301,11 @@ const overrideEntrySchema = z
     history: historySectionSchema.optional(),
     tagging: taggingSectionSchema.optional(),
     publishing: publishingSectionSchema.optional(),
-    "plugin-use": z
-      .string()
+    "plugin-use": pluginReferenceSchema
       .optional()
-      .describe("Override the plugin assignment for matched Packages."),
+      .describe(
+        "Override the plugin assignment for matched Packages. Same {path,builtin,command} shape as discovery.plugins[].use.",
+      ),
   })
   .strict()
   .meta({

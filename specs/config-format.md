@@ -90,11 +90,14 @@ Enumerates packages and resolves which plugin manages each. The
 discovery:
   plugins:
     - match: "packages/*"
-      use: cargo
+      use:
+        builtin: cargo
     - match: "apps/*"
-      use: npm
+      use:
+        builtin: npm
     - match: "tools/migrator"
-      use: ./scripts/custom-version
+      use:
+        path: ./scripts/custom-version
   use-gitignore: true
 ```
 
@@ -119,18 +122,68 @@ discovery:
     - match:
         - "packages/*"
         - "!packages/internal-experiment"
-      use: cargo
+      use:
+        builtin: cargo
 ```
 
 ### Plugin resolution
 
-`use` accepts:
+`use` is a tagged object — **exactly one** of `path:`, `builtin:`, or
+`command:` must be set. The discriminator makes the source of the
+plugin explicit in the YAML, rather than being inferred from the shape
+of a single overloaded string. Parsers can tell what kind of reference
+they're looking at without heuristics.
 
-- **Path to executable**: `./scripts/custom-version`, `/usr/local/bin/my-plugin`
-- **Builtin name**: `cargo`, `npm`, `pyproject` (once first-party plugins ship)
+```yaml
+discovery:
+  plugins:
+    - match: "apps/*"
+      use:
+        path: ./examples/plugins/deno     # local file or directory
+    - match: "crates/*"
+      use:
+        builtin: cargo                    # first-party plugin (none ship in v1)
+    - match: "tools/*"
+      use:
+        command: my-plugin                # binary found on $PATH
+```
 
-Resolution order: explicit path first; if `use` doesn't start with `./`,
-`/`, or `~`, it's looked up in the builtin registry.
+- **`path`** — A local file or directory. Relative paths resolve
+  against the repo root. `./`, `../`, `/`, and `~/` are all accepted.
+  A directory plugin lays out one executable per Op (`discover`,
+  `read-version`, …); a file plugin is invoked once per Op with the
+  op name as `argv[1]`.
+- **`builtin`** — The name of a first-party plugin that ships with
+  `dv`. **v1 ships no builtins**; any `builtin:` entry will error with
+  `plugin-not-found` until first-party plugins land. Reserved now so
+  configs are forward-compatible.
+- **`command`** — A binary name to look up on `$PATH`. Useful when a
+  plugin is installed via `brew`, `cargo install`, `deno install`, etc.
+  The lookup uses `$PATHEXT` on Windows for `.cmd`/`.exe` resolution;
+  otherwise just the bare name.
+
+Setting more than one key on the same `use:` is a config error
+(`config-shape`). The "exactly one of" rule is enforced by the Zod
+schema before any resolution runs.
+
+#### Migrating from the pre-1.0 string form
+
+Earlier pre-1.0 versions of `dv` accepted a single string at `use:`,
+with the kind inferred from string shape (`./foo` was a path, anything
+else was a builtin name). That overload was removed because
+configurations could not be unambiguously parsed from the YAML alone.
+
+If you see `config-legacy-use-shape` when running any `dv` command,
+your config still uses the old string form. Run:
+
+```sh
+dv migrate config
+```
+
+to rewrite the file in place. The migrator preserves the original kind
+inferred from the string shape — path-shaped strings become `path:`,
+others become `builtin:` — and is idempotent: running it on an already-
+migrated config is a no-op.
 
 ### Per-assignment options
 
@@ -140,7 +193,8 @@ Each plugin entry accepts an optional `timeout`:
 discovery:
   plugins:
     - match: "packages/*"
-      use: cargo
+      use:
+        builtin: cargo
       timeout: 60s            # max duration for this plugin's fast ops
 ```
 
@@ -250,14 +304,19 @@ How release plugins are invoked after tagging.
 
 ```yaml
 publishing:
-  plugin: ./scripts/release-handler
+  plugin:
+    path: ./scripts/release-handler
   timeout: none
 ```
 
-| Key       | Type             | Default  | Meaning                                                                                       |
-| --------- | ---------------- | -------- | --------------------------------------------------------------------------------------------- |
-| `plugin`  | string           | *(none)* | Optional executable invoked per package after tagging. See plugin docs.                       |
-| `timeout` | duration / `none`| `none`   | Max wall-clock for the `release` op. Default none — publishing is slow and variable. Set a duration (e.g. `5m`) to bound it. |
+`plugin` follows the same discriminated shape as
+`discovery.plugins[].use` — exactly one of `path:`, `builtin:`, or
+`command:`. See [Plugin resolution](#plugin-resolution) for the kinds.
+
+| Key       | Type              | Default  | Meaning                                                                                                                                            |
+| --------- | ----------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `plugin`  | plugin reference  | *(none)* | Optional plugin invoked per package after tagging. Same `{path,builtin,command}` shape as `discovery.plugins[].use`.                               |
+| `timeout` | duration / `none` | `none`   | Max wall-clock for the `release` op. Default none — publishing is slow and variable. Set a duration (e.g. `5m`) to bound it.                       |
 
 ## `git`
 
@@ -359,7 +418,8 @@ overrides:
 
   - match: "tools/migrator"
     publishing:
-      plugin: ./scripts/special-release
+      plugin:
+        path: ./scripts/special-release
 ```
 
 ### Override-able sections
@@ -409,11 +469,14 @@ discovery:
     - match:
         - "packages/*"
         - "!packages/internal-*"
-      use: cargo
+      use:
+        builtin: cargo
     - match: "apps/*"
-      use: npm
+      use:
+        builtin: npm
     - match: "tools/migrator"
-      use: ./scripts/version-from-VERSION-file
+      use:
+        path: ./scripts/version-from-VERSION-file
   use-gitignore: true
 
 changelog:
@@ -423,7 +486,8 @@ tagging:
   format: "{package}@{version}"
 
 publishing:
-  plugin: ./scripts/release-handler
+  plugin:
+    path: ./scripts/release-handler
 
 git:
   require-clean-tree: true

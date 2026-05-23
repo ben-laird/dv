@@ -1,5 +1,5 @@
 import { join, relative } from "@std/path";
-import type { PluginAssignment } from "../domain/config.ts";
+import { type PluginAssignment, pluginReferenceKey } from "../domain/config.ts";
 import { DvError } from "../domain/errors.ts";
 import type { Package } from "../domain/package.ts";
 import type { Record as DvRecord } from "../domain/record.ts";
@@ -496,16 +496,17 @@ interface ResolveAllPluginsArgs {
 async function resolveAllPlugins(
   args: ResolveAllPluginsArgs,
 ): Promise<Map<string, ResolvedPlugin>> {
-  const resolvedPluginsByUseString = new Map<string, ResolvedPlugin>();
+  const resolvedPluginsByKey = new Map<string, ResolvedPlugin>();
   for (const pluginAssignment of args.pluginAssignments) {
-    if (resolvedPluginsByUseString.has(pluginAssignment.use)) continue;
+    const assignmentKey = pluginReferenceKey(pluginAssignment.use);
+    if (resolvedPluginsByKey.has(assignmentKey)) continue;
     const resolvedPlugin = await resolvePlugin({
-      pluginUseString: pluginAssignment.use,
+      pluginReference: pluginAssignment.use,
       repoRootPath: args.repoRootPath,
     });
-    resolvedPluginsByUseString.set(pluginAssignment.use, resolvedPlugin);
+    resolvedPluginsByKey.set(assignmentKey, resolvedPlugin);
   }
-  return resolvedPluginsByUseString;
+  return resolvedPluginsByKey;
 }
 
 interface ReadAllCurrentVersionsArgs {
