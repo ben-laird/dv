@@ -78,6 +78,15 @@ interface DetectFirstStableArgs {
   versionString: string;
 }
 
+// "First stable" = first tag that crosses out of Unstable
+// (Algebra §3). A Package may have a long lineage of 0.x.y tags
+// before crossing — all of those are still Unstable. The transition
+// to 1.0.0 is what we celebrate, *whether or not* the Package had
+// prior 0.x history. The previous implementation only fired the
+// celebration when the Package had no prior tags at all, which made
+// the `dv v1` ceremony silent for any Package that had ever shipped
+// a 0.x.y. Fixed: check that no prior tag has a stable major
+// (≥1) — that's the boundary we're crossing.
 async function detectFirstStable(
   args: DetectFirstStableArgs,
 ): Promise<boolean> {
@@ -86,5 +95,18 @@ async function detectFirstStable(
     repoRootPath: args.repoRootPath,
     pattern: `${args.pkg.name}@*`,
   });
-  return priorTags.length === 0;
+  // Look at the version portion of each tag (after `<pkg>@`) and
+  // check whether any has a stable major. The tag format is
+  // configurable but the trailing `<version>` segment is fixed by
+  // convention — we accept any suffix starting with `<pkg>@`.
+  const tagPrefix = `${args.pkg.name}@`;
+  for (const tag of priorTags) {
+    if (!tag.startsWith(tagPrefix)) continue;
+    const versionPortion = tag.slice(tagPrefix.length);
+    const majorString = versionPortion.split(".")[0];
+    if (majorString === undefined) continue;
+    const majorNumber = Number(majorString);
+    if (Number.isFinite(majorNumber) && majorNumber >= 1) return false;
+  }
+  return true;
 }

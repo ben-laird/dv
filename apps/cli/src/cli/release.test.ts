@@ -354,6 +354,82 @@ Deno.test("runRelease celebrates first-stable transitions in the human summary",
   }
 });
 
+Deno.test("runRelease celebrates first-stable even when the Package has prior 0.x.y tags (dv v1 ceremony)", async () => {
+  // Given a Package at 1.0.0 that *did* have prior 0.x.y tags —
+  // the situation after `dv v1` promotes a Package that has been
+  // releasing 0.x.y versions for a while. Prior to the fix, this
+  // case was silently missed (priorTags.length > 0 short-circuited
+  // the celebration). Per Algebra §3 the 0.x lineage is all
+  // Unstable; crossing into Stable is the moment we celebrate,
+  // regardless of how long the 0.x lineage was.
+  const fixture = await setUpReleaseFixture({
+    initialVersionA: "1.0.0",
+    initialVersionB: "0.5.0",
+    preExistingTags: ["pkg-a@0.4.0", "pkg-a@0.4.1", "pkg-a@0.5.0"],
+  });
+
+  try {
+    // When dv release runs
+    const { result, capturedStdout } = await captureStdout(() =>
+      runRelease({
+        force: false,
+        yes: true,
+        emitJson: false,
+        colorEnabled: false,
+      }),
+    );
+
+    // Then the celebration STILL fires for pkg-a — this is the
+    // promotion moment even though prior 0.x tags exist
+    assertStringIncludes(capturedStdout, "🎉");
+    assertStringIncludes(capturedStdout, "pkg-a promoted to 1.0.0");
+
+    const firstStableEntries = result.plan.awaitingRelease.filter(
+      (entry) => entry.firstStable,
+    );
+    assertEquals(firstStableEntries.length, 1);
+    assertEquals(firstStableEntries[0]?.package, "pkg-a");
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+Deno.test("runRelease does NOT celebrate when a stable major has already been tagged before", async () => {
+  // Given a Package at 1.0.0 that already has a prior >=1.0 tag —
+  // this is a re-release of an already-stable Package (e.g. via
+  // --force after a partial publish failure). The celebration is
+  // for the boundary crossing, not for the release event itself.
+  const fixture = await setUpReleaseFixture({
+    initialVersionA: "1.0.0",
+    initialVersionB: "0.5.0",
+    preExistingTags: ["pkg-a@1.0.0-rc.1", "pkg-a@1.0.0"],
+  });
+
+  try {
+    // When dv release runs with --force (re-publishes the already-
+    // tagged 1.0.0)
+    const { result, capturedStdout } = await captureStdout(() =>
+      runRelease({
+        force: true,
+        yes: true,
+        emitJson: false,
+        colorEnabled: false,
+      }),
+    );
+
+    // Then NO celebration — the stable boundary was already crossed
+    // in a prior release. pkg-b doesn't get one either (still 0.x).
+    assertEquals(capturedStdout.includes("🎉"), false);
+
+    const firstStableEntries = result.plan.awaitingRelease.filter(
+      (entry) => entry.firstStable,
+    );
+    assertEquals(firstStableEntries.length, 0);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
 Deno.test("runRelease --push sends minted tags to the configured remote", async () => {
   // Given two untagged packages and a bare remote configured
   const fixture = await setUpReleaseFixture({
