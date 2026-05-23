@@ -52,18 +52,6 @@ Done:
   command. Text-in / text-out per step so user comments survive
   the rewrite.
 
-### Known small issues
-
-These don't gate 1.0 — they're audit-finding-grade fixes worth
-batching whenever someone touches the adjacent code.
-
-- **`dv status` crashes when `.dv/records/` doesn't exist**
-  (`os error 2: readdir`). It should treat a missing records dir
-  the same as an empty one (no pending records). Hit when
-  scratch-testing the `run:` arm against a fresh repo that hadn't
-  called `dv init` first. Fix is small: `listRecords` should
-  catch `Deno.errors.NotFound` and return an empty listing.
-
 ### Deferred to later (architecturally accommodated)
 
 Out of scope for v1 — see the full list with rationale in

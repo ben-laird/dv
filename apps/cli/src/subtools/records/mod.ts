@@ -40,23 +40,37 @@ export async function listRecords(
   const parsedRecords: DvRecord[] = [];
   const failures: RecordError[] = [];
 
-  const directoryHandle = openRecordsDirectory(recordsDirectory);
-  if (directoryHandle === null) return { parsedRecords, failures };
-
-  for await (const directoryEntry of directoryHandle) {
-    if (!directoryEntry.isFile) continue;
-    if (!directoryEntry.name.endsWith(".md")) continue;
-    const recordPath = join(recordsDirectory, directoryEntry.name);
-    const fileContents = await Deno.readTextFile(recordPath);
-    try {
-      parsedRecords.push(parseRecord({ fileContents, recordPath }));
-    } catch (caughtError) {
-      if (caughtError instanceof RecordError) {
-        failures.push(caughtError);
-      } else {
-        throw caughtError;
+  // A missing records directory is a legitimate "no records yet"
+  // state — the same shape an empty directory produces. Treat both
+  // as an empty listing instead of throwing, so commands that only
+  // ever read records (`dv status`, `dv validate`) work on a fresh
+  // repo where `dv init` hasn't run yet, and commands that write
+  // records (`dv add`) create the directory before they get here.
+  //
+  // The catch wraps the `for await` rather than the `Deno.readDir`
+  // call itself: readDir returns the async iterator synchronously
+  // and only throws on first iteration (the prior synchronous
+  // try/catch around readDir never fired).
+  try {
+    for await (const directoryEntry of Deno.readDir(recordsDirectory)) {
+      if (!directoryEntry.isFile) continue;
+      if (!directoryEntry.name.endsWith(".md")) continue;
+      const recordPath = join(recordsDirectory, directoryEntry.name);
+      const fileContents = await Deno.readTextFile(recordPath);
+      try {
+        parsedRecords.push(parseRecord({ fileContents, recordPath }));
+      } catch (caughtError) {
+        if (caughtError instanceof RecordError) {
+          failures.push(caughtError);
+        } else {
+          throw caughtError;
+        }
       }
     }
+  } catch (caughtError) {
+    if (!(caughtError instanceof Deno.errors.NotFound)) throw caughtError;
+    // Directory doesn't exist → empty listing. Fall through to the
+    // sort + return below; both arrays are still empty.
   }
   parsedRecords.sort((leftRecord, rightRecord) =>
     leftRecord.filename.localeCompare(rightRecord.filename),
@@ -65,15 +79,4 @@ export async function listRecords(
     leftFailure.recordPath.localeCompare(rightFailure.recordPath),
   );
   return { parsedRecords, failures };
-}
-
-function openRecordsDirectory(
-  recordsDirectory: string,
-): AsyncIterable<Deno.DirEntry> | null {
-  try {
-    return Deno.readDir(recordsDirectory);
-  } catch (caughtError) {
-    if (caughtError instanceof Deno.errors.NotFound) return null;
-    throw caughtError;
-  }
 }
