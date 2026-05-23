@@ -128,11 +128,11 @@ discovery:
 
 ### Plugin resolution
 
-`use` is a tagged object — **exactly one** of `path:`, `builtin:`, or
-`command:` must be set. The discriminator makes the source of the
-plugin explicit in the YAML, rather than being inferred from the shape
-of a single overloaded string. Parsers can tell what kind of reference
-they're looking at without heuristics.
+`use` is a tagged object — **exactly one** of `path:`, `builtin:`,
+`command:`, or `run:` must be set. The discriminator makes the source
+of the plugin explicit in the YAML, rather than being inferred from
+the shape of a single overloaded string. Parsers can tell what kind
+of reference they're looking at without heuristics.
 
 ```yaml
 discovery:
@@ -146,6 +146,9 @@ discovery:
     - match: "tools/*"
       use:
         command: my-plugin                # binary found on $PATH
+    - match: "scripts/*"
+      use:
+        run: deno run -A jsr:@sekhmet/some-plugin  # full invocation string
 ```
 
 - **`path`** — A local file or directory. Relative paths resolve
@@ -161,10 +164,41 @@ discovery:
   plugin is installed via `brew`, `cargo install`, `deno install`, etc.
   The lookup uses `$PATHEXT` on Windows for `.cmd`/`.exe` resolution;
   otherwise just the bare name.
+- **`run`** — A full invocation string. The value is POSIX-tokenized
+  (the same rules `$EDITOR` follows): quoted strings, `\`-escapes,
+  whitespace as token separator. The **first token** is the
+  executable; the **remaining tokens** are static args that prefix
+  every invocation. The Op name (`discover`, `read-version`, …) is
+  appended as the final argument. Use `run:` when your plugin needs
+  an interpreter or static arguments that ride with every call.
+
+  Example: `deno run -A jsr:@sekhmet/some-plugin` produces
+  `deno run -A jsr:@sekhmet/some-plugin discover` for the discover
+  Op, `deno run -A jsr:@sekhmet/some-plugin read-version` for the
+  read-version Op, and so on. Variable expansion (`$VAR`) and
+  command substitution (`` `cmd` ``) are deliberately not performed
+  — `run:` is a tokenized invocation, not a shell line.
 
 Setting more than one key on the same `use:` is a config error
 (`config-shape`). The "exactly one of" rule is enforced by the Zod
 schema before any resolution runs.
+
+#### When to pick which
+
+The two arms most likely to confuse each other are `command` and
+`run`:
+
+- **`command: my-plugin`** — one binary, no static args. dv resolves
+  it on `$PATH` up front and spawns it directly. Choose this when
+  your plugin is a real binary the user installed (`brew install
+  my-plugin`, `cargo install my-plugin`, etc.).
+- **`run: deno run -A jsr:@scope/foo`** — multiple tokens (an
+  interpreter + flags + a script reference). Choose this when you'd
+  otherwise need to wrap the invocation in a shell script just to
+  bundle the static args. The Sekhmet-style "every script is a JSR
+  package" pattern lands here.
+
+`path:` is for things on the filesystem; `builtin:` is reserved.
 
 #### Migrating from the pre-1.0 string form
 

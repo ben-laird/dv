@@ -93,9 +93,25 @@
                     "additionalProperties": false,
                     "title": "Plugin reference (command)",
                     "description": "A binary resolved against $PATH."
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "run": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Full invocation string, POSIX-tokenized and run verbatim with the Op name appended (e.g. 'deno run -A jsr:@scope/plugin' or 'python -m my_plugin'). Use when the plugin needs an interpreter or static args every invocation reuses."
+                      }
+                    },
+                    "required": [
+                      "run"
+                    ],
+                    "additionalProperties": false,
+                    "title": "Plugin reference (run)",
+                    "description": "An invocation string tokenized POSIX-style. The Op name is appended as the final argument on each call."
                   }
                 ],
-                "description": "Plugin reference. Exactly one of `path`, `builtin`, or `command` must be set."
+                "description": "Plugin reference. Exactly one of `path`, `builtin`, `command`, or `run` must be set."
               },
               "timeout": {
                 "description": "Max wall-clock for this plugin's fast ops (discover, read-version, write-version, update-dependency). Default 60s.",
@@ -236,6 +252,22 @@
               "additionalProperties": false,
               "title": "Plugin reference (command)",
               "description": "A binary resolved against $PATH."
+            },
+            {
+              "type": "object",
+              "properties": {
+                "run": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Full invocation string, POSIX-tokenized and run verbatim with the Op name appended (e.g. 'deno run -A jsr:@scope/plugin' or 'python -m my_plugin'). Use when the plugin needs an interpreter or static args every invocation reuses."
+                }
+              },
+              "required": [
+                "run"
+              ],
+              "additionalProperties": false,
+              "title": "Plugin reference (run)",
+              "description": "An invocation string tokenized POSIX-style. The Op name is appended as the final argument on each call."
             }
           ]
         },
@@ -447,6 +479,22 @@
                     "additionalProperties": false,
                     "title": "Plugin reference (command)",
                     "description": "A binary resolved against $PATH."
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "run": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Full invocation string, POSIX-tokenized and run verbatim with the Op name appended (e.g. 'deno run -A jsr:@scope/plugin' or 'python -m my_plugin'). Use when the plugin needs an interpreter or static args every invocation reuses."
+                      }
+                    },
+                    "required": [
+                      "run"
+                    ],
+                    "additionalProperties": false,
+                    "title": "Plugin reference (run)",
+                    "description": "An invocation string tokenized POSIX-style. The Op name is appended as the final argument on each call."
                   }
                 ]
               },
@@ -525,6 +573,22 @@
                 "additionalProperties": false,
                 "title": "Plugin reference (command)",
                 "description": "A binary resolved against $PATH."
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "run": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Full invocation string, POSIX-tokenized and run verbatim with the Op name appended (e.g. 'deno run -A jsr:@scope/plugin' or 'python -m my_plugin'). Use when the plugin needs an interpreter or static args every invocation reuses."
+                  }
+                },
+                "required": [
+                  "run"
+                ],
+                "additionalProperties": false,
+                "title": "Plugin reference (run)",
+                "description": "An invocation string tokenized POSIX-style. The Op name is appended as the final argument on each call."
               }
             ]
           }

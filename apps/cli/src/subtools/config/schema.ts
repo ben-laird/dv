@@ -89,14 +89,31 @@ const pluginCommandReferenceSchema = z
     description: "A binary resolved against $PATH.",
   });
 
+const pluginRunReferenceSchema = z
+  .object({
+    run: z
+      .string()
+      .min(1)
+      .describe(
+        "Full invocation string, POSIX-tokenized and run verbatim with the Op name appended (e.g. 'deno run -A jsr:@scope/plugin' or 'python -m my_plugin'). Use when the plugin needs an interpreter or static args every invocation reuses.",
+      ),
+  })
+  .strict()
+  .meta({
+    title: "Plugin reference (run)",
+    description:
+      "An invocation string tokenized POSIX-style. The Op name is appended as the final argument on each call.",
+  });
+
 export const pluginReferenceSchema = z
   .union([
     pluginPathReferenceSchema,
     pluginBuiltinReferenceSchema,
     pluginCommandReferenceSchema,
+    pluginRunReferenceSchema,
   ])
   .describe(
-    "Plugin reference. Exactly one of `path`, `builtin`, or `command` must be set.",
+    "Plugin reference. Exactly one of `path`, `builtin`, `command`, or `run` must be set.",
   );
 
 const pluginAssignmentSchema = z

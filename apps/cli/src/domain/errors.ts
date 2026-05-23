@@ -54,6 +54,10 @@ export type DvErrorShape =
       context: { command: string };
     }
   | {
+      code: "plugin-run-parse";
+      context: { runValue: string };
+    }
+  | {
       code: "plugin-not-executable";
       context: { pluginPath: string; opName: string };
     }

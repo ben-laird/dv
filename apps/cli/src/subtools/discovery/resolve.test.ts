@@ -190,3 +190,63 @@ Deno.test("resolvePlugin(command) rejects path-shaped names early (user meant pa
   );
   assertEquals(caughtError.kind.code, "plugin-command-not-found");
 });
+
+Deno.test("resolvePlugin(run) tokenizes the invocation string and produces an 'invocation' plugin", async () => {
+  // Given a `run:` reference of the shape Sekhmet-style users
+  // want — an interpreter plus a JSR specifier
+  const resolvedPlugin = await resolvePlugin({
+    pluginReference: { run: "deno run -A jsr:@sekhmet/some-plugin" },
+    repoRootPath: "/unused-by-run-arm",
+  });
+
+  // Then the result is an 'invocation' kind carrying the first
+  // token as executable, the rest as baseArgs, and the original
+  // string as the display path for error context
+  if (resolvedPlugin.kind !== "invocation") {
+    throw new Error(`expected kind 'invocation', got '${resolvedPlugin.kind}'`);
+  }
+  assertEquals(resolvedPlugin.executable, "deno");
+  assertEquals(resolvedPlugin.baseArgs, [
+    "run",
+    "-A",
+    "jsr:@sekhmet/some-plugin",
+  ]);
+  assertEquals(resolvedPlugin.path, "deno run -A jsr:@sekhmet/some-plugin");
+});
+
+Deno.test("resolvePlugin(run) preserves quoted args containing spaces", async () => {
+  // Given a run reference where one arg legitimately contains
+  // spaces (e.g. a path argument the user wants to pass static)
+  const resolvedPlugin = await resolvePlugin({
+    pluginReference: {
+      run: 'python -m my_plugin --root "/repos/path with spaces"',
+    },
+    repoRootPath: "/unused",
+  });
+
+  // Then the tokenizer preserved the quoted span as a single arg
+  if (resolvedPlugin.kind !== "invocation") {
+    throw new Error(`expected kind 'invocation', got '${resolvedPlugin.kind}'`);
+  }
+  assertEquals(resolvedPlugin.baseArgs, [
+    "-m",
+    "my_plugin",
+    "--root",
+    "/repos/path with spaces",
+  ]);
+});
+
+Deno.test("resolvePlugin(run) errors with 'plugin-run-parse' on malformed quoting", async () => {
+  // Given a run reference with an unterminated quote — the
+  // tokenizer rejects this, and the resolver maps to a targeted
+  // DvError pointing at the run: value
+  const caughtError = await assertRejects(
+    () =>
+      resolvePlugin({
+        pluginReference: { run: "deno run 'unclosed quote" },
+        repoRootPath: "/unused",
+      }),
+    DvError,
+  );
+  assertEquals(caughtError.kind.code, "plugin-run-parse");
+});

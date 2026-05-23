@@ -19,7 +19,8 @@
 export type PluginReference =
   | { path: string }
   | { builtin: string }
-  | { command: string };
+  | { command: string }
+  | { run: string };
 
 export interface PluginAssignment {
   match: string | string[];
@@ -33,9 +34,10 @@ export interface PluginAssignment {
 // which assignment's plugin to invoke without having to carry the
 // reference object around.
 //
-//   { path: "./foo" }     → "path:./foo"
-//   { builtin: "cargo" }  → "builtin:cargo"
-//   { command: "x" }      → "command:x"
+//   { path: "./foo" }                → "path:./foo"
+//   { builtin: "cargo" }             → "builtin:cargo"
+//   { command: "x" }                 → "command:x"
+//   { run: "deno run -A jsr:@s/p" }  → "run:deno run -A jsr:@s/p"
 //
 // Two assignments referencing the same plugin produce the same key,
 // which is what the resolve-once cache relies on. The key is not a
@@ -43,7 +45,8 @@ export interface PluginAssignment {
 export function pluginReferenceKey(ref: PluginReference): string {
   if ("path" in ref) return `path:${ref.path}`;
   if ("builtin" in ref) return `builtin:${ref.builtin}`;
-  return `command:${ref.command}`;
+  if ("command" in ref) return `command:${ref.command}`;
+  return `run:${ref.run}`;
 }
 
 export interface DiscoveryConfig {

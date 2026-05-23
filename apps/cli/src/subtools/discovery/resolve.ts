@@ -3,9 +3,10 @@ import type { PluginReference } from "../../domain/config.ts";
 import { pluginReferenceKey } from "../../domain/config.ts";
 import { DvError } from "../../domain/errors.ts";
 import { CONFIG_DIR } from "../config/locations.ts";
+import { PosixTokenizeError, posixTokenize } from "../shell/posix-tokenize.ts";
 
 // Resolves a plugin reference per specs/config-format.md § Plugin
-// resolution. Three arms; the discriminator is the key set on the
+// resolution. Four arms; the discriminator is the key set on the
 // reference object:
 //
 //   { path: "..." }      → local file or directory. ./, ../, /, ~/
@@ -15,6 +16,12 @@ import { CONFIG_DIR } from "../config/locations.ts";
 //                          v1 ships none; always errors.
 //   { command: "..." }   → binary on $PATH. Resolved via PATH
 //                          traversal + PATHEXT on Windows.
+//   { run: "..." }       → full invocation string, POSIX-tokenized;
+//                          first token is the executable, the rest
+//                          are static args prepended to the Op
+//                          name on each call. Use when the plugin
+//                          needs an interpreter (deno run, python
+//                          -m, node) or static args.
 //
 // The pre-1.0 form took a single string with the kind inferred from
 // shape (`./...` → path, otherwise → builtin). That overload was
@@ -24,7 +31,17 @@ import { CONFIG_DIR } from "../config/locations.ts";
 
 export type ResolvedPlugin =
   | { kind: "single"; path: string }
-  | { kind: "dir"; path: string };
+  | { kind: "dir"; path: string }
+  // The `run:` arm. `path` is the original invocation string for
+  // display in errors; `executable` and `baseArgs` are what
+  // invokeOp passes to Deno.Command. The Op name is appended to
+  // baseArgs at spawn time.
+  | {
+      kind: "invocation";
+      path: string;
+      executable: string;
+      baseArgs: string[];
+    };
 
 interface ResolvePluginArgs {
   pluginReference: PluginReference;
@@ -47,6 +64,18 @@ export function resolvePlugin(
       commandName: pluginReference.command,
     });
   }
+  if ("run" in pluginReference) {
+    // resolveRunReference is sync; lift its return-or-throw into
+    // a resolved/rejected promise so callers always see the same
+    // async shape regardless of arm.
+    try {
+      return Promise.resolve(
+        resolveRunReference({ runString: pluginReference.run }),
+      );
+    } catch (caughtError) {
+      return Promise.reject(caughtError);
+    }
+  }
   // builtin: arm — v1 ships none, so always fails. The same code
   // (`plugin-not-found`) covers this and "path doesn't exist" so
   // consumers branch on one code; the message tells you which arm.
@@ -54,7 +83,7 @@ export function resolvePlugin(
     new DvError({
       code: "plugin-not-found",
       message: `builtin plugin '${pluginReference.builtin}' is not available — v1 ships no first-party plugins`,
-      hint: "use `path:` for a local plugin or `command:` for a binary on $PATH; first-party builtins ship post-v1",
+      hint: "use `path:` for a local plugin, `command:` for a binary on $PATH, or `run:` for a full invocation string; first-party builtins ship post-v1",
       context: {
         pluginReferenceKey: pluginReferenceKey(pluginReference),
       },
@@ -128,6 +157,51 @@ async function resolveCommandReference(
     });
   }
   return { kind: "single", path: resolvedAbsolutePath };
+}
+
+interface ResolveRunReferenceArgs {
+  runString: string;
+}
+
+// The `run:` arm: POSIX-tokenize the invocation string up front
+// so any quote/escape errors surface at resolve time (one error
+// per dv invocation) instead of per-Op. The first token becomes
+// the executable; the rest are static args that the runner
+// prepends to the Op name. Synchronous — no filesystem or $PATH
+// IO happens here (Deno.Command honors $PATH itself when given a
+// bare executable name).
+function resolveRunReference(args: ResolveRunReferenceArgs): ResolvedPlugin {
+  let tokens: string[];
+  try {
+    tokens = posixTokenize(args.runString);
+  } catch (caughtError) {
+    if (caughtError instanceof PosixTokenizeError) {
+      throw new DvError({
+        code: "plugin-run-parse",
+        message: `\`run:\` value did not parse: ${caughtError.message}`,
+        hint: "POSIX-shell quoting rules apply (\"...\", '...', \\-escapes); env-var expansion and command substitution are not performed",
+        context: { runValue: args.runString },
+        cause: caughtError,
+      });
+    }
+    throw caughtError;
+  }
+  const [executable, ...baseArgs] = tokens;
+  if (executable === undefined) {
+    // Unreachable: posixTokenize throws "empty" before returning
+    // an empty array. The narrowing keeps the type system honest.
+    throw new DvError({
+      code: "plugin-run-parse",
+      message: "`run:` value tokenized to an empty argv",
+      context: { runValue: args.runString },
+    });
+  }
+  return {
+    kind: "invocation",
+    path: args.runString,
+    executable,
+    baseArgs,
+  };
 }
 
 interface ExpandPathArgs {

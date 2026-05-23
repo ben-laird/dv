@@ -27,11 +27,25 @@ export interface InvokeOpResult {
 
 export async function invokeOp(args: InvokeOpArgs): Promise<InvokeOpResult> {
   const { resolvedPlugin, opName } = args;
-  const executablePath =
-    resolvedPlugin.kind === "single"
-      ? resolvedPlugin.path
-      : join(resolvedPlugin.path, opName);
-  const executableArgv = resolvedPlugin.kind === "single" ? [opName] : [];
+  // Dispatch on plugin kind to compute the executable + argv:
+  //   single     → call the file directly with [opName]
+  //   dir        → call <dir>/<opName> with no args
+  //   invocation → call the run:-string's first token with
+  //                [...baseArgs, opName] (baseArgs are the static
+  //                prefix the user supplied; opName is appended
+  //                like the single case)
+  let executablePath: string;
+  let executableArgv: string[];
+  if (resolvedPlugin.kind === "single") {
+    executablePath = resolvedPlugin.path;
+    executableArgv = [opName];
+  } else if (resolvedPlugin.kind === "dir") {
+    executablePath = join(resolvedPlugin.path, opName);
+    executableArgv = [];
+  } else {
+    executablePath = resolvedPlugin.executable;
+    executableArgv = [...resolvedPlugin.baseArgs, opName];
+  }
 
   const childEnvironment: Record<string, string> = {
     ...(args.environmentVariables ?? {}),

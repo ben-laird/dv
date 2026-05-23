@@ -41,14 +41,28 @@ Done:
 
 - **`dv v1 <package>`** — commit `06cc1de`. Not yet exercised
   against `@seshat/dv` itself, pending another audit pass.
-- **Discriminated `discovery.plugins[].use` key** — commit
-  `40ab432`. `path:` / `builtin:` / `command:` arms; legacy string
-  form errors with a targeted hint pointing at `dv migrate config`.
+- **Discriminated `discovery.plugins[].use` key** — commits
+  `40ab432` (path/builtin/command arms) and a follow-up adding the
+  fourth `run:` arm for interpreter-style invocations like
+  `deno run -A jsr:@scope/plugin`. Legacy string form errors with a
+  targeted hint pointing at `dv migrate config`.
 - **`dv migrate config`** — commit `5d5cd21`. Lives on the
   `subtools/config-migrations` subtool so the next breaking config
   change adds one `step-*.ts` file rather than growing this one
   command. Text-in / text-out per step so user comments survive
   the rewrite.
+
+### Known small issues
+
+These don't gate 1.0 — they're audit-finding-grade fixes worth
+batching whenever someone touches the adjacent code.
+
+- **`dv status` crashes when `.dv/records/` doesn't exist**
+  (`os error 2: readdir`). It should treat a missing records dir
+  the same as an empty one (no pending records). Hit when
+  scratch-testing the `run:` arm against a fresh repo that hadn't
+  called `dv init` first. Fix is small: `listRecords` should
+  catch `Deno.errors.NotFound` and return an empty listing.
 
 ### Deferred to later (architecturally accommodated)
 
