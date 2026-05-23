@@ -14,24 +14,14 @@ cross-cutting work that doesn't fit a single spec section.
 ### Breaking changes to land *before* the next 1.0 attempt
 
 We tried promoting `@seshat/dv` to 1.0.0 once and walked it back (see
-revert of `a9a32c1`) because this list became visible *during* the
-ceremony. Anything here would force a v2 if it landed post-1.0; SemVer
-treats them as breaking, so they have to ship first.
+revert of `a9a32c1`) because the use-key redesign became visible
+*during* the ceremony. Anything here would force a v2 if it landed
+post-1.0; SemVer treats them as breaking, so they have to ship first.
 
-- **Discriminated `discovery.plugins[]` use-key.** Today `use:` is
-  overloaded: a path-like string (`./examples/plugins/deno`) means
-  a local plugin; a bare name (`cargo`, `npm`) means an official
-  first-party plugin from the registry (none ship in v1, but the
-  resolution code already branches on this string-shape heuristic).
-  The intent is clear at sites where it's written, but parsers
-  can't tell from the YAML alone what kind of reference it is.
-  Borrow GitHub Actions' shape: separate keys (`path:` for local,
-  `builtin:` or `registry:` for official, possibly `executable:`
-  for "any binary on PATH" later) so the discriminator is explicit
-  in the source and lossless through Zod → JSON Schema. Migration
-  story: detect the old shape, emit a one-time warning pointing at
-  `dv migrate config` (which itself doesn't exist yet — call that
-  command's design work part of this thread).
+*(Empty for now — the discriminated use-key redesign and its
+migration command both landed pre-1.0, see Done below. The
+@seshat/dv → 1.0.0 ceremony can rerun once we've audited the
+remaining v1 commands.)*
 
 ### Commands still to implement
 
@@ -46,14 +36,19 @@ between milestone-class pieces of work.
   plugin authors. Sets up the env vars, pipes stdin, prints stdout.
 - **`dv plugin verify <plugin>`** — conformance check against
   `specs/schemas/plugin-responses.json` per Op the plugin declares.
-- **`dv migrate config`** — one-shot rewriter that takes the
-  pre-1.0 `use:` shape (string-overloaded) and rewrites it to the
-  post-redesign discriminated form. Not in `specs/cli.md` yet;
-  added to this list because the use-key redesign needs a
-  migration path.
 
-Done: `dv v1 <package>` (commit `06cc1de`). Not yet exercised against
-`@seshat/dv` itself — see the breaking-changes section above.
+Done:
+
+- **`dv v1 <package>`** — commit `06cc1de`. Not yet exercised
+  against `@seshat/dv` itself, pending another audit pass.
+- **Discriminated `discovery.plugins[].use` key** — commit
+  `40ab432`. `path:` / `builtin:` / `command:` arms; legacy string
+  form errors with a targeted hint pointing at `dv migrate config`.
+- **`dv migrate config`** — commit `5d5cd21`. Lives on the
+  `subtools/config-migrations` subtool so the next breaking config
+  change adds one `step-*.ts` file rather than growing this one
+  command. Text-in / text-out per step so user comments survive
+  the rewrite.
 
 ### Deferred to later (architecturally accommodated)
 

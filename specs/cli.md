@@ -237,6 +237,47 @@ About to commit core to 1.0.0 — this is a stability promise. Proceed? [y/N]
 
 ---
 
+## `dv migrate config`
+
+```
+dv migrate config [--dry-run] [--json]
+```
+
+Rewrites `.dv/config.yaml` to match the current schema shape. Each
+breaking config change between dv versions ships with one migration
+step in the [config-migrations subtool](../apps/cli/src/subtools/config-migrations/);
+this command walks every registered step against the file. Idempotent
+— running on an already-migrated config is a friendly no-op.
+
+The v1 release ships one step, `use-key-discriminated`, which
+rewrites the pre-1.0 string form of `use:` (and `publishing.plugin`,
+`overrides[].plugin-use`) into the tagged reference shape documented
+in [config-format.md § Plugin resolution](config-format.md#plugin-resolution).
+The migrator preserves the legacy resolver's exact shape heuristic
+so a migrated config behaves identically: path-shaped strings become
+`path:`, everything else becomes `builtin:`.
+
+| Flag        | Meaning                                                                                         |
+| ----------- | ----------------------------------------------------------------------------------------------- |
+| `--dry-run` | Report changes without writing the file. Exit 0 either way.                                     |
+| `--json`    | Emit `urn:dv:schema:v1:migrate-config-result` envelope on stdout. Suppresses the human summary. |
+
+```
+$ dv migrate config
+
+✓ migrated 1 change in /repo/.dv/config.yaml
+
+  use-key-discriminated — Rewrite the pre-1.0 string form of `use:` ...
+    discovery.plugins[0].use  ./examples/plugins/deno  →  path: ./examples/plugins/deno
+```
+
+User comments and surrounding whitespace are preserved verbatim
+across the rewrite — they explain *why* the config is shaped a
+certain way, and the migrator's text-based transform leaves them
+untouched.
+
+---
+
 ## `dv rename`
 
 ```

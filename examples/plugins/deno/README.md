@@ -14,7 +14,8 @@ discovery:
     - match:
         - "apps/*"
         - "packages/*"
-      use: ./examples/plugins/deno
+      use:
+        path: ./examples/plugins/deno
 ```
 
 ## What it implements

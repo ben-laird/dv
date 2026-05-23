@@ -211,7 +211,8 @@ wire it up in `config.yaml`:
 discovery:
   plugins:
     - match: "packages/legacy-thing"
-      use: ./.dv/plugins/version-file
+      use:
+        path: ./.dv/plugins/version-file
 ```
 
 ## Developing and testing plugins

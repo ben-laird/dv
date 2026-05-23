@@ -40,12 +40,15 @@ release Plugin for publishing. Edit `.dv/config.yaml`:
 discovery:
   plugins:
     - match: "packages/*"
-      use: ./.dv/plugins/cargo
+      use:
+        path: ./.dv/plugins/cargo
     - match: "tools/*"
-      use: ./.dv/plugins/npm
+      use:
+        path: ./.dv/plugins/npm
 
 publishing:
-  plugin: ./.dv/plugins/publish
+  plugin:
+    path: ./.dv/plugins/publish
 ```
 
 (The example Plugins shipped with `dv` are copyable starting points — see
