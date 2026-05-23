@@ -11,15 +11,34 @@ cross-cutting work that doesn't fit a single spec section.
 
 ## v1 product scope
 
+### Breaking changes to land *before* the next 1.0 attempt
+
+We tried promoting `@seshat/dv` to 1.0.0 once and walked it back (see
+revert of `a9a32c1`) because this list became visible *during* the
+ceremony. Anything here would force a v2 if it landed post-1.0; SemVer
+treats them as breaking, so they have to ship first.
+
+- **Discriminated `discovery.plugins[]` use-key.** Today `use:` is
+  overloaded: a path-like string (`./examples/plugins/deno`) means
+  a local plugin; a bare name (`cargo`, `npm`) means an official
+  first-party plugin from the registry (none ship in v1, but the
+  resolution code already branches on this string-shape heuristic).
+  The intent is clear at sites where it's written, but parsers
+  can't tell from the YAML alone what kind of reference it is.
+  Borrow GitHub Actions' shape: separate keys (`path:` for local,
+  `builtin:` or `registry:` for official, possibly `executable:`
+  for "any binary on PATH" later) so the discriminator is explicit
+  in the source and lossless through Zod → JSON Schema. Migration
+  story: detect the old shape, emit a one-time warning pointing at
+  `dv migrate config` (which itself doesn't exist yet — call that
+  command's design work part of this thread).
+
 ### Commands still to implement
 
 These are spec'd in [specs/cli.md](specs/cli.md) as v1 commands — not
 deferred, just not built yet. Listed here so they don't get lost
 between milestone-class pieces of work.
 
-- **`dv v1 <package>`** — gated, celebrated 0.x → 1.0.0 promotion.
-  No Record type can produce 1.0.0; this is the one command that
-  can. Up next as of this writing.
 - **`dv rename <from> <to>`** — append a lineage edge to the rename
   ledger so an old name resolves to a new one. Pure bookkeeping;
   never touches the package itself.
@@ -27,6 +46,14 @@ between milestone-class pieces of work.
   plugin authors. Sets up the env vars, pipes stdin, prints stdout.
 - **`dv plugin verify <plugin>`** — conformance check against
   `specs/schemas/plugin-responses.json` per Op the plugin declares.
+- **`dv migrate config`** — one-shot rewriter that takes the
+  pre-1.0 `use:` shape (string-overloaded) and rewrites it to the
+  post-redesign discriminated form. Not in `specs/cli.md` yet;
+  added to this list because the use-key redesign needs a
+  migration path.
+
+Done: `dv v1 <package>` (commit `06cc1de`). Not yet exercised against
+`@seshat/dv` itself — see the breaking-changes section above.
 
 ### Deferred to later (architecturally accommodated)
 
