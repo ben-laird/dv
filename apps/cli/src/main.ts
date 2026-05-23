@@ -16,6 +16,7 @@ import { runStatus } from "./cli/status.ts";
 import { runValidate } from "./cli/validate.ts";
 import { runVersion } from "./cli/version.ts";
 import { CHANGE_TYPES, isChangeType } from "./domain/change-type.ts";
+import { DV_VERSION } from "./dv-version.ts";
 import { CONFIG_DIR, configPath, recordsPath } from "./subtools/config/mod.ts";
 
 const USAGE_TEXT = `dv — language-agnostic, git-native changelog CLI
@@ -32,8 +33,6 @@ Usage:
 
 Milestones 1–3 are landing; the rest of v1 follows specs/v1-scope.md.
 `;
-
-const DV_VERSION = "0.1.0";
 
 const initCommand = defineCommand({
   flags: {

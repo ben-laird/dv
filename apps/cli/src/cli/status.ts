@@ -2,6 +2,7 @@ import type { Config, PluginAssignment } from "../domain/config.ts";
 import { DvError } from "../domain/errors.ts";
 import type { Package } from "../domain/package.ts";
 import type { Version } from "../domain/version.ts";
+import { DV_TAGLINE, DV_VERSION } from "../dv-version.ts";
 import { configPath, loadConfig, recordsPath } from "../subtools/config/mod.ts";
 import { discoverPackages } from "../subtools/discovery/mod.ts";
 import {
@@ -198,6 +199,18 @@ function renderHumanStatus(args: RenderHumanStatusArgs): void {
   const styler = makeStyler(colorEnabled);
 
   console.log("");
+  // Banner: one styled line at the top of the most-common entry
+  // command. Dim so it doesn't compete with the content; suppressed
+  // entirely under --json (which doesn't hit this renderer at all)
+  // and --no-color (where the dim style would render as plain text
+  // and just look like extra noise). NO_COLOR is honored by way of
+  // resolveColorEnabled in main.ts flipping colorEnabled to false.
+  if (colorEnabled) {
+    console.log(
+      `${styler.dim(`┌─ ${styler.bold("dv")}  ${DV_TAGLINE}  v${DV_VERSION}`)}`,
+    );
+    console.log("");
+  }
 
   if (discoveredPackages.length === 0) {
     console.log(styler.dim("no packages tracked"));
