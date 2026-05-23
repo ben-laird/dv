@@ -207,7 +207,7 @@ function renderHumanStatus(args: RenderHumanStatusArgs): void {
   // resolveColorEnabled in main.ts flipping colorEnabled to false.
   if (colorEnabled) {
     console.log(
-      `${styler.dim(`┌─ ${styler.bold("dv")}  ${DV_TAGLINE}  v${DV_VERSION}`)}`,
+      `${styler.dim(`${styler.bold("dv")}  ${DV_TAGLINE}  v${DV_VERSION}`)}`,
     );
     console.log("");
   }
