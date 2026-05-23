@@ -13,6 +13,7 @@ import { runAdd } from "./cli/add.ts";
 import { runInit } from "./cli/init.ts";
 import { runRelease } from "./cli/release.ts";
 import { runStatus } from "./cli/status.ts";
+import { runV1 } from "./cli/v1.ts";
 import { runValidate } from "./cli/validate.ts";
 import { runVersion } from "./cli/version.ts";
 import { CHANGE_TYPES, isChangeType } from "./domain/change-type.ts";
@@ -28,6 +29,7 @@ Usage:
   dv validate [--json]                 Lint records and config (CI-friendly)
   dv version [--dry-run --prune …]     Consume Records → bump, CHANGELOG, commit
   dv release [--dry-run --push --yes]  Mint per-Package tags + fire release plugins
+  dv v1 <package> [--yes …]            Promote a 0.x Package to 1.0.0 (the stability promise)
   dv --help                            Show this message
   dv --version                         Show the dv version
 
@@ -305,6 +307,61 @@ const releaseCommand = defineCommand({
   },
 });
 
+const v1Command = defineCommand({
+  flags: {
+    "dry-run": { kind: "boolean" },
+    "no-dry-run": { kind: "boolean" },
+    "no-commit": { kind: "boolean" },
+    prune: { kind: "boolean" },
+    yes: { kind: "boolean", alias: "y" },
+    "allow-dirty": { kind: "boolean" },
+    "no-allow-dirty": { kind: "boolean" },
+    json: { kind: "boolean" },
+    color: { kind: "boolean" },
+    "no-color": { kind: "boolean" },
+  },
+  usage:
+    "Usage: dv v1 <package> [--dry-run] [--no-commit] [--prune] [--yes] [--allow-dirty] [--json]",
+  run: async ({ argv, flags }) => {
+    if (argv.length !== 1) {
+      console.error(
+        `dv v1: expected exactly one <package> argument; got ${argv.length}`,
+      );
+      console.error("run 'dv v1 --help' for usage");
+      return 2;
+    }
+    const packageName = argv[0] ?? "";
+    const dryRunOverride =
+      flags["no-dry-run"] === true
+        ? false
+        : flags["dry-run"] === true
+          ? true
+          : undefined;
+    const allowDirtyOverride =
+      flags["no-allow-dirty"] === true
+        ? false
+        : flags["allow-dirty"] === true
+          ? true
+          : undefined;
+    const colorEnabled = resolveColorEnabled({
+      forceColor: flags.color === true,
+      suppressColor: flags["no-color"] === true,
+      emitJson: flags.json === true,
+    });
+    await runV1({
+      packageName,
+      dryRun: dryRunOverride,
+      noCommit: flags["no-commit"] === true,
+      prune: flags.prune === true,
+      yes: flags.yes === true,
+      allowDirty: allowDirtyOverride,
+      emitJson: flags.json === true,
+      colorEnabled,
+    });
+    return 0;
+  },
+});
+
 function expandCommaSeparated(
   rawValues: string[] | undefined,
 ): string[] | undefined {
@@ -416,6 +473,7 @@ export function main(argv: string[]): Promise<number> {
       validate: validateCommand,
       version: versionCommand,
       release: releaseCommand,
+      v1: v1Command,
     },
     reportError: makeReportDvError(detectedMode),
   });

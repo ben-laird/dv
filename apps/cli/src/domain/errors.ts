@@ -124,7 +124,18 @@ export type DvErrorShape =
   | {
       code: "release-partial-failure";
       context: { failedCount: number; totalAttempted: number };
-    };
+    }
+
+  // === v1 promotion ==============================================
+  | {
+      code: "v1-package-not-found";
+      context: { requestedPackage: string; knownPackages: string[] };
+    }
+  | {
+      code: "v1-already-stable";
+      context: { package: string; currentVersion: string };
+    }
+  | { code: "v1-cancelled" };
 
 // DvError is the throw type for every dv-internal failure. Extends
 // CliError with the DvErrorShape union pinned, so throw sites get
