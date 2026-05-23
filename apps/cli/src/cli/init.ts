@@ -13,7 +13,8 @@ const STARTER_CONFIG = `# dv configuration. See https://dv.dev/schema/v1.yaml fo
 # discovery:
 #   plugins:
 #     - match: "packages/*"
-#       use: ./examples/plugins/deno
+#       use:
+#         run: deno run -A ./examples/plugins/deno/main.ts
 #
 # tagging:
 #   format: "{package}@{version}"

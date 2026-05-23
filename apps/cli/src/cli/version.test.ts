@@ -533,11 +533,12 @@ async function setUpCascadeFixture(
   }).output();
 
   // Resolve the real example plugin from this test file's location so
-  // we exercise the same Op scripts dogfooded against the dv repo.
+  // we exercise the same dispatcher dogfooded against the dv repo.
+  // The example is a single-file main.ts invoked via the `run:` arm.
   const thisFileDir = fromFileUrl(new URL(".", import.meta.url));
-  const examplePluginPath = resolve(
+  const realPluginMainPath = resolve(
     thisFileDir,
-    "../../../../examples/plugins/deno",
+    "../../../../examples/plugins/deno/main.ts",
   );
 
   const changelogDir = join(repoRootPath, ".dv");
@@ -548,7 +549,7 @@ async function setUpCascadeFixture(
   plugins:
     - match: "packages/*"
       use:
-        path: ${examplePluginPath}
+        run: deno run -A ${realPluginMainPath}
 `,
   );
 

@@ -139,7 +139,7 @@ discovery:
   plugins:
     - match: "apps/*"
       use:
-        path: ./examples/plugins/deno     # local file or directory
+        path: ./scripts/my-plugin         # local file or directory
     - match: "crates/*"
       use:
         builtin: cargo                    # first-party plugin (none ship in v1)
