@@ -265,6 +265,28 @@ editors give autocomplete and validation. That recovers the type-safety
 ergonomics of a TS config without any of the runtime cost or portability
 debt.
 
+**Considered: JSON / JSONC** (matching Biome, Turborepo, Nx, Lerna,
+Changesets). Rejected because:
+
+- `dv` config carries prose comments — explaining why a plugin is
+  wired the way it is, why a particular override exists. Plain JSON
+  can't hold them; JSONC keeps them but requires a custom parser
+  every consumer must ship.
+- The "ecosystem proximity" argument cuts both ways. Biome /
+  Turborepo are in dv's neighborhood for "monorepo tooling," but
+  GitHub Actions, Helm, Ansible, Kubernetes, GitLab CI, and
+  CircleCI are arguably closer for "declarative orchestration of
+  executables" — and they're all YAML. `dv` belongs more to that
+  family than to the JS-tooling family.
+- The list-heavy shape of dv's config (nested `match` arrays,
+  `extends` chains, `overrides`) reads cleaner in YAML than in
+  JSON.
+- The strongest pro-JSON argument is autocomplete in editors. The
+  generated JSON Schema at `specs/schemas/config.json` plus the
+  `# yaml-language-server: $schema=...` directive at the top of
+  `.dv/config.yaml` gives us that — without giving up comments or
+  readability.
+
 #### Structure
 
 The config's *structure* is modeled on Biome's `biome.json`: top-level
