@@ -13,6 +13,7 @@ import { runAdd } from "./cli/add.ts";
 import { runInit } from "./cli/init.ts";
 import { runMigrateConfig } from "./cli/migrate.ts";
 import { runRelease } from "./cli/release.ts";
+import { runRename } from "./cli/rename.ts";
 import { runStatus } from "./cli/status.ts";
 import { runV1 } from "./cli/v1.ts";
 import { runValidate } from "./cli/validate.ts";
@@ -31,6 +32,7 @@ Usage:
   dv version [--dry-run --prune …]     Consume Records → bump, CHANGELOG, commit
   dv release [--dry-run --push --yes]  Mint per-Package tags + fire release plugins
   dv v1 <package> [--yes …]            Promote a 0.x Package to 1.0.0 (the stability promise)
+  dv rename <old> <new> [--at <ver>]   Append a lineage edge to the rename ledger
   dv migrate config [--dry-run]        Rewrite .dv/config.yaml to the current schema shape
   dv --help                            Show this message
   dv --version                         Show the dv version
@@ -364,6 +366,42 @@ const v1Command = defineCommand({
   },
 });
 
+const renameCommand = defineCommand({
+  flags: {
+    at: { kind: "string" },
+    "dry-run": { kind: "boolean" },
+    json: { kind: "boolean" },
+    color: { kind: "boolean" },
+    "no-color": { kind: "boolean" },
+  },
+  usage: "Usage: dv rename <old> <new> [--at <version>] [--dry-run] [--json]",
+  run: async ({ argv, flags }) => {
+    if (argv.length !== 2) {
+      console.error(
+        `dv rename: expected exactly two arguments <old> <new>; got ${argv.length}`,
+      );
+      console.error("run 'dv rename --help' for usage");
+      return 2;
+    }
+    const fromPackageName = argv[0] ?? "";
+    const toPackageName = argv[1] ?? "";
+    const colorEnabled = resolveColorEnabled({
+      forceColor: flags.color === true,
+      suppressColor: flags["no-color"] === true,
+      emitJson: flags.json === true,
+    });
+    await runRename({
+      fromPackageName,
+      toPackageName,
+      atVersionOverride: flags.at,
+      dryRun: flags["dry-run"] === true,
+      emitJson: flags.json === true,
+      colorEnabled,
+    });
+    return 0;
+  },
+});
+
 // `dv migrate` is a compound subcommand (`dv migrate config` is
 // the only one in v1). Multi-level subcommand dispatch isn't a
 // framework feature yet — when `dv plugin invoke` / `dv plugin
@@ -525,6 +563,7 @@ export function main(argv: string[]): Promise<number> {
       version: versionCommand,
       release: releaseCommand,
       v1: v1Command,
+      rename: renameCommand,
       migrate: migrateCommand,
     },
     reportError: makeReportDvError(detectedMode),

@@ -29,9 +29,6 @@ These are spec'd in [specs/cli.md](specs/cli.md) as v1 commands — not
 deferred, just not built yet. Listed here so they don't get lost
 between milestone-class pieces of work.
 
-- **`dv rename <from> <to>`** — append a lineage edge to the rename
-  ledger so an old name resolves to a new one. Pure bookkeeping;
-  never touches the package itself.
 - **`dv plugin invoke <plugin> <op>`** — single-Op debugger for
   plugin authors. Sets up the env vars, pipes stdin, prints stdout.
 - **`dv plugin verify <plugin>`** — conformance check against
@@ -39,6 +36,15 @@ between milestone-class pieces of work.
 
 Done:
 
+- **`dv rename <from> <to>`** — appends a lineage edge to
+  `.dv/renames.yaml` (text-append so user comments survive). The
+  `at` field is inferred from discovery's current version of the
+  new package; `--at <version>` overrides the inference for cases
+  where discovery can't reach the new name yet (e.g. unassigned
+  glob, backdating). Refuses to add a duplicate outgoing edge
+  from the same `from` — that would make Algebra §8's closure
+  non-functional. Bookkeeping only: never touches the actual
+  package.
 - **`dv v1 <package>`** — commit `06cc1de`. Not yet exercised
   against `@seshat/dv` itself, pending another audit pass.
 - **Discriminated `discovery.plugins[].use` key** — commits
