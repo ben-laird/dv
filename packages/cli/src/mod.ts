@@ -31,3 +31,37 @@ export {
   type DefaultCliErrorShape,
 } from "./errors.ts";
 export { type RenderCliErrorArgs, renderCliError } from "./render-cli-error.ts";
+
+// Router-based API (the new shape). The legacy `defineCli({commands})`
+// exports above are kept temporarily so the migration can proceed
+// command-by-command; they will be deleted in a follow-up commit.
+export {
+  type Cli as RouterCli,
+  type CliHandler,
+  type CliRequest,
+  type CliResponse,
+  type CommandNode,
+  type CommandRequest,
+  type CommandSpec as RouterCommandSpec,
+  type CtxBoundBuilders,
+  type DefaultDispatch,
+  type DefineCliRouterConfig,
+  type DoneStep,
+  type NextStep,
+  type OutputMode,
+  type OutputModeContext,
+  type ResolveOutputMode,
+  type RouterChild,
+  type RouterNode,
+  type RouterSpec,
+  type Step,
+  command,
+  defineCliRouter,
+  done,
+  forCtx,
+  formatCommandHelp,
+  formatRouterHelp,
+  inheritedFlags,
+  next,
+  router,
+} from "./router/mod.ts";

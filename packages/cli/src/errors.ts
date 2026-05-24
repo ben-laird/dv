@@ -44,6 +44,13 @@ export type DefaultCliErrorShape = {
 // than `{ kind: { code, context }, message, ... }` — the class itself
 // nests them. Narrowed per discriminated-union arm: `code` accepts
 // only the union's literal codes, `context` follows the matched arm.
+//
+// `exitCode` is optional and lives on the error itself because the
+// right exit code is a property of *what failed*, not of how the
+// failure is transported. Specific codes warrant specific codes
+// (`unknown-flag` should always be 2, `dirty-tree` always 1); the
+// framework's response renderer reads it directly. Omit to default
+// to 1 at render time.
 export type CliErrorInit<
   TShape extends CliErrorShape = DefaultCliErrorShape,
 > = TShape extends CliErrorShape
@@ -52,6 +59,7 @@ export type CliErrorInit<
       message: string;
       hint?: string;
       severity?: "error" | "warning";
+      exitCode?: number;
       cause?: unknown;
       subErrors?: CliError[];
     } & (TShape extends { context: infer X }
@@ -86,6 +94,9 @@ export class CliError<
   readonly kind: TShape;
   readonly hint?: string;
   readonly severity: "error" | "warning";
+  // The right exit code is a property of what failed, not of how
+  // it's transported. Optional; framework defaults to 1 when omitted.
+  readonly exitCode?: number;
   // subErrors carry their own (typically different) shape; erased to
   // the default at the array boundary so the parent doesn't have to
   // declare them.
@@ -107,6 +118,7 @@ export class CliError<
       : { code: init.code }) as TShape;
     this.hint = init.hint;
     this.severity = init.severity ?? "error";
+    this.exitCode = init.exitCode;
     this.subErrors = init.subErrors ?? [];
   }
 
