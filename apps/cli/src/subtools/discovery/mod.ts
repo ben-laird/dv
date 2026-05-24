@@ -66,13 +66,17 @@ export async function discoverPackages(
   return allDiscoveredPackages;
 }
 
-interface RunDiscoveryAssignmentArgs {
+export interface RunDiscoveryAssignmentArgs {
   pluginAssignment: PluginAssignment;
   assignmentIndex: number;
   repoRootPath: string;
 }
 
-async function runDiscoveryAssignment(
+// Exported so `dv plugin list` can audit one assignment at a time
+// — the per-plugin packages list is the grouping it shows, which
+// `discoverPackages` collapses across assignments. Same contract,
+// no parallel implementation of glob handling or env construction.
+export async function runDiscoveryAssignment(
   args: RunDiscoveryAssignmentArgs,
 ): Promise<Package[]> {
   const { pluginAssignment, assignmentIndex, repoRootPath } = args;

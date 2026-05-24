@@ -12,6 +12,14 @@ import { join, relative } from "@std/path";
 import { runAdd } from "./cli/add.ts";
 import { runInit } from "./cli/init.ts";
 import { runMigrateConfig } from "./cli/migrate.ts";
+import {
+  isPluginOpName,
+  PLUGIN_OP_NAMES,
+  type PluginOpName,
+  runPluginInvoke,
+} from "./cli/plugin-invoke.ts";
+import { runPluginList } from "./cli/plugin-list.ts";
+import { runPluginVerify } from "./cli/plugin-verify.ts";
 import { runRelease } from "./cli/release.ts";
 import { runRename } from "./cli/rename.ts";
 import { runStatus } from "./cli/status.ts";
@@ -33,6 +41,9 @@ Usage:
   dv release [--dry-run --push --yes]  Mint per-Package tags + fire release plugins
   dv v1 <package> [--yes …]            Promote a 0.x Package to 1.0.0 (the stability promise)
   dv rename <old> <new> [--at <ver>]   Append a lineage edge to the rename ledger
+  dv plugin list                       Resolve every plugin in the config and show its packages
+  dv plugin invoke <plug> <op>         Run one plugin Op with controlled inputs (debugger)
+  dv plugin verify <plug>              Conformance smoke test against a plugin (CI-friendly)
   dv migrate config [--dry-run]        Rewrite .dv/config.yaml to the current schema shape
   dv --help                            Show this message
   dv --version                         Show the dv version
@@ -402,6 +413,124 @@ const renameCommand = defineCommand({
   },
 });
 
+// `dv plugin` is a compound subcommand fan-out:
+//   - `dv plugin list`              — read-only config audit
+//   - `dv plugin invoke <plug> <op>`— single-Op debugger
+//   - `dv plugin verify <plug>`     — conformance smoke test
+//
+// Multi-level subcommand dispatch isn't a framework feature yet
+// (TODO: tree router inspired by Hono/tRPC, to be designed
+// separately). Until then, every nested-subcommand flag belongs
+// here and we route by hand: the union of every leaf's flag set
+// is declared on the spec, then the leaf is picked from argv[0].
+const pluginCommand = defineCommand({
+  flags: {
+    // shared
+    json: { kind: "boolean" },
+    color: { kind: "boolean" },
+    "no-color": { kind: "boolean" },
+    // invoke / verify
+    "repo-root": { kind: "string" },
+    glob: { kind: "string" },
+    // invoke
+    package: { kind: "string", alias: "p" },
+    path: { kind: "string" },
+    "new-version": { kind: "string" },
+    "git-tag": { kind: "string" },
+    "stdin-json": { kind: "string" },
+  },
+  usage:
+    "Usage: dv plugin <list|invoke|verify> ... — run `dv plugin <sub> --help` for the per-sub flags",
+  run: async ({ argv, flags }) => {
+    const subcommand = argv[0];
+    if (subcommand === undefined) {
+      console.error(
+        "dv plugin: missing subcommand (one of: list, invoke, verify)",
+      );
+      console.error("run 'dv plugin --help' for usage");
+      return 2;
+    }
+    const colorEnabled = resolveColorEnabled({
+      forceColor: flags.color === true,
+      suppressColor: flags["no-color"] === true,
+      emitJson: flags.json === true,
+    });
+
+    if (subcommand === "list") {
+      if (argv.length > 1) {
+        console.error(
+          `dv plugin list: unexpected arguments: ${argv.slice(1).join(" ")}`,
+        );
+        return 2;
+      }
+      const listResult = await runPluginList({
+        emitJson: flags.json === true,
+        colorEnabled,
+      });
+      // Exit 1 if any plugin failed to resolve or discover — same
+      // CI-friendly convention dv validate uses for record errors.
+      return listResult.hasFailures ? 1 : 0;
+    }
+
+    if (subcommand === "invoke") {
+      if (argv.length !== 3) {
+        console.error(
+          `dv plugin invoke: expected <plugin> <op>; got ${argv.length - 1} argument${argv.length - 1 === 1 ? "" : "s"}`,
+        );
+        console.error("run 'dv plugin invoke --help' for usage");
+        return 2;
+      }
+      const pluginPositional = argv[1] ?? "";
+      const rawOpName = argv[2] ?? "";
+      if (!isPluginOpName(rawOpName)) {
+        console.error(
+          `dv plugin invoke: unknown op '${rawOpName}' (one of: ${PLUGIN_OP_NAMES.join(", ")})`,
+        );
+        return 2;
+      }
+      const opName: PluginOpName = rawOpName;
+      await runPluginInvoke({
+        pluginPositional,
+        opName,
+        packageName: flags.package,
+        packagePath: flags.path,
+        repoRoot: flags["repo-root"],
+        discoverGlob: flags.glob,
+        newVersion: flags["new-version"],
+        gitTag: flags["git-tag"],
+        stdinJson: flags["stdin-json"],
+        emitJson: flags.json === true,
+        colorEnabled,
+      });
+      return 0;
+    }
+
+    if (subcommand === "verify") {
+      if (argv.length !== 2) {
+        console.error(
+          `dv plugin verify: expected <plugin>; got ${argv.length - 1} argument${argv.length - 1 === 1 ? "" : "s"}`,
+        );
+        console.error("run 'dv plugin verify --help' for usage");
+        return 2;
+      }
+      const pluginPositional = argv[1] ?? "";
+      const verifyResult = await runPluginVerify({
+        pluginPositional,
+        repoRoot: flags["repo-root"],
+        discoverGlob: flags.glob,
+        emitJson: flags.json === true,
+        colorEnabled,
+      });
+      return verifyResult.failedCount > 0 ? 1 : 0;
+    }
+
+    console.error(
+      `dv plugin: unknown subcommand '${subcommand}' (one of: list, invoke, verify)`,
+    );
+    return 2;
+  },
+});
+
 // `dv migrate` is a compound subcommand (`dv migrate config` is
 // the only one in v1). Multi-level subcommand dispatch isn't a
 // framework feature yet — when `dv plugin invoke` / `dv plugin
@@ -564,6 +693,7 @@ export function main(argv: string[]): Promise<number> {
       release: releaseCommand,
       v1: v1Command,
       rename: renameCommand,
+      plugin: pluginCommand,
       migrate: migrateCommand,
     },
     reportError: makeReportDvError(detectedMode),

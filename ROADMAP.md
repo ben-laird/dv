@@ -23,19 +23,31 @@ migration command both landed pre-1.0, see Done below. The
 @seshat/dv → 1.0.0 ceremony can rerun once we've audited the
 remaining v1 commands.)*
 
-### Commands still to implement
+### Commands shipped (the v1 surface)
 
-These are spec'd in [specs/cli.md](specs/cli.md) as v1 commands — not
-deferred, just not built yet. Listed here so they don't get lost
-between milestone-class pieces of work.
+The full v1 command set in [specs/cli.md](specs/cli.md) now exists.
+This section is the running log of how each one landed; the spec is
+authoritative for behavior.
 
-- **`dv plugin invoke <plugin> <op>`** — single-Op debugger for
-  plugin authors. Sets up the env vars, pipes stdin, prints stdout.
-- **`dv plugin verify <plugin>`** — conformance check against
-  `specs/schemas/plugin-responses.json` per Op the plugin declares.
-
-Done:
-
+- **`dv plugin list`** — read-only audit. Resolves every plugin
+  in `.dv/config.yaml`, runs per-assignment discovery, and shows
+  which packages each plugin claims. Non-fatal per-row: a broken
+  plugin produces a `resolve-failed` / `discover-failed` row
+  without hiding the rest. Complements `dv plugin verify`
+  (per-plugin deep check) and `dv status` (per-Record preview).
+- **`dv plugin invoke <plugin> <op>`** — single-Op debugger.
+  Routes through `resolvePlugin` + `invokeOp` + the per-Op
+  `parse*Response` so any contract drift surfaces here too (no
+  parallel implementation). Positional `<plugin>` accepts the
+  same discriminated forms as config (`path:`, `command:`,
+  `builtin:`, `run:`) plus shape-inferred bare tokens.
+- **`dv plugin verify <plugin>`** — conformance smoke test for
+  CI. Runs `discover`, `read-version` per discovered package, and
+  a bad-op exit-code check. Side-effectful ops
+  (`write-version`, `update-dependency`, `release`) report as
+  `skipped` rather than executed — there's no safe auto-undo for
+  a manifest write or publish; authors should use `dv plugin
+  invoke` against a throwaway fixture for those.
 - **`dv rename <from> <to>`** — appends a lineage edge to
   `.dv/renames.yaml` (text-append so user comments survive). The
   `at` field is inferred from discovery's current version of the
