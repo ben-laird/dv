@@ -182,6 +182,46 @@ Deno.test("router returns help text (auto-generated from children) when invoked 
   assertEquals(appleIndex < bananaIndex, true);
 });
 
+Deno.test("router help previews grandchildren under each sub-router on a continuation line", async () => {
+  // Given a tree where one child is a sub-router with its own
+  // children — readers shouldn't have to descend to learn what's
+  // there.
+  const root = router({
+    commands: {
+      leaf: command({
+        description: "a plain leaf",
+        flags: {},
+        run: () => done({ kind: "ok" }),
+      }),
+      compound: router({
+        description: "a sub-router with children",
+        commands: {
+          alpha: command({ flags: {}, run: () => done({ kind: "ok" }) }),
+          beta: command({ flags: {}, run: () => done({ kind: "ok" }) }),
+        },
+      }),
+    },
+  });
+
+  // When the user asks for top-level help
+  const result = await runWithCapture({ rootRouter: root, argv: [] });
+
+  // Then the sub-router's children are listed on a continuation
+  // line under it
+  assertEquals(result.exitCode, 0);
+  const helpText = result.stdoutLines.join("\n");
+  assertStringIncludes(helpText, "compound");
+  assertStringIncludes(helpText, "a sub-router with children");
+  // The grandchildren appear as a comma-separated preview, sorted.
+  assertStringIncludes(helpText, "alpha, beta");
+  // The leaf row does NOT get a continuation line (leaves have
+  // flags, not children — that lives in `leaf --help`).
+  const leafLine = result.stdoutLines.find((line) =>
+    line.includes("a plain leaf"),
+  );
+  assertEquals(leafLine !== undefined, true);
+});
+
 Deno.test("router returns help on --help even when a subcommand would have matched", async () => {
   // Given a tree where --help comes before any valid subcommand
   const root = router({

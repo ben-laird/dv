@@ -28,7 +28,7 @@ import { resolveColorEnabled, sharedOutputFlags } from "./shared-flags.ts";
 const { command, router } = forCtx<DvCtx>();
 
 export const pluginRouter = router({
-  description: "Plugin authoring + audit commands (list / invoke / verify)",
+  description: "Plugin authoring + audit commands",
   commands: {
     list: command({
       description: "Resolve every plugin in the config and show its packages",

@@ -51,6 +51,10 @@ export function formatRouterHelp<Ctx>(args: FormatRouterHelpArgs<Ctx>): string {
     (widest, [name]) => Math.max(widest, name.length),
     0,
   );
+  // Continuation lines for sub-router previews indent to where the
+  // description column starts, so a reader's eye follows from the
+  // parent description down to its inline child list.
+  const continuationIndent = " ".repeat(2 + widestName + 2);
 
   const lines: string[] = [];
   lines.push(`Usage: ${breadcrumb} <subcommand> [...]`);
@@ -66,6 +70,20 @@ export function formatRouterHelp<Ctx>(args: FormatRouterHelpArgs<Ctx>): string {
     lines.push(
       `  ${bold(paddedName, colorEnabled)}${dim(description, colorEnabled)}`,
     );
+    // For sub-routers, preview the grandchildren on a continuation
+    // line so `dv --help` shows what's inside `dv plugin` /
+    // `dv migrate` without making the reader drill down. Leaves
+    // get no continuation (their flags live in `<name> --help`).
+    if (childNode.kind === "router") {
+      const grandchildNames = Object.keys(childNode.children).sort(
+        (left, right) => left.localeCompare(right),
+      );
+      if (grandchildNames.length > 0) {
+        lines.push(
+          `${continuationIndent}${dim(grandchildNames.join(", "), colorEnabled)}`,
+        );
+      }
+    }
   }
   lines.push("");
   lines.push(`Run \`${breadcrumb} <subcommand> --help\` for per-command flags.`);
