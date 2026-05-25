@@ -1,6 +1,5 @@
 import { assertEquals } from "@std/assert";
-import type { FlagSpec } from "./command-spec.ts";
-import { lowerFlagSpec } from "./flag-spec.ts";
+import { type FlagSpec, lowerFlagSpec } from "./flag-spec.ts";
 
 Deno.test("lowerFlagSpec assigns each flag to its kind's array", () => {
   // Given one flag of each kind

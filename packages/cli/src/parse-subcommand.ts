@@ -1,6 +1,5 @@
 import { parseArgs } from "@std/cli/parse-args";
-import type { FlagSpec, FlagsOf, RunnerContext } from "./command-spec.ts";
-import { lowerFlagSpec } from "./flag-spec.ts";
+import { type FlagSpec, type FlagsOf, lowerFlagSpec } from "./flag-spec.ts";
 
 // Internal sentinel: an unknown flag (a token starting with `-` that
 // isn't declared) becomes this throw, caught by defineCli's dispatch
@@ -23,9 +22,16 @@ export interface ParseSubcommandArgvArgs<
   subcommandArgv: string[];
 }
 
+export interface ParseSubcommandArgvResult<
+  TFlagMap extends Record<string, FlagSpec>,
+> {
+  flags: FlagsOf<TFlagMap>;
+  argv: string[];
+}
+
 export function parseSubcommandArgv<TFlagMap extends Record<string, FlagSpec>>(
   args: ParseSubcommandArgvArgs<TFlagMap>,
-): RunnerContext<TFlagMap> {
+): ParseSubcommandArgvResult<TFlagMap> {
   const lowered = lowerFlagSpec(args.flagSpecMap);
   const parsed = parseArgs(args.subcommandArgv, {
     string: lowered.string,

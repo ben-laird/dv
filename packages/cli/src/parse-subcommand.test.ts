@@ -1,5 +1,5 @@
 import { assertEquals, assertThrows } from "@std/assert";
-import type { FlagSpec } from "./command-spec.ts";
+import type { FlagSpec } from "./flag-spec.ts";
 import {
   parseSubcommandArgv,
   UnknownFlagError,

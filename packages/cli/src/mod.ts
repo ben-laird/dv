@@ -1,8 +1,12 @@
-// Public surface of @seshat/cli — a minimal argv-dispatch CLI
-// framework. Tiny on purpose: register subcommands with typed flag
-// specs, get a `Cli` that routes argv. Errors go through CliError +
-// renderCliError so human-stderr and --json envelope outputs flow
-// from one structured shape.
+// Public surface of @seshat/cli. The framework is a router-based,
+// trampoline-dispatched CLI builder: define a tree of `command()`
+// leaves and `router()` nodes, hand the root to `defineCli`, and the
+// framework owns argv parsing, dispatch, help generation, and error
+// rendering. See `./router/` for the implementation.
+//
+// Error envelopes use CliError + renderCliError for consistent
+// human/JSON output. Consumers extend CliError with their own
+// discriminated-union error shapes for typed catch-site narrowing.
 
 export {
   type RawCliErrorEnvelope,
@@ -10,19 +14,6 @@ export {
   rawCliErrorEnvelopeSchema,
   rawCliErrorPayloadSchema,
 } from "./cli-error-schema.ts";
-export { defineCommand } from "./command-spec.ts";
-export type {
-  Cli,
-  CliConfig,
-  CommandRunner,
-  CommandSpec,
-  FlagSpec,
-  FlagsOf,
-  ReportErrorContext,
-  ReportErrorHook,
-  RunnerContext,
-} from "./command-spec.ts";
-export { defineCli } from "./define-cli.ts";
 export {
   CliError,
   type CliErrorInit,
@@ -30,22 +21,26 @@ export {
   type CliErrorShape,
   type DefaultCliErrorShape,
 } from "./errors.ts";
+export {
+  type FlagSpec,
+  type FlagsOf,
+  type LoweredFlagSpec,
+  lowerFlagSpec,
+} from "./flag-spec.ts";
 export { type RenderCliErrorArgs, renderCliError } from "./render-cli-error.ts";
 
-// Router-based API (the new shape). The legacy `defineCli({commands})`
-// exports above are kept temporarily so the migration can proceed
-// command-by-command; they will be deleted in a follow-up commit.
+// Router framework — the main surface consumers build CLIs against.
 export {
-  type Cli as RouterCli,
+  type Cli,
   type CliHandler,
   type CliRequest,
   type CliResponse,
   type CommandNode,
   type CommandRequest,
-  type CommandSpec as RouterCommandSpec,
+  type CommandSpec,
   type CtxBoundBuilders,
   type DefaultDispatch,
-  type DefineCliRouterConfig,
+  type DefineCliConfig,
   type DoneStep,
   type NextStep,
   type OutputMode,
@@ -56,7 +51,7 @@ export {
   type RouterSpec,
   type Step,
   command,
-  defineCliRouter,
+  defineCli,
   done,
   forCtx,
   formatCommandHelp,

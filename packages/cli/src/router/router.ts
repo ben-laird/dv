@@ -1,4 +1,4 @@
-import type { FlagSpec, FlagsOf } from "../command-spec.ts";
+import type { FlagSpec, FlagsOf } from "../flag-spec.ts";
 import { CliError } from "../errors.ts";
 import { type CommandNode, command as makeCommand } from "./command.ts";
 import { formatRouterHelp } from "./help.ts";

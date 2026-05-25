@@ -1,4 +1,4 @@
-import type { FlagSpec, FlagsOf } from "../command-spec.ts";
+import type { FlagSpec, FlagsOf } from "../flag-spec.ts";
 import { CliError } from "../errors.ts";
 import { parseSubcommandArgv, UnknownFlagError } from "../parse-subcommand.ts";
 import { formatCommandHelp } from "./help.ts";

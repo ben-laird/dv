@@ -35,3 +35,17 @@ export function resolveColorEnabled(args: ResolveColorEnabledArgs): boolean {
   if (Deno.env.get("NO_COLOR")) return false;
   return Deno.stdout.isTerminal();
 }
+
+// Many commands accept paired boolean flags like `--dry-run` /
+// `--no-dry-run` to override a config default in either direction.
+// Returns `true`, `false`, or `undefined` (no override).
+// The negative flag wins if both are set — matches the precedence
+// the legacy dispatcher used.
+export function resolveTristate(args: {
+  positiveFlag: boolean | undefined;
+  negativeFlag: boolean | undefined;
+}): boolean | undefined {
+  if (args.negativeFlag === true) return false;
+  if (args.positiveFlag === true) return true;
+  return undefined;
+}

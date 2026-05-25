@@ -1,7 +1,7 @@
 import { assertEquals, assertStringIncludes } from "@std/assert";
 import { CliError } from "../errors.ts";
 import { command } from "./command.ts";
-import { defineCliRouter, type OutputMode } from "./define-cli.ts";
+import { defineCli, type OutputMode } from "./define-cli.ts";
 import { router } from "./router.ts";
 import { done, next, type CliResponse } from "./types.ts";
 
@@ -43,7 +43,7 @@ async function runWithCapture<Ctx>(args: {
     stderrLines.push(parts.map((p) => String(p)).join(" "));
   };
   try {
-    const cli = defineCliRouter<Ctx>({
+    const cli = defineCli<Ctx>({
       name: "test-cli",
       version: "0.0.1",
       rootRouter: args.rootRouter,

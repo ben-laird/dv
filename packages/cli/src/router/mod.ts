@@ -1,4 +1,4 @@
-// Public surface of @seshat/cli's router-based API. Re-exported
+// Public surface of the @seshat/cli router-based API. Re-exported
 // from the package's top-level mod.ts; consumers shouldn't import
 // from `./router/*.ts` directly (those paths aren't stable).
 
@@ -10,11 +10,11 @@ export {
 } from "./command.ts";
 export {
   type Cli,
-  type DefineCliRouterConfig,
+  type DefineCliConfig,
   type OutputMode,
   type OutputModeContext,
   type ResolveOutputMode,
-  defineCliRouter,
+  defineCli,
 } from "./define-cli.ts";
 export {
   formatCommandHelp,
