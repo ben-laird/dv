@@ -79,6 +79,21 @@ export interface RunVersionResult {
   bumpedPackageCount: number;
   consumedRecordCount: number;
   cascadedUpdates: CascadedUpdate[];
+  finalizedFiles: FinalizedFile[];
+}
+
+// One additional file the finalize pass staged into the version
+// commit. Grouped by the plugin that produced it so the human
+// summary can name the source ("refreshed deno.lock via the deno
+// plugin") rather than dumping a flat list.
+export interface FinalizedFile {
+  // The canonical plugin reference key (e.g.
+  // "run:deno run -A ./examples/plugins/deno/main.ts"), so the
+  // summary can de-dupe across packages governed by the same plugin.
+  pluginKey: string;
+  // Repo-relative path the plugin reported via
+  // additionalChangedFiles.
+  path: string;
 }
 
 // A single actual constraint rewrite the cascade pass executed (the
@@ -201,6 +216,7 @@ export async function runVersion(
       bumpedPackageCount: 0,
       consumedRecordCount: 0,
       cascadedUpdates: [],
+      finalizedFiles: [],
     };
   }
 
@@ -216,6 +232,7 @@ export async function runVersion(
         prune: options.prune,
       }),
       cascadedUpdates: [],
+      finalizedFiles: [],
     };
   }
 
@@ -430,6 +447,7 @@ export async function runVersion(
     });
     bumpedPackagesByPluginKey.set(pkg.plugin, existingList);
   }
+  const finalizedFiles: FinalizedFile[] = [];
   for (const [pluginKey, packagesForPlugin] of bumpedPackagesByPluginKey) {
     const resolvedPlugin = resolvedPluginsByUseString.get(pluginKey);
     if (resolvedPlugin === undefined) {
@@ -452,6 +470,7 @@ export async function runVersion(
       });
       for (const additionalFile of finalizeResult.additionalChangedFiles) {
         touchedPaths.push(additionalFile);
+        finalizedFiles.push({ pluginKey, path: additionalFile });
       }
       finalizeStep.done();
     } catch (caughtError) {
@@ -501,6 +520,7 @@ export async function runVersion(
     commitSha,
     staged: !shouldCommit,
     cascadedUpdates,
+    finalizedFiles,
     colorEnabled: options.colorEnabled,
   });
 
@@ -510,6 +530,7 @@ export async function runVersion(
     bumpedPackageCount: plan.pending.length,
     consumedRecordCount: consumedRecordFilenames.size,
     cascadedUpdates,
+    finalizedFiles,
   };
 }
 
@@ -705,6 +726,7 @@ interface RenderHumanSummaryArgs {
   commitSha: string | null;
   staged: boolean;
   cascadedUpdates: CascadedUpdate[];
+  finalizedFiles: FinalizedFile[];
   colorEnabled: boolean;
 }
 
@@ -737,5 +759,34 @@ function renderHumanSummary(args: RenderHumanSummaryArgs): void {
       )}`,
     );
   }
+  if (args.finalizedFiles.length > 0) {
+    console.log("");
+    console.log(formatFinalizedFilesLine(args.finalizedFiles, styler));
+  }
   console.log("");
+}
+
+// Emits something like:
+//
+//   ↳ refreshed 1 file (deno.lock)
+//   ↳ refreshed 2 files (deno.lock, Cargo.lock)
+//
+// The path list is sorted + de-duped so re-runs render the same
+// summary regardless of how plugins ordered their additionalChangedFiles
+// arrays. We don't show the plugin reference key inline — it's already
+// in the per-step "finalize" progress line above the summary, and
+// including it twice clutters the typical single-plugin case
+// (which is what every dv monorepo with one ecosystem looks like).
+function formatFinalizedFilesLine(
+  finalizedFiles: FinalizedFile[],
+  styler: ReturnType<typeof makeStyler>,
+): string {
+  const uniquePaths = [
+    ...new Set(finalizedFiles.map((entry) => entry.path)),
+  ].sort();
+  const fileCount = uniquePaths.length;
+  const fileWord = fileCount === 1 ? "file" : "files";
+  return `  ${styler.dim(
+    `↳ refreshed ${fileCount} ${fileWord} (${uniquePaths.join(", ")})`,
+  )}`;
 }

@@ -14,6 +14,12 @@ interface SetUpRepoArgs {
   // The current version the plugin will report for the "core" package
   // before dv version runs.
   initialVersion?: string;
+  // If set, the bash plugin's `finalize` op reports these
+  // additionalChangedFiles instead of the default `unsupported: true`
+  // escape hatch. Used by the "summary mentions refreshed files"
+  // test; the files don't need to exist on disk for the summary
+  // path to render them.
+  finalizeAdditionalFiles?: string[];
 }
 
 interface SetUpRepoResult {
@@ -79,6 +85,22 @@ async function setUpFixture(args: SetUpRepoArgs): Promise<SetUpRepoResult> {
   );
 
   const pluginPath = join(repoRootPath, "plugin");
+  // For finalize-with-files tests, the bash plugin must actually
+  // create the files it'll claim via additionalChangedFiles so the
+  // subsequent `git add` doesn't error on missing paths.
+  const finalizeBashBlock =
+    args.finalizeAdditionalFiles === undefined
+      ? `echo '{"ok":true,"unsupported":true}'`
+      : [
+          ...args.finalizeAdditionalFiles.map(
+            (filePath) =>
+              `mkdir -p "$DV_REPO_ROOT/$(dirname "${filePath}")" && touch "$DV_REPO_ROOT/${filePath}"`,
+          ),
+          `echo '${JSON.stringify({
+            ok: true,
+            additionalChangedFiles: args.finalizeAdditionalFiles,
+          })}'`,
+        ].join("\n    ");
   await Deno.writeTextFile(
     pluginPath,
     `#!/usr/bin/env bash
@@ -96,10 +118,10 @@ case "\${DV_OPERATION:-$1}" in
     echo '{"ok":true}'
     ;;
   finalize)
-    # Bash plugins that don't need post-write cleanup use the
-    # documented unsupported:true escape hatch so dv treats finalize
-    # as a no-op.
-    echo '{"ok":true,"unsupported":true}'
+    # Tests configure this via finalizeAdditionalFiles. Default is
+    # the documented unsupported:true escape hatch (so finalize is a
+    # no-op); with files, the plugin touches them and reports them.
+    ${finalizeBashBlock}
     ;;
 esac
 `,
@@ -237,6 +259,40 @@ Deno.test("runVersion bumps the manifest, prepends the CHANGELOG, deletes the re
 
     // And one commit landed
     assertEquals(typeof result.commitSha, "string");
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+Deno.test("runVersion's human summary names the files finalize refreshed", async () => {
+  // Given a repo whose finalize op reports one additional file —
+  // the docs of `dv version` promise this file ships with the
+  // commit, so the summary should name it for the user.
+  const fixture = await setUpFixture({
+    initialVersion: "1.0.0",
+    recordFiles: {
+      "a.md": "---\ntype: feat\npackages:\n  - core\n---\n\nA feature.\n",
+    },
+    finalizeAdditionalFiles: ["fake.lock"],
+  });
+
+  try {
+    // When dv version runs
+    const { result, capturedStdout } = await captureStdout(() =>
+      runVersion({
+        noCommit: false,
+        prune: false,
+        emitJson: false,
+        colorEnabled: false,
+        yes: false,
+      }),
+    );
+
+    // Then the result reports the finalized file and the human
+    // summary names it under a `↳ refreshed` line
+    assertEquals(result.finalizedFiles.length, 1);
+    assertEquals(result.finalizedFiles[0]?.path, "fake.lock");
+    assertStringIncludes(capturedStdout, "↳ refreshed 1 file (fake.lock)");
   } finally {
     await fixture.cleanup();
   }

@@ -87,12 +87,23 @@ export interface RunV1Result {
   promotedPackage: string;
   consumedRecordCount: number;
   cascadedUpdates: CascadedUpdate[];
+  finalizedFiles: FinalizedFile[];
 }
 
 interface CascadedUpdate {
   bumpedPackage: string;
   dependent: string;
   dependentPath: string;
+}
+
+// One additional file the finalize pass staged into the v1 commit.
+// v1 only ever bumps one package, so there's at most one plugin
+// involved; we still carry the same shape as version's RunVersionResult
+// for consistency (callers reading the result don't have to branch
+// on the command).
+export interface FinalizedFile {
+  pluginKey: string;
+  path: string;
 }
 
 export async function runV1(options: RunV1Options): Promise<RunV1Result> {
@@ -298,6 +309,7 @@ export async function runV1(options: RunV1Options): Promise<RunV1Result> {
         consumedRecords.length +
         (options.prune ? unresolvedReferences.length : 0),
       cascadedUpdates: [],
+      finalizedFiles: [],
     };
   }
 
@@ -447,6 +459,7 @@ export async function runV1(options: RunV1Options): Promise<RunV1Result> {
   // v1 only ever bumps one package, so there's exactly one plugin
   // to finalize — no grouping needed. See specs/plugin-contract.md
   // § finalize and dv version's finalize loop for context.
+  const finalizedFiles: FinalizedFile[] = [];
   const finalizeStep = progressReporter.start({
     packageName: "",
     operationName: "finalize",
@@ -467,6 +480,10 @@ export async function runV1(options: RunV1Options): Promise<RunV1Result> {
     });
     for (const additionalFile of finalizeResult.additionalChangedFiles) {
       touchedPaths.push(additionalFile);
+      finalizedFiles.push({
+        pluginKey: targetPackage.plugin,
+        path: additionalFile,
+      });
     }
     finalizeStep.done();
   } catch (caughtError) {
@@ -514,6 +531,7 @@ export async function runV1(options: RunV1Options): Promise<RunV1Result> {
     commitSha,
     staged: !shouldCommit,
     cascadedUpdates,
+    finalizedFiles,
     colorEnabled: options.colorEnabled,
   });
 
@@ -523,6 +541,7 @@ export async function runV1(options: RunV1Options): Promise<RunV1Result> {
     promotedPackage: targetPackage.name,
     consumedRecordCount: consumedRecordFilenames.size,
     cascadedUpdates,
+    finalizedFiles,
   };
 }
 
@@ -726,6 +745,7 @@ interface RenderHumanSummaryArgs {
   commitSha: string | null;
   staged: boolean;
   cascadedUpdates: CascadedUpdate[];
+  finalizedFiles: FinalizedFile[];
   colorEnabled: boolean;
 }
 
@@ -753,6 +773,19 @@ function renderHumanSummary(args: RenderHumanSummaryArgs): void {
         `↳ updated ${args.cascadedUpdates.length} dependent constraint${
           args.cascadedUpdates.length === 1 ? "" : "s"
         } (${dependentNames})`,
+      )}`,
+    );
+  }
+  if (args.finalizedFiles.length > 0) {
+    console.log("");
+    const uniquePaths = [
+      ...new Set(args.finalizedFiles.map((entry) => entry.path)),
+    ].sort();
+    const fileCount = uniquePaths.length;
+    const fileWord = fileCount === 1 ? "file" : "files";
+    console.log(
+      `  ${styler.dim(
+        `↳ refreshed ${fileCount} ${fileWord} (${uniquePaths.join(", ")})`,
       )}`,
     );
   }
