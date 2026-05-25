@@ -73,31 +73,26 @@ authoritative for behavior.
 ### Pre-1.0 work still to do
 
 From the v1 audit (2026-05-25). Each is independently shippable.
-Suggested order: --debug first (smallest, completes plugin DX),
-spec sweep next (paperwork + ceremony verification), npm example
-last (largest, decoupled from the others).
 
-- **`--debug` plugin tracing.** Listed in
+- **`--debug` plugin tracing** — landed in commit `5dde93a`.
+  Tool-wide flag pre-scanned at the binary boundary, threaded
+  through every plugin invoker via optional `TracingHooks`.
+  Renders one stderr block per invocation (op, env, stdin,
+  stdout/stderr, exit, duration). Completes the plugin DX triad
+  alongside `dv plugin invoke` / `verify`.
+- **Spec sweep** — landed in commit `5dde93a`. Contract version
+  documented in [specs/plugin-contract.md § Contract version](specs/plugin-contract.md#contract-version);
+  `info` and `finalize` folded into
   [specs/v1-scope.md § Plugin contract](specs/v1-scope.md#plugin-contract).
-  Tool-wide flag on `dv version` / `release` / `v1` / `status` /
-  `validate` that logs every plugin invocation to stderr (op,
-  env vars, stdin, stdout, exit code, duration). The answer to
-  "why did my plugin fail inside dv version." Cheapest of the
-  three; completes the plugin DX triad alongside
-  `dv plugin invoke` / `verify`. Implementation seam: thread an
-  optional `TracingHooks` option through `invokeOp`, populate it
-  from a `--debug` flag pre-scanned at the binary boundary (same
-  spot detectReportMode used to live).
-- **Spec sweep + 1.0 ceremony rehearsal.** Fold `finalize` and
-  `info` into [specs/v1-scope.md § Plugin contract](specs/v1-scope.md#plugin-contract);
-  document the contract version in [specs/plugin-contract.md](specs/plugin-contract.md)
-  intro. Then exercise `dv migrate config` and `dv v1 @seshat/dv`
-  against this repo end-to-end to surface drift before any real
-  1.0 attempt. Mostly bookkeeping but should happen before any
-  promotion. Last successful `dv v1` ceremony was the walked-back
-  attempt that prompted the use-key redesign — every change since
-  (run: arm, finalize op, info op, router framework) is unverified
-  through that path.
+- **1.0 ceremony rehearsal** — rehearsed against this repo on
+  2026-05-25. `dv migrate config --dry-run` reports already-current
+  shape; `dv version --dry-run` projects 0.5.0 → 0.6.0 (the two
+  pending Records for finalize-summary and info-op); `dv v1
+  @seshat/dv --dry-run --yes` projects 0.5.0 → 1.0.0 with
+  @seshat/cli's constraint rewritten; `dv plugin verify` against
+  the deno example reports 4 pass, 0 fail. The real `dv v1`
+  promotion is left as a deliberate next step rather than an
+  autonomous one — 1.0 is one-way.
 - **npm example plugin** (`examples/plugins/npm/main.ts`).
   Reference material for the most common non-Deno ecosystem. Copy
   `examples/plugins/deno/main.ts` and retarget at `package.json`
@@ -105,6 +100,11 @@ last (largest, decoupled from the others).
   including `info` and `finalize` (runs `npm install` to refresh
   `package-lock.json`). Optional — skip if you'd rather wait for
   the first real npm user.
+- **Vitepress docs site.** Wire the spec library
+  ([specs/](specs/)) into the site so it actually publishes the
+  authoritative content; today `apps/docs/` has the VitePress
+  scaffold but no sidebar/rewrites. Source of truth stays in
+  `specs/` per `apps/docs/CLAUDE.md`.
 
 ### Deferred to later (architecturally accommodated)
 
