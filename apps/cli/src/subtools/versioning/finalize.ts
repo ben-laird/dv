@@ -16,17 +16,13 @@ import { invokeOp, parseFinalizeResponse } from "../plugin/mod.ts";
 // Plugin response shape (FinalizeResponse):
 //   { ok: true }                                      — supported, no extra files
 //   { ok: true, additionalChangedFiles: [paths...] }  — paths to stage
-//   { ok: true, unsupported: true }                   — plugin doesn't implement finalize
 //   { ok: false, error: "..." }                       — hard failure, aborts before commit
 //
-// The `unsupported: true` escape hatch matters because there's no
-// op-declaration mechanism in the plugin contract. dv calls finalize
-// on every plugin in the run; plugins that haven't been updated to
-// support it can either (a) return unsupported, or (b) exit
-// non-zero from an unknown-op default-arm — in which case dv
-// surfaces the plugin-exit-nonzero error the same way it would
-// for any other op. Recommended plugin pattern: add the case
-// explicitly and return unsupported when you have no work to do.
+// dv only invokes finalize when the plugin's info.supportedOps
+// includes it (see PluginInfoCache). Plugins that don't implement
+// finalize simply leave it off the list; the op-declaration
+// mechanism (info) is the answer to "does this plugin support
+// op X?" — no per-response escape hatch needed.
 
 export interface InvokeFinalizeArgs {
   repoRootPath: string;
@@ -80,12 +76,6 @@ export async function invokeFinalize(
     rawStdout,
     pluginPath: args.resolvedPlugin.path,
   });
-  // unsupported is the documented "no finalize for me" escape;
-  // collapse it to the same empty-files result as "supported but
-  // nothing to add" so callers branch on one shape.
-  if (validatedResponse.unsupported === true) {
-    return { additionalChangedFiles: [] };
-  }
   return {
     additionalChangedFiles: validatedResponse.additionalChangedFiles ?? [],
     message: validatedResponse.message,

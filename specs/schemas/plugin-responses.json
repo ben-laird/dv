@@ -17,6 +17,31 @@
       "type": "string",
       "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$"
     },
+    "info": {
+      "title": "info response",
+      "description": "Mandatory metadata. dv invokes this once per plugin per run (cached) to learn the contract version and the op set the plugin implements. Plugins that don't implement an optional op leave it off supportedOps; dv skips ops not declared here.",
+      "type": "object",
+      "required": ["contractVersion", "supportedOps"],
+      "properties": {
+        "contractVersion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Must match dv's expected version (currently '1'). Mismatch is a hard error."
+        },
+        "supportedOps": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*$",
+            "description": "Lowercase-kebab op name."
+          },
+          "description": "Every op the plugin implements. `discover` is required for the plugin to be useful."
+        },
+        "name": { "type": "string", "minLength": 1, "description": "Cosmetic plugin name." },
+        "version": { "type": "string", "minLength": 1, "description": "Cosmetic plugin version." }
+      }
+    },
     "discover": {
       "title": "discover response",
       "description": "Packages this plugin claims under the matched paths.",
@@ -83,15 +108,11 @@
     },
     "finalize": {
       "title": "finalize response",
-      "description": "Result of the post-write cleanup hook. Lets a plugin refresh generated companion files (lockfiles, etc.) so they ship in the same commit as the manifest edits. Fires once per plugin per `dv version` / `dv v1` run, after every write-version + update-dependency call.",
+      "description": "Result of the post-write cleanup hook. Lets a plugin refresh generated companion files (lockfiles, etc.) so they ship in the same commit as the manifest edits. Fires once per plugin per `dv version` / `dv v1` run, after every write-version + update-dependency call. dv only invokes finalize when the plugin's info.supportedOps includes it.",
       "type": "object",
       "required": ["ok"],
       "properties": {
         "ok": { "type": "boolean" },
-        "unsupported": {
-          "type": "boolean",
-          "description": "True if this plugin does not implement finalize. dv treats this as a no-op rather than an error — the escape hatch for plugins predating the op."
-        },
         "additionalChangedFiles": {
           "type": "array",
           "items": { "type": "string", "minLength": 1 },
@@ -102,6 +123,7 @@
     }
   },
   "oneOf": [
+    { "$ref": "#/$defs/info" },
     { "$ref": "#/$defs/discover" },
     { "$ref": "#/$defs/read-version" },
     { "$ref": "#/$defs/write-version" },

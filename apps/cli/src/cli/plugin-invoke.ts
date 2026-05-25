@@ -1,9 +1,11 @@
 import { DvError } from "../domain/errors.ts";
 import { resolvePlugin } from "../subtools/discovery/resolve.ts";
 import {
+  DV_CONTRACT_VERSION,
   invokeOp,
   parseDiscoverResponse,
   parseFinalizeResponse,
+  parseInfoResponse,
   parseReadVersionResponse,
   parseReleaseResponse,
   parseUpdateDependencyResponse,
@@ -27,6 +29,7 @@ import { makeStyler } from "./styler.ts";
 const DEFAULT_INVOKE_TIMEOUT_MS = 60_000;
 
 export const PLUGIN_OP_NAMES = [
+  "info",
   "discover",
   "read-version",
   "write-version",
@@ -191,6 +194,16 @@ function buildInvokeEnvironment(
   // command validates that the user supplied what the contract
   // requires so a missing flag produces a clear DvError, not a
   // runtime plugin failure with no context.
+
+  // info is the metadata op — no per-package context needed.
+  // dv passes DV_CONTRACT_VERSION so the plugin can self-validate
+  // before responding; we leave that to invokeInfo in real runs,
+  // but mirror the env shape here so debug-invocations look right.
+  if (args.opName === "info") {
+    childEnvironment.DV_CONTRACT_VERSION = DV_CONTRACT_VERSION;
+    return childEnvironment;
+  }
+
   if (args.opName === "discover") {
     if (args.discoverGlob === undefined) {
       throw missingFlagError({
@@ -319,6 +332,11 @@ interface ConformanceCheckArgs {
 
 function conformanceCheck(args: ConformanceCheckArgs): unknown {
   switch (args.opName) {
+    case "info":
+      return parseInfoResponse({
+        rawStdout: args.rawStdout,
+        pluginPath: args.pluginPath,
+      });
     case "discover":
       return parseDiscoverResponse({
         rawStdout: args.rawStdout,
@@ -409,6 +427,12 @@ function summarizeResponse(opName: PluginOpName, parsed: unknown): string {
   if (parsed === null || typeof parsed !== "object") return "";
   const responseRecord = parsed as Record<string, unknown>;
   switch (opName) {
+    case "info": {
+      const ops = Array.isArray(responseRecord.supportedOps)
+        ? responseRecord.supportedOps
+        : [];
+      return `(contractVersion=${String(responseRecord.contractVersion)}, ${ops.length} ops)`;
+    }
     case "discover": {
       const packages = responseRecord.packages;
       const count = Array.isArray(packages) ? packages.length : 0;

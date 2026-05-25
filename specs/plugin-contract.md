@@ -66,6 +66,43 @@ ecosystem-specific gaps (where is the version stored? how is a dependency
 constraint expressed? how is this package published?), not to reimplement
 `dv`'s core logic.
 
+### `info`
+
+Mandatory metadata op. dv invokes it exactly once per plugin per run
+(cached) before any other op, to learn the contract version and the
+op set the plugin implements. The presence of `info` is what lets dv
+add new ops to the contract without breaking older plugins: dv simply
+doesn't invoke ops the plugin doesn't claim, and refuses to run against
+an incompatible contract version.
+
+**Input:** `DV_CONTRACT_VERSION` carries the contract version dv
+expects (currently `"1"`), so a plugin written for a different
+contract can self-detect and short-circuit with a clean error.
+
+**Output:**
+
+```json
+{
+  "contractVersion": "1",
+  "supportedOps": ["info", "discover", "read-version", "write-version",
+                    "update-dependency", "release", "finalize"],
+  "name": "deno",
+  "version": "0.1.0"
+}
+```
+
+- `contractVersion` — must match dv's expected version. Mismatch is
+  a hard error (`plugin-contract-mismatch`) raised before any other op.
+- `supportedOps` — every op the plugin implements. `discover` is
+  required for the plugin to be useful; the rest depend on what dv
+  asks for. Op names are lowercase-kebab.
+- `name`, `version` — optional cosmetic fields surfaced in
+  `dv plugin list` / verify summaries.
+
+A plugin that doesn't implement an optional op simply omits it from
+`supportedOps`; dv skips that op rather than invoking it. This is the
+op-declaration mechanism that replaces per-response escape hatches.
+
 ### `discover`
 
 Given a glob (from `.dv/config.yaml`), list the packages that match.

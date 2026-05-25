@@ -3,6 +3,7 @@ import { DvError } from "../../domain/errors.ts";
 import {
   parseDiscoverResponse,
   parseFinalizeResponse,
+  parseInfoResponse,
   parseReadVersionResponse,
   parseReleaseResponse,
   parseUpdateDependencyResponse,
@@ -355,22 +356,25 @@ Deno.test("parseFinalizeResponse accepts {ok:true, additionalChangedFiles:[...]}
   assertEquals(validatedResponse.message, "refreshed deno.lock");
 });
 
-Deno.test("parseFinalizeResponse accepts the {ok:true, unsupported:true} escape hatch", () => {
-  // Given a plugin that doesn't implement finalize — the
-  // documented "no finalize for me" response. dv treats this as
-  // a no-op rather than an error so plugins predating the op
-  // keep working.
-  const unsupportedStdout = `{"ok":true,"unsupported":true}`;
+Deno.test("parseFinalizeResponse rejects the legacy {unsupported:true} escape hatch", () => {
+  // Given a plugin that uses the pre-info `unsupported:true`
+  // escape hatch. Since v1 introduced the mandatory `info` op
+  // (with supportedOps as the gate), unsupported is no longer
+  // a valid finalize response — plugins that don't implement
+  // finalize simply leave it off info.supportedOps.
+  const legacyStdout = `{"ok":true,"unsupported":true}`;
 
   // When parsed
-  const validatedResponse = parseFinalizeResponse({
-    rawStdout: unsupportedStdout,
-    pluginPath: "/x",
-  });
-
-  // Then unsupported is the literal true and additionalChangedFiles
-  // is absent (no work was done)
-  assertEquals(validatedResponse, { ok: true, unsupported: true });
+  // Then DvError surfaces — strict schemas catch the field as
+  // unknown rather than silently accepting it
+  assertThrows(
+    () =>
+      parseFinalizeResponse({
+        rawStdout: legacyStdout,
+        pluginPath: "/x",
+      }),
+    DvError,
+  );
 });
 
 Deno.test("parseFinalizeResponse accepts {ok:false, error:...} as a hard failure", () => {
@@ -420,6 +424,93 @@ Deno.test("parseFinalizeResponse rejects empty strings in additionalChangedFiles
     () =>
       parseFinalizeResponse({
         rawStdout: emptyPathStdout,
+        pluginPath: "/x",
+      }),
+    DvError,
+  );
+});
+
+Deno.test("parseInfoResponse accepts a minimal {contractVersion, supportedOps} payload", () => {
+  // Given the smallest valid info — just the two required fields
+  const minimalStdout = `{"contractVersion":"1","supportedOps":["discover"]}`;
+
+  // When parsed
+  const validatedResponse = parseInfoResponse({
+    rawStdout: minimalStdout,
+    pluginPath: "/x",
+  });
+
+  // Then the required fields surface as typed values
+  assertEquals(validatedResponse.contractVersion, "1");
+  assertEquals(validatedResponse.supportedOps, ["discover"]);
+  // Optional cosmetic fields default to undefined
+  assertEquals(validatedResponse.name, undefined);
+  assertEquals(validatedResponse.version, undefined);
+});
+
+Deno.test("parseInfoResponse accepts the full {contractVersion, supportedOps, name, version} payload", () => {
+  // Given a plugin that advertises everything it can
+  const fullStdout = `{"contractVersion":"1","supportedOps":["info","discover","read-version","write-version","update-dependency","release","finalize"],"name":"deno","version":"0.1.0"}`;
+
+  // When parsed
+  const validatedResponse = parseInfoResponse({
+    rawStdout: fullStdout,
+    pluginPath: "/x",
+  });
+
+  // Then every field flows through
+  assertEquals(validatedResponse.contractVersion, "1");
+  assertEquals(validatedResponse.supportedOps.length, 7);
+  assertEquals(validatedResponse.name, "deno");
+  assertEquals(validatedResponse.version, "0.1.0");
+});
+
+Deno.test("parseInfoResponse rejects an empty supportedOps array", () => {
+  // Given a plugin that advertises no ops — useless and almost
+  // certainly a bug (discover at minimum is required)
+  const emptyOpsStdout = `{"contractVersion":"1","supportedOps":[]}`;
+
+  // When parsed
+  // Then DvError surfaces (schema requires min length 1)
+  assertThrows(
+    () =>
+      parseInfoResponse({
+        rawStdout: emptyOpsStdout,
+        pluginPath: "/x",
+      }),
+    DvError,
+  );
+});
+
+Deno.test("parseInfoResponse rejects op names that aren't lowercase-kebab", () => {
+  // Given a plugin that uses camelCase op names — those won't
+  // match dv's invocations anyway, so failing at the schema
+  // boundary is the right time to catch it
+  const camelOpsStdout = `{"contractVersion":"1","supportedOps":["readVersion"]}`;
+
+  // When parsed
+  // Then DvError surfaces (the regex requires kebab-case)
+  assertThrows(
+    () =>
+      parseInfoResponse({
+        rawStdout: camelOpsStdout,
+        pluginPath: "/x",
+      }),
+    DvError,
+  );
+});
+
+Deno.test("parseInfoResponse rejects unknown extra fields (strict shape)", () => {
+  // Given a plugin emitting a field the contract does not define
+  const extraFieldStdout = `{"contractVersion":"1","supportedOps":["discover"],"futureField":true}`;
+
+  // When parsed
+  // Then DvError surfaces — strict catches typos and
+  // forward-compat probing rather than silently accepting
+  assertThrows(
+    () =>
+      parseInfoResponse({
+        rawStdout: extraFieldStdout,
         pluginPath: "/x",
       }),
     DvError,

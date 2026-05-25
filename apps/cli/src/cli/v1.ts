@@ -24,6 +24,7 @@ import {
   renderHistorySection,
   upsertHistorySection,
 } from "../subtools/history/mod.ts";
+import { PluginInfoCache } from "../subtools/plugin/mod.ts";
 import { listRecords } from "../subtools/records/mod.ts";
 import { loadRenameLedger, renamesPath } from "../subtools/renames/mod.ts";
 import { buildRenameResolver } from "../subtools/renames/resolve.ts";
@@ -149,6 +150,10 @@ export async function runV1(options: RunV1Options): Promise<RunV1Result> {
   const resolvedPluginsByUseString = await resolveAllPlugins({
     pluginAssignments: loadedConfig.discovery.plugins,
     repoRootPath,
+  });
+  const pluginInfoCache = await loadInfoForAllPlugins({
+    resolvedPluginsByKey: resolvedPluginsByUseString,
+    timeoutMs: DEFAULT_FAST_OP_TIMEOUT_MS,
   });
   const targetPlugin = resolvedPluginsByUseString.get(targetPackage.plugin);
   if (targetPlugin === undefined) {
@@ -459,38 +464,50 @@ export async function runV1(options: RunV1Options): Promise<RunV1Result> {
   // v1 only ever bumps one package, so there's exactly one plugin
   // to finalize — no grouping needed. See specs/plugin-contract.md
   // § finalize and dv version's finalize loop for context.
+  //
+  // Skipped when the plugin didn't declare finalize in
+  // info.supportedOps. The info cache was populated up front so
+  // this is a pure lookup.
   const finalizedFiles: FinalizedFile[] = [];
-  const finalizeStep = progressReporter.start({
-    packageName: "",
-    operationName: "finalize",
-  });
-  try {
-    const finalizeResult = await invokeFinalize({
-      repoRootPath,
-      resolvedPlugin: targetPlugin,
-      bumpedPackages: [
-        {
-          name: targetPackage.name,
-          path: targetPackage.path,
-          newVersion: "1.0.0",
-        },
-      ],
-      trigger: "v1",
-      timeoutMs: DEFAULT_FAST_OP_TIMEOUT_MS,
+  const targetSupportsFinalize =
+    pluginInfoCache
+      .get(targetPackage.plugin)
+      ?.supportedOps.includes("finalize") === true;
+  if (targetSupportsFinalize) {
+    const finalizeStep = progressReporter.start({
+      packageName: "",
+      operationName: "finalize",
     });
-    for (const additionalFile of finalizeResult.additionalChangedFiles) {
-      touchedPaths.push(additionalFile);
-      finalizedFiles.push({
-        pluginKey: targetPackage.plugin,
-        path: additionalFile,
+    try {
+      const finalizeResult = await invokeFinalize({
+        repoRootPath,
+        resolvedPlugin: targetPlugin,
+        bumpedPackages: [
+          {
+            name: targetPackage.name,
+            path: targetPackage.path,
+            newVersion: "1.0.0",
+          },
+        ],
+        trigger: "v1",
+        timeoutMs: DEFAULT_FAST_OP_TIMEOUT_MS,
       });
+      for (const additionalFile of finalizeResult.additionalChangedFiles) {
+        touchedPaths.push(additionalFile);
+        finalizedFiles.push({
+          pluginKey: targetPackage.plugin,
+          path: additionalFile,
+        });
+      }
+      finalizeStep.done();
+    } catch (caughtError) {
+      finalizeStep.fail(
+        caughtError instanceof Error
+          ? caughtError.message
+          : String(caughtError),
+      );
+      throw caughtError;
     }
-    finalizeStep.done();
-  } catch (caughtError) {
-    finalizeStep.fail(
-      caughtError instanceof Error ? caughtError.message : String(caughtError),
-    );
-    throw caughtError;
   }
 
   await stageFiles({ repoRootPath, paths: touchedPaths });
@@ -629,6 +646,27 @@ async function resolveAllPlugins(
     resolvedPluginsByKey.set(assignmentKey, resolvedPlugin);
   }
   return resolvedPluginsByKey;
+}
+
+// Mirror of version.ts's loader. dv v1 only ever exercises one
+// plugin (the target package's), so in theory we could just call
+// invokeInfo once — but driving the whole resolved-plugins map
+// through the same cache the rest of the pipeline expects keeps
+// the API consistent (and surfaces any unrelated plugin's
+// contract-version mismatch before we touch anything).
+async function loadInfoForAllPlugins(args: {
+  resolvedPluginsByKey: Map<string, ResolvedPlugin>;
+  timeoutMs: number;
+}): Promise<PluginInfoCache> {
+  const cache = new PluginInfoCache();
+  for (const [pluginKey, resolvedPlugin] of args.resolvedPluginsByKey) {
+    await cache.getOrLoad({
+      pluginKey,
+      resolvedPlugin,
+      timeoutMs: args.timeoutMs,
+    });
+  }
+  return cache;
 }
 
 interface ReadAllCurrentVersionsArgs {

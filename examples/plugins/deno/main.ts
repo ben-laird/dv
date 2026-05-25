@@ -22,6 +22,9 @@ import { dirname, join, relative } from "jsr:@std/path@^1";
 
 const op = Deno.args[0];
 switch (op) {
+  case "info":
+    runInfo();
+    break;
   case "discover":
     await runDiscover();
     break;
@@ -43,6 +46,31 @@ switch (op) {
   default:
     console.error(`unknown dv op: '${op ?? "<missing>"}'`);
     Deno.exit(1);
+}
+
+// === info ======================================================
+
+// Mandatory. dv invokes this once per plugin per run (cached) to
+// learn the contract version and op set. The contract version must
+// match what dv expects (passed via DV_CONTRACT_VERSION); op names
+// must appear in supportedOps for dv to invoke them.
+function runInfo(): void {
+  console.log(
+    JSON.stringify({
+      contractVersion: "1",
+      supportedOps: [
+        "info",
+        "discover",
+        "read-version",
+        "write-version",
+        "update-dependency",
+        "release",
+        "finalize",
+      ],
+      name: "deno",
+      version: "0.1.0",
+    }),
+  );
 }
 
 // === discover ==================================================

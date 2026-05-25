@@ -77,6 +77,14 @@ export type DvErrorShape =
       code: "plugin-error";
       context: { pluginPath: string; opName: string };
     }
+  | {
+      code: "plugin-contract-mismatch";
+      context: {
+        pluginPath: string;
+        pluginContractVersion: string;
+        expectedContractVersion: string;
+      };
+    }
 
   // === records: parse + frontmatter ==============================
   | { code: "frontmatter-missing"; context: { recordPath: string } }

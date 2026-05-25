@@ -1,6 +1,7 @@
 import { DvError } from "../domain/errors.ts";
 import { resolvePlugin } from "../subtools/discovery/resolve.ts";
 import {
+  invokeInfo,
   invokeOp,
   parseDiscoverResponse,
   parseFinalizeResponse,
@@ -10,23 +11,22 @@ import { parsePluginPositional } from "./parse-plugin-positional.ts";
 import { makeStyler } from "./styler.ts";
 
 // `dv plugin verify <plugin>` per specs/cli.md § dv plugin verify.
-// Automated conformance smoke test for CI. The verifier exercises
-// what's safely exerciseable without a real repo:
+// Automated conformance smoke test for CI. The verifier:
 //
-//   - resolve the plugin (catches not-found / not-executable)
-//   - run `discover` against the glob and conformance-check the
-//     response shape
-//   - for each discovered package, run `read-version` (idempotent,
-//     no side effects)
-//   - run a deliberately-bogus op and confirm non-zero exit (the
-//     contract says bad input must fail loudly, not silently)
+//   1. invokes the mandatory `info` op (refuses on contract-version
+//      mismatch; checks that discover is declared)
+//   2. for each op the plugin declared in info.supportedOps:
+//        - safe ops (discover, read-version, finalize) are
+//          exercised end-to-end
+//        - side-effectful ops (write-version, update-dependency,
+//          release) report as `skipped` — there's no safe way to
+//          auto-undo a manifest write or a publish, so verify
+//          being honest about its scope beats pretending coverage
+//   3. confirms a bogus op name exits non-zero (the contract
+//      says bad input must fail loudly, not silently)
 //
-// Side-effectful ops (write-version, update-dependency, release) are
-// reported as `skipped` rather than executed — there's no way to
-// auto-undo a manifest write or a publish, so verify being honest
-// about its scope beats verify pretending it covered everything.
-// Plugin authors can use `dv plugin invoke` to exercise those ops
-// against a throwaway fixture.
+// Plugin authors can use `dv plugin invoke` to exercise the
+// side-effectful ops against a throwaway fixture.
 
 const DEFAULT_VERIFY_TIMEOUT_MS = 60_000;
 const DEFAULT_VERIFY_GLOB = "*";
@@ -73,86 +73,137 @@ export async function runPluginVerify(
 
   const checks: CheckReport[] = [];
 
-  // ── discover ────────────────────────────────────────────────────
-  let discoveredPackages: { name: string; path: string }[] = [];
+  // ── info first: the mandatory op that tells us what to test ────
+  // info also asserts the contract version matches and that
+  // discover is declared — both via invokeInfo's internal checks.
+  // We catch + report the failure as a verify result rather than
+  // letting it throw, so the verify summary stays consistent
+  // (every result is one check entry).
+  let supportedOps: Set<string>;
   try {
-    const discoverInvocation = await invokeOp({
+    const infoResponse = await invokeInfo({
       resolvedPlugin,
-      opName: "discover",
-      environmentVariables: buildVerifyEnvironment({
-        repoRootPath,
-        extra: { DV_DISCOVER_GLOB: discoverGlob },
-      }),
       timeoutMs: opTimeoutMs,
     });
-    const discoverResponse = parseDiscoverResponse({
-      rawStdout: discoverInvocation.rawStdout,
-      pluginPath: resolvedPlugin.path,
-    });
-    discoveredPackages = discoverResponse.packages;
+    supportedOps = new Set(infoResponse.supportedOps);
+    const nameSuffix =
+      infoResponse.name !== undefined
+        ? infoResponse.version !== undefined
+          ? ` (${infoResponse.name} ${infoResponse.version})`
+          : ` (${infoResponse.name})`
+        : "";
     checks.push({
-      name: "discover",
+      name: "info",
       outcome: "pass",
-      detail: `${discoveredPackages.length} package${
-        discoveredPackages.length === 1 ? "" : "s"
-      } returned for glob '${discoverGlob}'`,
+      detail: `contractVersion=${infoResponse.contractVersion}, ${infoResponse.supportedOps.length} ops declared${nameSuffix}`,
     });
   } catch (caughtError) {
+    // Without info we can't safely invoke anything else — the
+    // contract requires it. Surface the failure and bail.
     checks.push({
-      name: "discover",
+      name: "info",
       outcome: "fail",
       detail: describeError(caughtError),
     });
+    return finishVerify({
+      checks,
+      resolvedPluginPath: resolvedPlugin.path,
+      emitJson: options.emitJson,
+      colorEnabled: options.colorEnabled,
+    });
   }
 
-  // ── read-version per discovered package ─────────────────────────
-  if (discoveredPackages.length === 0) {
-    checks.push({
-      name: "read-version",
-      outcome: "skipped",
-      detail:
-        "discover returned no packages — pass `--glob` so verify can exercise read-version against a real package",
-    });
-  } else {
-    for (const discoveredPackage of discoveredPackages) {
-      try {
-        const readVersionInvocation = await invokeOp({
-          resolvedPlugin,
-          opName: "read-version",
-          environmentVariables: buildVerifyEnvironment({
-            repoRootPath,
-            extra: {
-              DV_PACKAGE_NAME: discoveredPackage.name,
-              DV_PACKAGE_PATH: discoveredPackage.path,
-            },
-          }),
-          timeoutMs: opTimeoutMs,
-        });
-        const readVersionResponse = parseReadVersionResponse({
-          rawStdout: readVersionInvocation.rawStdout,
-          pluginPath: resolvedPlugin.path,
-        });
-        checks.push({
-          name: `read-version[${discoveredPackage.name}]`,
-          outcome: "pass",
-          detail: `version=${readVersionResponse.version}`,
-        });
-      } catch (caughtError) {
-        checks.push({
-          name: `read-version[${discoveredPackage.name}]`,
-          outcome: "fail",
-          detail: describeError(caughtError),
-        });
+  // ── discover (only if declared) ─────────────────────────────────
+  // info already asserts discover is declared, but this re-check
+  // is defense-in-depth: any future relaxation of invokeInfo
+  // wouldn't silently turn this skip into a pass.
+  let discoveredPackages: { name: string; path: string }[] = [];
+  if (supportedOps.has("discover")) {
+    try {
+      const discoverInvocation = await invokeOp({
+        resolvedPlugin,
+        opName: "discover",
+        environmentVariables: buildVerifyEnvironment({
+          repoRootPath,
+          extra: { DV_DISCOVER_GLOB: discoverGlob },
+        }),
+        timeoutMs: opTimeoutMs,
+      });
+      const discoverResponse = parseDiscoverResponse({
+        rawStdout: discoverInvocation.rawStdout,
+        pluginPath: resolvedPlugin.path,
+      });
+      discoveredPackages = discoverResponse.packages;
+      checks.push({
+        name: "discover",
+        outcome: "pass",
+        detail: `${discoveredPackages.length} package${
+          discoveredPackages.length === 1 ? "" : "s"
+        } returned for glob '${discoverGlob}'`,
+      });
+    } catch (caughtError) {
+      checks.push({
+        name: "discover",
+        outcome: "fail",
+        detail: describeError(caughtError),
+      });
+    }
+  }
+
+  // ── read-version per discovered package (only if declared) ──────
+  if (supportedOps.has("read-version")) {
+    if (discoveredPackages.length === 0) {
+      checks.push({
+        name: "read-version",
+        outcome: "skipped",
+        detail:
+          "discover returned no packages — pass `--glob` so verify can exercise read-version against a real package",
+      });
+    } else {
+      for (const discoveredPackage of discoveredPackages) {
+        try {
+          const readVersionInvocation = await invokeOp({
+            resolvedPlugin,
+            opName: "read-version",
+            environmentVariables: buildVerifyEnvironment({
+              repoRootPath,
+              extra: {
+                DV_PACKAGE_NAME: discoveredPackage.name,
+                DV_PACKAGE_PATH: discoveredPackage.path,
+              },
+            }),
+            timeoutMs: opTimeoutMs,
+          });
+          const readVersionResponse = parseReadVersionResponse({
+            rawStdout: readVersionInvocation.rawStdout,
+            pluginPath: resolvedPlugin.path,
+          });
+          checks.push({
+            name: `read-version[${discoveredPackage.name}]`,
+            outcome: "pass",
+            detail: `version=${readVersionResponse.version}`,
+          });
+        } catch (caughtError) {
+          checks.push({
+            name: `read-version[${discoveredPackage.name}]`,
+            outcome: "fail",
+            detail: describeError(caughtError),
+          });
+        }
       }
     }
   }
 
-  // ── side-effectful ops: report as skipped ───────────────────────
+  // ── side-effectful ops: report as skipped (only if declared) ────
+  // Undeclared side-effectful ops simply don't appear in the
+  // summary — verify only reports on what the plugin says it
+  // supports. Keeps the output focused on relevant checks.
   for (const sideEffectfulOp of [
     "write-version",
     "update-dependency",
     "release",
   ] as const) {
+    if (!supportedOps.has(sideEffectfulOp)) continue;
     checks.push({
       name: sideEffectfulOp,
       outcome: "skipped",
@@ -161,54 +212,48 @@ export async function runPluginVerify(
     });
   }
 
-  // ── finalize: safe to verify with an empty bumped-packages list
-  // (the plugin should be a no-op when nothing changed). Either a
-  // proper `{ ok: true, additionalChangedFiles: [] }` response or
-  // the `{ ok: true, unsupported: true }` escape hatch counts as
-  // a pass — both satisfy the contract.
-  try {
-    const finalizeInvocation = await invokeOp({
-      resolvedPlugin,
-      opName: "finalize",
-      environmentVariables: buildVerifyEnvironment({
-        repoRootPath,
-        extra: {
-          DV_FINALIZE_TRIGGER: "version",
-          DV_BUMPED_PACKAGES: "[]",
-        },
-      }),
-      timeoutMs: opTimeoutMs,
-    });
-    const finalizeResponse = parseFinalizeResponse({
-      rawStdout: finalizeInvocation.rawStdout,
-      pluginPath: resolvedPlugin.path,
-    });
-    if (finalizeResponse.unsupported === true) {
-      checks.push({
-        name: "finalize",
-        outcome: "pass",
-        detail: "plugin returned `unsupported: true` (escape hatch)",
+  // ── finalize (only if declared) ─────────────────────────────────
+  // Safe to verify with an empty bumped-packages list: the plugin
+  // should be a no-op when nothing changed.
+  if (supportedOps.has("finalize")) {
+    try {
+      const finalizeInvocation = await invokeOp({
+        resolvedPlugin,
+        opName: "finalize",
+        environmentVariables: buildVerifyEnvironment({
+          repoRootPath,
+          extra: {
+            DV_FINALIZE_TRIGGER: "version",
+            DV_BUMPED_PACKAGES: "[]",
+          },
+        }),
+        timeoutMs: opTimeoutMs,
       });
-    } else if (finalizeResponse.ok) {
-      const count = finalizeResponse.additionalChangedFiles?.length ?? 0;
-      checks.push({
-        name: "finalize",
-        outcome: "pass",
-        detail: `no-op run reported ${count} additional file${count === 1 ? "" : "s"}`,
+      const finalizeResponse = parseFinalizeResponse({
+        rawStdout: finalizeInvocation.rawStdout,
+        pluginPath: resolvedPlugin.path,
       });
-    } else {
+      if (finalizeResponse.ok) {
+        const count = finalizeResponse.additionalChangedFiles?.length ?? 0;
+        checks.push({
+          name: "finalize",
+          outcome: "pass",
+          detail: `no-op run reported ${count} additional file${count === 1 ? "" : "s"}`,
+        });
+      } else {
+        checks.push({
+          name: "finalize",
+          outcome: "fail",
+          detail: `plugin returned ok:false (${finalizeResponse.message ?? "no message"})`,
+        });
+      }
+    } catch (caughtError) {
       checks.push({
         name: "finalize",
         outcome: "fail",
-        detail: `plugin returned ok:false (${finalizeResponse.message ?? "no message"})`,
+        detail: describeError(caughtError),
       });
     }
-  } catch (caughtError) {
-    checks.push({
-      name: "finalize",
-      outcome: "fail",
-      detail: describeError(caughtError),
-    });
   }
 
   // ── bad-input check: a bogus op name must exit non-zero ─────────
@@ -253,19 +298,39 @@ export async function runPluginVerify(
     }
   }
 
-  const passedCount = checks.filter((check) => check.outcome === "pass").length;
-  const failedCount = checks.filter((check) => check.outcome === "fail").length;
-  const skippedCount = checks.filter(
+  return finishVerify({
+    checks,
+    resolvedPluginPath: resolvedPlugin.path,
+    emitJson: options.emitJson,
+    colorEnabled: options.colorEnabled,
+  });
+}
+
+interface FinishVerifyArgs {
+  checks: CheckReport[];
+  resolvedPluginPath: string;
+  emitJson: boolean;
+  colorEnabled: boolean;
+}
+
+function finishVerify(args: FinishVerifyArgs): RunPluginVerifyResult {
+  const passedCount = args.checks.filter(
+    (check) => check.outcome === "pass",
+  ).length;
+  const failedCount = args.checks.filter(
+    (check) => check.outcome === "fail",
+  ).length;
+  const skippedCount = args.checks.filter(
     (check) => check.outcome === "skipped",
   ).length;
 
-  if (options.emitJson) {
+  if (args.emitJson) {
     console.log(
       JSON.stringify(
         {
           schema: "urn:dv:schema:v1:plugin-verify-result",
-          pluginPath: resolvedPlugin.path,
-          checks,
+          pluginPath: args.resolvedPluginPath,
+          checks: args.checks,
           summary: { passedCount, failedCount, skippedCount },
         },
         null,
@@ -274,18 +339,18 @@ export async function runPluginVerify(
     );
   } else {
     renderHumanSummary({
-      pluginPath: resolvedPlugin.path,
-      checks,
+      pluginPath: args.resolvedPluginPath,
+      checks: args.checks,
       passedCount,
       failedCount,
       skippedCount,
-      colorEnabled: options.colorEnabled,
+      colorEnabled: args.colorEnabled,
     });
   }
 
   return {
-    resolvedPluginPath: resolvedPlugin.path,
-    checks,
+    resolvedPluginPath: args.resolvedPluginPath,
+    checks: args.checks,
     passedCount,
     failedCount,
     skippedCount,

@@ -85,12 +85,25 @@ async function setUpFixture(args: SetUpRepoArgs): Promise<SetUpRepoResult> {
   );
 
   const pluginPath = join(repoRootPath, "plugin");
+  // info.supportedOps gates which ops dv will invoke. When the test
+  // wants finalize files, the plugin advertises finalize; otherwise
+  // it leaves finalize off the list and dv skips it (no escape
+  // hatch needed at the response level — info is the gate).
+  const supportedOps = ["info", "discover", "read-version", "write-version"];
+  if (args.finalizeAdditionalFiles !== undefined) {
+    supportedOps.push("finalize");
+  }
+  const infoResponseJson = JSON.stringify({
+    contractVersion: "1",
+    supportedOps,
+    name: "test-bash-plugin",
+  });
   // For finalize-with-files tests, the bash plugin must actually
   // create the files it'll claim via additionalChangedFiles so the
   // subsequent `git add` doesn't error on missing paths.
   const finalizeBashBlock =
     args.finalizeAdditionalFiles === undefined
-      ? `echo '{"ok":true,"unsupported":true}'`
+      ? `echo '{"ok":true}'`
       : [
           ...args.finalizeAdditionalFiles.map(
             (filePath) =>
@@ -106,6 +119,9 @@ async function setUpFixture(args: SetUpRepoArgs): Promise<SetUpRepoResult> {
     `#!/usr/bin/env bash
 set -euo pipefail
 case "\${DV_OPERATION:-$1}" in
+  info)
+    echo '${infoResponseJson}'
+    ;;
   discover)
     echo '{"packages":[{"name":"core","path":"packages/core"}]}'
     ;;
@@ -118,9 +134,8 @@ case "\${DV_OPERATION:-$1}" in
     echo '{"ok":true}'
     ;;
   finalize)
-    # Tests configure this via finalizeAdditionalFiles. Default is
-    # the documented unsupported:true escape hatch (so finalize is a
-    # no-op); with files, the plugin touches them and reports them.
+    # Only declared in info.supportedOps when finalizeAdditionalFiles
+    # is set; otherwise this branch is unreachable.
     ${finalizeBashBlock}
     ;;
 esac

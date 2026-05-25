@@ -24,6 +24,7 @@ import {
   renderHistorySection,
   upsertHistorySection,
 } from "../subtools/history/mod.ts";
+import { PluginInfoCache } from "../subtools/plugin/mod.ts";
 import { listRecords } from "../subtools/records/mod.ts";
 import { loadRenameLedger, renamesPath } from "../subtools/renames/mod.ts";
 import { computeAwaitingRelease } from "../subtools/tagging/mod.ts";
@@ -156,6 +157,13 @@ export async function runVersion(
   const resolvedPluginsByUseString = await resolveAllPlugins({
     pluginAssignments: loadedConfig.discovery.plugins,
     repoRootPath,
+  });
+  // Load info for every resolved plugin once, up front. This is
+  // where contract-version mismatches surface — we want them BEFORE
+  // any per-package op runs, not mid-pipeline.
+  const pluginInfoCache = await loadInfoForAllPlugins({
+    resolvedPluginsByKey: resolvedPluginsByUseString,
+    timeoutMs: DEFAULT_FAST_OP_TIMEOUT_MS,
   });
   const packageCurrentVersions = await readAllCurrentVersions({
     discoveredPackages,
@@ -456,6 +464,17 @@ export async function runVersion(
         message: `no resolved plugin for '${pluginKey}' during finalize`,
       });
     }
+    // Skip plugins that didn't declare `finalize` in info.supportedOps —
+    // the op is optional, and invoking it would surface as a
+    // plugin-exit-nonzero (or worse, undefined behavior). The
+    // info cache was populated up front so this is a pure lookup.
+    const pluginInfo = pluginInfoCache.get(pluginKey);
+    if (
+      pluginInfo === undefined ||
+      !pluginInfo.supportedOps.includes("finalize")
+    ) {
+      continue;
+    }
     const finalizeStep = progressReporter.start({
       packageName: "",
       operationName: "finalize",
@@ -594,6 +613,27 @@ async function resolveAllPlugins(
     resolvedPluginsByKey.set(assignmentKey, resolvedPlugin);
   }
   return resolvedPluginsByKey;
+}
+
+// Eagerly loads info for every plugin in the resolved map. dv
+// version / dv v1 call this right after resolveAllPlugins so any
+// contract-version mismatch surfaces before we start invoking
+// per-package ops. Returns the populated cache; callers consult
+// it via `.get(pluginKey)?.supportedOps` to decide whether to
+// invoke optional ops like finalize.
+async function loadInfoForAllPlugins(args: {
+  resolvedPluginsByKey: Map<string, ResolvedPlugin>;
+  timeoutMs: number;
+}): Promise<PluginInfoCache> {
+  const cache = new PluginInfoCache();
+  for (const [pluginKey, resolvedPlugin] of args.resolvedPluginsByKey) {
+    await cache.getOrLoad({
+      pluginKey,
+      resolvedPlugin,
+      timeoutMs: args.timeoutMs,
+    });
+  }
+  return cache;
 }
 
 interface ReadAllCurrentVersionsArgs {

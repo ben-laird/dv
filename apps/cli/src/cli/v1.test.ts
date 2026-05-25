@@ -76,11 +76,27 @@ async function setUpFixture(
   );
 
   const pluginPath = join(repoRootPath, "plugin");
+  // info.supportedOps omits finalize — this fixture has no
+  // post-write cleanup work, so dv skips finalize entirely.
+  const infoResponseJson = JSON.stringify({
+    contractVersion: "1",
+    supportedOps: [
+      "info",
+      "discover",
+      "read-version",
+      "write-version",
+      "update-dependency",
+    ],
+    name: "test-v1-bash-plugin",
+  });
   await Deno.writeTextFile(
     pluginPath,
     `#!/usr/bin/env bash
 set -euo pipefail
 case "\${DV_OPERATION:-$1}" in
+  info)
+    echo '${infoResponseJson}'
+    ;;
   discover)
     echo '{"packages":[{"name":"core","path":"packages/core"}]}'
     ;;
@@ -94,12 +110,6 @@ case "\${DV_OPERATION:-$1}" in
     ;;
   update-dependency)
     echo '{"ok":true,"changed":false}'
-    ;;
-  finalize)
-    # Bash plugins that don't need post-write cleanup use the
-    # documented unsupported:true escape hatch so dv treats finalize
-    # as a no-op.
-    echo '{"ok":true,"unsupported":true}'
     ;;
 esac
 `,

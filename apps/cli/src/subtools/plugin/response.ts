@@ -95,12 +95,11 @@ export type ReleaseResponse = z.infer<typeof releaseResponseSchema>;
 // plugin touched during finalize. dv stages these alongside the
 // manifest changes and includes them in the version commit.
 //
-// `unsupported: true` — escape hatch for plugins that don't
-// implement finalize. dv invokes the op unconditionally (the
-// plugin contract has no op-declaration mechanism), so plugins
-// that haven't implemented it return `{ ok: true, unsupported: true }`
-// to signal "I got the request, no finalize for me." dv treats
-// this as a no-op rather than an error.
+// dv only invokes finalize when the plugin's `info.supportedOps`
+// includes it; a plugin that doesn't implement finalize simply
+// leaves it off the supportedOps list. The op-declaration
+// mechanism (info) is the answer to "does this plugin support
+// op X?" — no per-response escape hatch needed.
 //
 // `{ ok: false, error: "..." }` is a hard failure: the plugin's
 // finalize blew up (e.g. lockfile refresh hit a network error).
@@ -109,13 +108,58 @@ export type ReleaseResponse = z.infer<typeof releaseResponseSchema>;
 export const finalizeResponseSchema = z
   .object({
     ok: z.boolean(),
-    unsupported: z.boolean().optional(),
     additionalChangedFiles: z.array(z.string().min(1)).optional(),
     message: z.string().optional(),
   })
   .strict();
 
 export type FinalizeResponse = z.infer<typeof finalizeResponseSchema>;
+
+// `info` is mandatory. dv invokes it once per plugin per run
+// (cached) to learn the contract version and the op set the
+// plugin implements. The presence of `info` is what lets dv add
+// new ops to the contract without breaking older plugins: dv
+// simply doesn't invoke ops the plugin doesn't claim, and refuses
+// to run against an incompatible contract version.
+//
+// Required fields:
+//   contractVersion — must match dv's expected version. v1 expects "1".
+//   supportedOps    — every op the plugin implements. `discover` is
+//                     required for the plugin to be useful at all;
+//                     the rest depend on what dv asks for.
+//
+// Optional cosmetic fields:
+//   name, version — surface in `dv plugin list` / verify summaries.
+
+const PLUGIN_OP_NAME_PATTERN = /^[a-z][a-z0-9-]*$/;
+
+export const infoResponseSchema = z
+  .object({
+    contractVersion: z
+      .string()
+      .min(1, "contractVersion must be a non-empty string"),
+    supportedOps: z
+      .array(
+        z
+          .string()
+          .regex(
+            PLUGIN_OP_NAME_PATTERN,
+            "op names must be lowercase kebab (e.g. 'read-version')",
+          ),
+      )
+      .min(1, "supportedOps must list at least 'discover'"),
+    name: z.string().min(1).optional(),
+    version: z.string().min(1).optional(),
+  })
+  .strict();
+
+export type InfoResponse = z.infer<typeof infoResponseSchema>;
+
+// The contract version this dv binary speaks. Plugins must
+// declare a matching contractVersion in their info response.
+// Bumping this is itself a breaking change to the plugin contract
+// (every plugin in the ecosystem would have to update).
+export const DV_CONTRACT_VERSION = "1";
 
 interface ParseSingleOpResponseArgs {
   rawStdout: string;
@@ -198,6 +242,21 @@ export function parseFinalizeResponse(
     opName: "finalize",
     responseSchema: finalizeResponseSchema,
     acceptStructuredFailure: true,
+  });
+}
+
+// info goes through the standard error-envelope check — an
+// info-time `{ok: false, error: "..."}` is genuinely the
+// "I can't even tell you what I support" case and should surface
+// as plugin-error.
+export function parseInfoResponse(
+  args: ParseSingleOpResponseArgs,
+): InfoResponse {
+  return parsePluginResponse({
+    rawStdout: args.rawStdout,
+    pluginPath: args.pluginPath,
+    opName: "info",
+    responseSchema: infoResponseSchema,
   });
 }
 

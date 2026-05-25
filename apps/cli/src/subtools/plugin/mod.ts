@@ -4,12 +4,21 @@
 // later publishing's `release`) flows through here.
 
 export {
+  type InvokeInfoArgs,
+  invokeInfo,
+  PluginInfoCache,
+} from "./info.ts";
+export {
   type DiscoverResponse,
+  DV_CONTRACT_VERSION,
   discoverResponseSchema,
   type FinalizeResponse,
   finalizeResponseSchema,
+  type InfoResponse,
+  infoResponseSchema,
   parseDiscoverResponse,
   parseFinalizeResponse,
+  parseInfoResponse,
   parsePluginResponse,
   parseReadVersionResponse,
   parseReleaseResponse,
