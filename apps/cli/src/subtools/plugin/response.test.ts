@@ -2,6 +2,7 @@ import { assertEquals, assertThrows } from "@std/assert";
 import { DvError } from "../../domain/errors.ts";
 import {
   parseDiscoverResponse,
+  parseFinalizeResponse,
   parseReadVersionResponse,
   parseReleaseResponse,
   parseUpdateDependencyResponse,
@@ -317,6 +318,108 @@ Deno.test("parseReleaseResponse rejects unknown extra fields (strict shape)", ()
     () =>
       parseReleaseResponse({
         rawStdout: extraFieldStdout,
+        pluginPath: "/x",
+      }),
+    DvError,
+  );
+});
+
+Deno.test("parseFinalizeResponse accepts {ok:true} with no additional files", () => {
+  // Given the simplest happy response — finalize ran but had no
+  // companion files to refresh this run
+  const minimalStdout = `{"ok":true}`;
+
+  // When parsed
+  const validatedResponse = parseFinalizeResponse({
+    rawStdout: minimalStdout,
+    pluginPath: "/x",
+  });
+
+  // Then ok is true and the optional fields default to undefined
+  assertEquals(validatedResponse, { ok: true });
+});
+
+Deno.test("parseFinalizeResponse accepts {ok:true, additionalChangedFiles:[...]}", () => {
+  // Given a plugin reporting one lockfile to stage
+  const stagedStdout = `{"ok":true,"additionalChangedFiles":["deno.lock"],"message":"refreshed deno.lock"}`;
+
+  // When parsed
+  const validatedResponse = parseFinalizeResponse({
+    rawStdout: stagedStdout,
+    pluginPath: "/x",
+  });
+
+  // Then the path list flows through verbatim
+  assertEquals(validatedResponse.ok, true);
+  assertEquals(validatedResponse.additionalChangedFiles, ["deno.lock"]);
+  assertEquals(validatedResponse.message, "refreshed deno.lock");
+});
+
+Deno.test("parseFinalizeResponse accepts the {ok:true, unsupported:true} escape hatch", () => {
+  // Given a plugin that doesn't implement finalize — the
+  // documented "no finalize for me" response. dv treats this as
+  // a no-op rather than an error so plugins predating the op
+  // keep working.
+  const unsupportedStdout = `{"ok":true,"unsupported":true}`;
+
+  // When parsed
+  const validatedResponse = parseFinalizeResponse({
+    rawStdout: unsupportedStdout,
+    pluginPath: "/x",
+  });
+
+  // Then unsupported is the literal true and additionalChangedFiles
+  // is absent (no work was done)
+  assertEquals(validatedResponse, { ok: true, unsupported: true });
+});
+
+Deno.test("parseFinalizeResponse accepts {ok:false, error:...} as a hard failure", () => {
+  // Given a plugin reporting a failed lockfile refresh — finalize
+  // bypasses the standard error-envelope short-circuit (same
+  // pattern release uses) so the schema validates ok:false
+  // structurally rather than producing a plugin-error
+  const failedStdout = `{"ok":false,"message":"deno install failed"}`;
+
+  // When parsed
+  const validatedResponse = parseFinalizeResponse({
+    rawStdout: failedStdout,
+    pluginPath: "/x",
+  });
+
+  // Then the structured failure flows through; dv's pipeline
+  // turns ok:false into the abort-before-commit path
+  assertEquals(validatedResponse.ok, false);
+  assertEquals(validatedResponse.message, "deno install failed");
+});
+
+Deno.test("parseFinalizeResponse rejects unknown extra fields (strict shape)", () => {
+  // Given a plugin emitting a field the contract does not define
+  const extraFieldStdout = `{"ok":true,"surpriseField":42}`;
+
+  // When parsed
+  // Then DvError surfaces — typos and forward-compat probing
+  // should fail loudly rather than silently
+  assertThrows(
+    () =>
+      parseFinalizeResponse({
+        rawStdout: extraFieldStdout,
+        pluginPath: "/x",
+      }),
+    DvError,
+  );
+});
+
+Deno.test("parseFinalizeResponse rejects empty strings in additionalChangedFiles", () => {
+  // Given a plugin that somehow emitted an empty path — staging
+  // would do nothing useful and likely indicates a plugin bug
+  const emptyPathStdout = `{"ok":true,"additionalChangedFiles":[""]}`;
+
+  // When parsed
+  // Then DvError surfaces (schema sets minLength: 1 on each entry)
+  assertThrows(
+    () =>
+      parseFinalizeResponse({
+        rawStdout: emptyPathStdout,
         pluginPath: "/x",
       }),
     DvError,

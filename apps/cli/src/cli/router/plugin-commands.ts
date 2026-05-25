@@ -65,6 +65,16 @@ export const pluginRouter = router({
         path: { kind: "string" },
         "new-version": { kind: "string" },
         "git-tag": { kind: "string" },
+        trigger: {
+          kind: "string",
+          description:
+            "finalize-only: sets DV_FINALIZE_TRIGGER ('version' or 'v1')",
+        },
+        "bumped-packages": {
+          kind: "string",
+          description:
+            "finalize-only: JSON payload for DV_BUMPED_PACKAGES (default: [])",
+        },
         "stdin-json": { kind: "string" },
       },
       run: async ({ flags, argv, path }) => {
@@ -99,6 +109,21 @@ export const pluginRouter = router({
           suppressColor: flags["no-color"] === true,
           emitJson: flags.json === true,
         });
+        const rawTrigger = flags.trigger;
+        if (
+          rawTrigger !== undefined &&
+          rawTrigger !== "version" &&
+          rawTrigger !== "v1"
+        ) {
+          return done({
+            kind: "error",
+            error: new CliError({
+              code: "bad-args",
+              exitCode: 2,
+              message: `--trigger must be 'version' or 'v1' (got '${rawTrigger}')`,
+            }),
+          });
+        }
         await runPluginInvoke({
           pluginPositional,
           opName,
@@ -108,6 +133,8 @@ export const pluginRouter = router({
           discoverGlob: flags.glob,
           newVersion: flags["new-version"],
           gitTag: flags["git-tag"],
+          finalizeTrigger: rawTrigger,
+          bumpedPackagesJson: flags["bumped-packages"],
           stdinJson: flags["stdin-json"],
           emitJson: flags.json === true,
           colorEnabled,

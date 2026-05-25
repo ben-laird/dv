@@ -1291,7 +1291,7 @@
     "members": {
       "apps/cli": {
         "dependencies": [
-          "jsr:@seshat/cli@0.1"
+          "jsr:@seshat/cli@0.2"
         ]
       },
       "apps/docs": {

@@ -84,6 +84,39 @@ export const releaseResponseSchema = z
 
 export type ReleaseResponse = z.infer<typeof releaseResponseSchema>;
 
+// `finalize` is the optional post-write cleanup hook. Fires once per
+// plugin per `dv version` / `dv v1` run, after every write-version
+// + update-dependency call has completed but BEFORE staging and
+// committing. Plugins use it to refresh generated companion files
+// (deno.lock, package-lock.json, Cargo.lock, etc.) so they ship in
+// the same commit as the manifest edits.
+//
+// `additionalChangedFiles` — paths (relative to repo root) the
+// plugin touched during finalize. dv stages these alongside the
+// manifest changes and includes them in the version commit.
+//
+// `unsupported: true` — escape hatch for plugins that don't
+// implement finalize. dv invokes the op unconditionally (the
+// plugin contract has no op-declaration mechanism), so plugins
+// that haven't implemented it return `{ ok: true, unsupported: true }`
+// to signal "I got the request, no finalize for me." dv treats
+// this as a no-op rather than an error.
+//
+// `{ ok: false, error: "..." }` is a hard failure: the plugin's
+// finalize blew up (e.g. lockfile refresh hit a network error).
+// dv aborts the run BEFORE committing so the user keeps a clean
+// tree to retry.
+export const finalizeResponseSchema = z
+  .object({
+    ok: z.boolean(),
+    unsupported: z.boolean().optional(),
+    additionalChangedFiles: z.array(z.string().min(1)).optional(),
+    message: z.string().optional(),
+  })
+  .strict();
+
+export type FinalizeResponse = z.infer<typeof finalizeResponseSchema>;
+
 interface ParseSingleOpResponseArgs {
   rawStdout: string;
   pluginPath: string;
@@ -148,6 +181,22 @@ export function parseReleaseResponse(
     pluginPath: args.pluginPath,
     opName: "release",
     responseSchema: releaseResponseSchema,
+    acceptStructuredFailure: true,
+  });
+}
+
+// finalize also accepts `{ok: false}` as a valid response shape (a
+// finalize failure should produce a structured error that dv
+// reports as plugin-error, NOT short-circuit through the bare
+// error envelope). Same pattern as release.
+export function parseFinalizeResponse(
+  args: ParseSingleOpResponseArgs,
+): FinalizeResponse {
+  return parsePluginResponse({
+    rawStdout: args.rawStdout,
+    pluginPath: args.pluginPath,
+    opName: "finalize",
+    responseSchema: finalizeResponseSchema,
     acceptStructuredFailure: true,
   });
 }

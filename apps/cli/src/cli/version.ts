@@ -29,6 +29,7 @@ import { loadRenameLedger, renamesPath } from "../subtools/renames/mod.ts";
 import { computeAwaitingRelease } from "../subtools/tagging/mod.ts";
 import {
   buildVersionPlan,
+  invokeFinalize,
   invokeReadVersion,
   invokeUpdateDependency,
   invokeWriteVersion,
@@ -230,7 +231,13 @@ export async function runVersion(
   // --json. Column widths are precomputed from the per-package
   // names + known op labels (write-version is the longest) so the
   // lines align across the whole run.
-  const versionOpLabels = ["write-version", "changelog", "cascade", "commit"];
+  const versionOpLabels = [
+    "write-version",
+    "changelog",
+    "cascade",
+    "finalize",
+    "commit",
+  ];
   const progressReporter: ProgressReporter = options.emitJson
     ? makeSilentProgressReporter()
     : makeLiveProgressReporter({
@@ -396,6 +403,65 @@ export async function runVersion(
   }
   for (const update of cascadedUpdates) {
     touchedPaths.push(update.dependentPath);
+  }
+
+  // Per-plugin finalize pass (specs/plugin-contract.md § finalize).
+  // Fires once per plugin that governs a bumped package, AFTER all
+  // write-version + cascade update-dependency calls have settled.
+  // Lets the plugin refresh generated companion files (deno.lock,
+  // package-lock.json, Cargo.lock, etc.) so they ship in the same
+  // commit as the manifest edits.
+  //
+  // Group bumped packages by their governing plugin first so each
+  // plugin sees the full set of packages it owns that changed this
+  // run (lockfile refresh is naturally a cross-package operation).
+  const bumpedPackagesByPluginKey = new Map<
+    string,
+    { name: string; path: string; newVersion: string }[]
+  >();
+  for (const pendingEntry of plan.pending) {
+    const pkg = discoveredPackageByName.get(pendingEntry.package);
+    if (pkg === undefined) continue;
+    const existingList = bumpedPackagesByPluginKey.get(pkg.plugin) ?? [];
+    existingList.push({
+      name: pkg.name,
+      path: pkg.path,
+      newVersion: pendingEntry.projectedVersion,
+    });
+    bumpedPackagesByPluginKey.set(pkg.plugin, existingList);
+  }
+  for (const [pluginKey, packagesForPlugin] of bumpedPackagesByPluginKey) {
+    const resolvedPlugin = resolvedPluginsByUseString.get(pluginKey);
+    if (resolvedPlugin === undefined) {
+      throw new DvError({
+        code: "internal-plan-mismatch",
+        message: `no resolved plugin for '${pluginKey}' during finalize`,
+      });
+    }
+    const finalizeStep = progressReporter.start({
+      packageName: "",
+      operationName: "finalize",
+    });
+    try {
+      const finalizeResult = await invokeFinalize({
+        repoRootPath,
+        resolvedPlugin,
+        bumpedPackages: packagesForPlugin,
+        trigger: "version",
+        timeoutMs: DEFAULT_FAST_OP_TIMEOUT_MS,
+      });
+      for (const additionalFile of finalizeResult.additionalChangedFiles) {
+        touchedPaths.push(additionalFile);
+      }
+      finalizeStep.done();
+    } catch (caughtError) {
+      finalizeStep.fail(
+        caughtError instanceof Error
+          ? caughtError.message
+          : String(caughtError),
+      );
+      throw caughtError;
+    }
   }
 
   await stageFiles({ repoRootPath, paths: touchedPaths });

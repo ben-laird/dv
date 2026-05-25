@@ -52,11 +52,11 @@ The operations are the lifecycle hooks that `dv`'s subtools delegate to
 when they need ecosystem-specific behavior (see `design.md` § Capability
 decomposition). The mapping:
 
-| Subtool        | Delegates to op(s)                                |
-| -------------- | ------------------------------------------------- |
-| **discovery**  | `discover`                                        |
-| **versioning** | `read-version`, `write-version`, `update-dependency` |
-| **publishing** | `release`                                         |
+| Subtool        | Delegates to op(s)                                               |
+| -------------- | ---------------------------------------------------------------- |
+| **discovery**  | `discover`                                                       |
+| **versioning** | `read-version`, `write-version`, `update-dependency`, `finalize` |
+| **publishing** | `release`                                                        |
 
 The `records`, `changelog`, and `tagging` subtools need no plugin
 delegation — Record parsing and CHANGELOG rendering are format
@@ -158,6 +158,47 @@ What the plugin actually *does* is its business: `npm publish`, `cargo publish`,
 `gh release create`, post to Slack, nothing. Failures here do not roll back
 the tags (publishing is intentionally side-effectful and idempotency is the
 plugin's problem).
+
+### `finalize` (optional)
+
+Post-write cleanup hook. Fires once per plugin per `dv version` / `dv v1`
+run, after every `write-version` + `update-dependency` call has completed
+but **before** dv stages and commits. Lets the plugin refresh generated
+companion files (`deno.lock`, `package-lock.json`, `Cargo.lock`, etc.)
+so they ship in the same commit as the manifest edits.
+
+**Input:** `DV_REPO_ROOT`, `DV_FINALIZE_TRIGGER` (`"version"` or `"v1"`),
+`DV_BUMPED_PACKAGES` (JSON array of `{name, path, new_version}` entries
+for packages this plugin governs that bumped this run).
+
+**Output:**
+
+```json
+{ "ok": true, "additionalChangedFiles": ["deno.lock"] }
+```
+
+Paths are relative to repo root. dv stages every entry in
+`additionalChangedFiles` alongside the manifest changes and includes
+them in the version commit. The list may be empty when no companion
+files needed touching (e.g. a lockfile that's already in sync).
+
+Plugins that don't implement finalize should respond with:
+
+```json
+{ "ok": true, "unsupported": true }
+```
+
+dv treats `unsupported: true` as a no-op — the escape hatch for
+plugins predating the op, since the contract has no op-declaration
+mechanism. New plugins should implement finalize even if it's just
+this no-op response, so the unknown-op default-arm doesn't surface
+as a `plugin-exit-nonzero` error.
+
+A hard failure (`{ ok: false, error: "..." }`) aborts the run
+**before** the commit, leaving the user with a clean tree to retry.
+This is different from `release`'s failure semantics: release runs
+*after* tags are minted and can't roll back; finalize runs before
+any commit, so failing loudly is safe.
 
 ## Errors
 

@@ -95,6 +95,12 @@ case "\${DV_OPERATION:-$1}" in
     echo "$DV_NEW_VERSION" > "$DV_PACKAGE_PATH/VERSION"
     echo '{"ok":true}'
     ;;
+  finalize)
+    # Bash plugins that don't need post-write cleanup use the
+    # documented unsupported:true escape hatch so dv treats finalize
+    # as a no-op.
+    echo '{"ok":true,"unsupported":true}'
+    ;;
 esac
 `,
   );

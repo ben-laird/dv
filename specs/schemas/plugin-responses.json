@@ -80,6 +80,25 @@
         },
         "message": { "type": "string" }
       }
+    },
+    "finalize": {
+      "title": "finalize response",
+      "description": "Result of the post-write cleanup hook. Lets a plugin refresh generated companion files (lockfiles, etc.) so they ship in the same commit as the manifest edits. Fires once per plugin per `dv version` / `dv v1` run, after every write-version + update-dependency call.",
+      "type": "object",
+      "required": ["ok"],
+      "properties": {
+        "ok": { "type": "boolean" },
+        "unsupported": {
+          "type": "boolean",
+          "description": "True if this plugin does not implement finalize. dv treats this as a no-op rather than an error — the escape hatch for plugins predating the op."
+        },
+        "additionalChangedFiles": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Repo-relative paths the plugin touched during finalize. dv stages these alongside the manifest changes for the version commit."
+        },
+        "message": { "type": "string" }
+      }
     }
   },
   "oneOf": [
@@ -88,6 +107,7 @@
     { "$ref": "#/$defs/write-version" },
     { "$ref": "#/$defs/update-dependency" },
     { "$ref": "#/$defs/release" },
+    { "$ref": "#/$defs/finalize" },
     { "$ref": "#/$defs/error" }
   ]
 }

@@ -95,6 +95,12 @@ case "\${DV_OPERATION:-$1}" in
   update-dependency)
     echo '{"ok":true,"changed":false}'
     ;;
+  finalize)
+    # Bash plugins that don't need post-write cleanup use the
+    # documented unsupported:true escape hatch so dv treats finalize
+    # as a no-op.
+    echo '{"ok":true,"unsupported":true}'
+    ;;
 esac
 `,
   );

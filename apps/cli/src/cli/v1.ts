@@ -29,6 +29,7 @@ import { loadRenameLedger, renamesPath } from "../subtools/renames/mod.ts";
 import { buildRenameResolver } from "../subtools/renames/resolve.ts";
 import { computeAwaitingRelease } from "../subtools/tagging/mod.ts";
 import {
+  invokeFinalize,
   invokeReadVersion,
   invokeUpdateDependency,
   invokeWriteVersion,
@@ -308,7 +309,13 @@ export async function runV1(options: RunV1Options): Promise<RunV1Result> {
 
   // Execute the plan. The shape mirrors runVersion's per-package
   // loop but for the single target.
-  const v1OpLabels = ["write-version", "changelog", "cascade", "commit"];
+  const v1OpLabels = [
+    "write-version",
+    "changelog",
+    "cascade",
+    "finalize",
+    "commit",
+  ];
   const progressReporter: ProgressReporter = options.emitJson
     ? makeSilentProgressReporter()
     : makeLiveProgressReporter({
@@ -433,6 +440,40 @@ export async function runV1(options: RunV1Options): Promise<RunV1Result> {
   }
   for (const update of cascadedUpdates) {
     touchedPaths.push(update.dependentPath);
+  }
+
+  // Finalize the target package's plugin so generated companion
+  // files (deno.lock, etc.) refresh and ship with this commit.
+  // v1 only ever bumps one package, so there's exactly one plugin
+  // to finalize — no grouping needed. See specs/plugin-contract.md
+  // § finalize and dv version's finalize loop for context.
+  const finalizeStep = progressReporter.start({
+    packageName: "",
+    operationName: "finalize",
+  });
+  try {
+    const finalizeResult = await invokeFinalize({
+      repoRootPath,
+      resolvedPlugin: targetPlugin,
+      bumpedPackages: [
+        {
+          name: targetPackage.name,
+          path: targetPackage.path,
+          newVersion: "1.0.0",
+        },
+      ],
+      trigger: "v1",
+      timeoutMs: DEFAULT_FAST_OP_TIMEOUT_MS,
+    });
+    for (const additionalFile of finalizeResult.additionalChangedFiles) {
+      touchedPaths.push(additionalFile);
+    }
+    finalizeStep.done();
+  } catch (caughtError) {
+    finalizeStep.fail(
+      caughtError instanceof Error ? caughtError.message : String(caughtError),
+    );
+    throw caughtError;
   }
 
   await stageFiles({ repoRootPath, paths: touchedPaths });

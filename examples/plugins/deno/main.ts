@@ -37,6 +37,9 @@ switch (op) {
   case "release":
     runRelease();
     break;
+  case "finalize":
+    await runFinalize();
+    break;
   default:
     console.error(`unknown dv op: '${op ?? "<missing>"}'`);
     Deno.exit(1);
@@ -279,4 +282,83 @@ function runRelease(): void {
       message: `example plugin: would have published ${packageName}@${newVersion}; replace this stub to actually publish`,
     }),
   );
+}
+
+// === finalize ==================================================
+
+// Fires once per plugin after every write-version + cascade
+// update-dependency call has completed, before dv stages + commits.
+// We refresh deno.lock so it ships with the manifest edits in the
+// same commit (otherwise the next deno-anything command would
+// dirty the user's tree).
+//
+// Env vars dv sets for this op:
+//   DV_REPO_ROOT            — absolute path to repo root
+//   DV_FINALIZE_TRIGGER     — "version" or "v1"
+//   DV_BUMPED_PACKAGES      — JSON array of {name, path, new_version}
+//                             entries for packages this plugin
+//                             governs that bumped this run
+//
+// Return shape (specs/schemas/plugin-responses.json):
+//   { ok, unsupported?, additionalChangedFiles?, message? }
+
+async function runFinalize(): Promise<void> {
+  const repoRoot = Deno.env.get("DV_REPO_ROOT");
+  if (!repoRoot) {
+    console.log(
+      JSON.stringify({ ok: false, error: "DV_REPO_ROOT is required" }),
+    );
+    Deno.exit(1);
+  }
+
+  // Snapshot deno.lock's content (or absence) before we touch it
+  // so we can report it as additionally-changed iff the install
+  // actually moved bytes. Reporting it unconditionally would
+  // create empty-diff churn for runs where the lockfile didn't
+  // need refreshing.
+  const lockfilePath = join(repoRoot, "deno.lock");
+  const lockfileBefore = await readFileOrUndefined(lockfilePath);
+
+  // `deno install` (no args) refreshes the lockfile against the
+  // current manifests. Quiet so its output doesn't leak into our
+  // stdout (which dv parses as JSON).
+  const installResult = await new Deno.Command("deno", {
+    args: ["install", "--quiet"],
+    cwd: repoRoot,
+    stdout: "piped",
+    stderr: "piped",
+  }).output();
+  if (!installResult.success) {
+    const stderrText = new TextDecoder().decode(installResult.stderr).trim();
+    console.log(
+      JSON.stringify({
+        ok: false,
+        error: `deno install failed (exit ${installResult.code}): ${stderrText || "<no stderr>"}`,
+      }),
+    );
+    Deno.exit(1);
+  }
+
+  const lockfileAfter = await readFileOrUndefined(lockfilePath);
+  const additionalChangedFiles =
+    lockfileBefore !== lockfileAfter ? ["deno.lock"] : [];
+  console.log(
+    JSON.stringify({
+      ok: true,
+      additionalChangedFiles,
+      message:
+        additionalChangedFiles.length > 0
+          ? "refreshed deno.lock"
+          : "deno.lock already up to date",
+    }),
+  );
+}
+
+async function readFileOrUndefined(path: string): Promise<string | undefined> {
+  try {
+    return await Deno.readTextFile(path);
+  } catch (caughtError) {
+    if (caughtError instanceof Deno.errors.NotFound) return undefined;
+    throw caughtError;
+  }
 }

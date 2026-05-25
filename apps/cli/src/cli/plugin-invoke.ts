@@ -3,6 +3,7 @@ import { resolvePlugin } from "../subtools/discovery/resolve.ts";
 import {
   invokeOp,
   parseDiscoverResponse,
+  parseFinalizeResponse,
   parseReadVersionResponse,
   parseReleaseResponse,
   parseUpdateDependencyResponse,
@@ -31,6 +32,7 @@ export const PLUGIN_OP_NAMES = [
   "write-version",
   "update-dependency",
   "release",
+  "finalize",
 ] as const;
 
 export type PluginOpName = (typeof PLUGIN_OP_NAMES)[number];
@@ -48,6 +50,13 @@ export interface RunPluginInvokeOptions {
   discoverGlob?: string;
   newVersion?: string;
   gitTag?: string;
+  // finalize-only inputs: --trigger flips DV_FINALIZE_TRIGGER
+  // ("version" or "v1"); --bumped-packages is the literal JSON
+  // payload dv would have built from the run's plan. For an
+  // ad-hoc debug invocation, the user may pass any well-formed
+  // value (e.g. `[]` to simulate "nothing bumped").
+  finalizeTrigger?: "version" | "v1";
+  bumpedPackagesJson?: string;
   stdinJson?: string;
   timeoutMs?: number;
   emitJson: boolean;
@@ -164,6 +173,8 @@ interface BuildInvokeEnvironmentArgs {
   discoverGlob?: string;
   newVersion?: string;
   gitTag?: string;
+  finalizeTrigger?: "version" | "v1";
+  bumpedPackagesJson?: string;
 }
 
 function buildInvokeEnvironment(
@@ -192,7 +203,18 @@ function buildInvokeEnvironment(
     return childEnvironment;
   }
 
-  // Every non-discover op requires DV_PACKAGE_NAME + DV_PACKAGE_PATH.
+  // finalize is per-plugin, not per-package — it sees DV_REPO_ROOT
+  // (already set), DV_FINALIZE_TRIGGER, and DV_BUMPED_PACKAGES.
+  // No DV_PACKAGE_NAME / DV_PACKAGE_PATH here; the bumped-packages
+  // payload supplies that information for every package the
+  // plugin governs that bumped this run.
+  if (args.opName === "finalize") {
+    childEnvironment.DV_FINALIZE_TRIGGER = args.finalizeTrigger ?? "version";
+    childEnvironment.DV_BUMPED_PACKAGES = args.bumpedPackagesJson ?? "[]";
+    return childEnvironment;
+  }
+
+  // Every other non-discover op requires DV_PACKAGE_NAME + DV_PACKAGE_PATH.
   if (args.packageName === undefined) {
     throw missingFlagError({
       opName: args.opName,
@@ -322,6 +344,11 @@ function conformanceCheck(args: ConformanceCheckArgs): unknown {
         rawStdout: args.rawStdout,
         pluginPath: args.pluginPath,
       });
+    case "finalize":
+      return parseFinalizeResponse({
+        rawStdout: args.rawStdout,
+        pluginPath: args.pluginPath,
+      });
   }
 }
 
@@ -400,6 +427,14 @@ function summarizeResponse(opName: PluginOpName, parsed: unknown): string {
           ? ""
           : ` published=${String(responseRecord.published)}`;
       return `(ok=${ok}${published})`;
+    }
+    case "finalize": {
+      if (responseRecord.unsupported === true) return "(unsupported)";
+      const additionalChangedFiles = responseRecord.additionalChangedFiles;
+      const count = Array.isArray(additionalChangedFiles)
+        ? additionalChangedFiles.length
+        : 0;
+      return `(${count} file${count === 1 ? "" : "s"} changed)`;
     }
   }
 }

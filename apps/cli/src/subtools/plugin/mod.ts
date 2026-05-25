@@ -6,7 +6,10 @@
 export {
   type DiscoverResponse,
   discoverResponseSchema,
+  type FinalizeResponse,
+  finalizeResponseSchema,
   parseDiscoverResponse,
+  parseFinalizeResponse,
   parsePluginResponse,
   parseReadVersionResponse,
   parseReleaseResponse,

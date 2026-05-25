@@ -3,6 +3,7 @@ import { resolvePlugin } from "../subtools/discovery/resolve.ts";
 import {
   invokeOp,
   parseDiscoverResponse,
+  parseFinalizeResponse,
   parseReadVersionResponse,
 } from "../subtools/plugin/mod.ts";
 import { parsePluginPositional } from "./parse-plugin-positional.ts";
@@ -157,6 +158,56 @@ export async function runPluginVerify(
       outcome: "skipped",
       detail:
         "side-effectful — exercise with `dv plugin invoke` against a throwaway fixture",
+    });
+  }
+
+  // ── finalize: safe to verify with an empty bumped-packages list
+  // (the plugin should be a no-op when nothing changed). Either a
+  // proper `{ ok: true, additionalChangedFiles: [] }` response or
+  // the `{ ok: true, unsupported: true }` escape hatch counts as
+  // a pass — both satisfy the contract.
+  try {
+    const finalizeInvocation = await invokeOp({
+      resolvedPlugin,
+      opName: "finalize",
+      environmentVariables: buildVerifyEnvironment({
+        repoRootPath,
+        extra: {
+          DV_FINALIZE_TRIGGER: "version",
+          DV_BUMPED_PACKAGES: "[]",
+        },
+      }),
+      timeoutMs: opTimeoutMs,
+    });
+    const finalizeResponse = parseFinalizeResponse({
+      rawStdout: finalizeInvocation.rawStdout,
+      pluginPath: resolvedPlugin.path,
+    });
+    if (finalizeResponse.unsupported === true) {
+      checks.push({
+        name: "finalize",
+        outcome: "pass",
+        detail: "plugin returned `unsupported: true` (escape hatch)",
+      });
+    } else if (finalizeResponse.ok) {
+      const count = finalizeResponse.additionalChangedFiles?.length ?? 0;
+      checks.push({
+        name: "finalize",
+        outcome: "pass",
+        detail: `no-op run reported ${count} additional file${count === 1 ? "" : "s"}`,
+      });
+    } else {
+      checks.push({
+        name: "finalize",
+        outcome: "fail",
+        detail: `plugin returned ok:false (${finalizeResponse.message ?? "no message"})`,
+      });
+    }
+  } catch (caughtError) {
+    checks.push({
+      name: "finalize",
+      outcome: "fail",
+      detail: describeError(caughtError),
     });
   }
 
