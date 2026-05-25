@@ -5,6 +5,10 @@ one h3 subsection per Record consumed during that release, with the
 Record's body prose verbatim. For terse one-line bullets, see
 CHANGELOG.md.
 
+## [0.5.0] - 2026-05-25
+
+### Add finalize plugin op so generated companion files ship with the version commit
+
 ## [0.4.0] - 2026-05-25
 
 ### Migrate every command to the @seshat/cli router framework
