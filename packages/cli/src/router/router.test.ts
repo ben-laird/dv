@@ -207,13 +207,13 @@ Deno.test("router help previews grandchildren under each sub-router on a continu
   const result = await runWithCapture({ rootRouter: root, argv: [] });
 
   // Then the sub-router's children are listed on a continuation
-  // line under it
+  // line under it, with the ↳ arrow marker and the child names
+  // separated by two spaces so each reads as its own token.
   assertEquals(result.exitCode, 0);
   const helpText = result.stdoutLines.join("\n");
   assertStringIncludes(helpText, "compound");
   assertStringIncludes(helpText, "a sub-router with children");
-  // The grandchildren appear as a comma-separated preview, sorted.
-  assertStringIncludes(helpText, "alpha, beta");
+  assertStringIncludes(helpText, "↳ alpha  beta");
   // The leaf row does NOT get a continuation line (leaves have
   // flags, not children — that lives in `leaf --help`).
   const leafLine = result.stdoutLines.find((line) =>

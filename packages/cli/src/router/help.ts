@@ -74,14 +74,24 @@ export function formatRouterHelp<Ctx>(args: FormatRouterHelpArgs<Ctx>): string {
     // line so `dv --help` shows what's inside `dv plugin` /
     // `dv migrate` without making the reader drill down. Leaves
     // get no continuation (their flags live in `<name> --help`).
+    //
+    // The `↳ ` prefix + bolded child names signal "these are
+    // subcommands you can type" two ways — the arrow gives depth
+    // and the bolding matches how parent command names look in
+    // the main list. Two-space separator between names so each
+    // command stands as its own scannable token rather than
+    // running together as a comma-list (which the reader could
+    // mistake for prose).
     if (childNode.kind === "router") {
       const grandchildNames = Object.keys(childNode.children).sort(
         (left, right) => left.localeCompare(right),
       );
       if (grandchildNames.length > 0) {
-        lines.push(
-          `${continuationIndent}${dim(grandchildNames.join(", "), colorEnabled)}`,
-        );
+        const arrow = bold("↳", colorEnabled);
+        const renderedNames = grandchildNames
+          .map((name) => bold(name, colorEnabled))
+          .join("  ");
+        lines.push(`${continuationIndent}${arrow} ${renderedNames}`);
       }
     }
   }
