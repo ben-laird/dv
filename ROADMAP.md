@@ -101,16 +101,38 @@ later](specs/v1-scope.md#deferred-to-later). Highlights:
 Tracked here because they're scaffolding/quality work that isn't
 user-visible — the user-facing scope docs are the wrong home.
 
-- **Errors-as-values (Result<T, E>) in `@seshat/cli`.** Considered
-  during the EC1–EC7 structured-error sweep and deliberately deferred
-  to keep that sweep atomic. The current model is exception-based
-  throw → framework catch → `renderCliError`. A Result-based API
-  would let runners *return* failures so the type system makes the
-  exit-1 path explicit at every call site (Rust's `main() -> Result`
-  convention). Trigger: enough catch-site narrowing pain to make the
-  ergonomics worth the API churn. Likely lives as a separate
-  `defineResultCli` entry point so the throw-based shape stays
-  available.
+- **Errors-as-values in `@seshat/cli`.** Landed via the router
+  framework's `CliResponse` discriminated union (`{ kind: "ok" |
+  "error" | "help" }`). Effect-style: typed errors are returned by
+  runners and rendered by the framework; thrown errors are bugs we
+  degrade gracefully on (caught at the trampoline boundary, wrapped
+  into `code: "unknown"`). See `packages/cli/src/router/`.
+- **Lift `requireRepoRoot` into a root-router pre-handler.** Today
+  every dv leaf calls `requireRepoRoot()` independently. The router's
+  parent-with-logic feature (a router's own `run` that can enrich
+  ctx before delegating via `next(child, ...)`) lets us do the
+  resolution once and put it in `DvCtx`. Each leaf then reads
+  `ctx.repoRootPath` directly. Same trick can fold in
+  `loadConfig(configPath(...))` for the commands that all need it.
+  Trigger: the per-leaf calls are repetitive and slow the dv-side
+  refactor cost of every new command.
+- **Move printing out of runners into `CliResponse`.** Today's
+  `runX()` functions print directly to stdout and leaves return
+  `done({ kind: "ok" })`. The cleaner end state is for runners to
+  return `{ stdout?, json? }` and let the framework's renderer
+  print, so leaves are pure data and the framework owns IO. Big
+  refactor; mostly mechanical (every console.log moves into a
+  string-builder) but each leaf needs visual diff against the
+  current output before/after. Worth doing when we add a second
+  consumer that wants to capture dv's output programmatically
+  (e.g. a TUI shell that drives `dv status` and renders inline).
+- **Surface router/leaf descriptions in parent listings.** Sub-router
+  rows in `dv --help` show the sub-router's own description but not
+  its children's; today you have to descend one level to see what's
+  inside. A two-line listing (`plugin    Plugin authoring + audit /
+  list, invoke, verify`) or an inline child preview would make the
+  top-level help self-explanatory. Implementation lives in
+  `packages/cli/src/router/help.ts`.
 - **Real prompt subtool.** `dv release`'s confirmation uses the
   built-in `Deno.prompt`. Replace with a proper prompt subtool when
   any second command needs one (and probably worth doing alongside
