@@ -1,7 +1,11 @@
 import type { Package } from "../../domain/package.ts";
 import { parseVersion, type Version } from "../../domain/version.ts";
 import type { ResolvedPlugin } from "../discovery/resolve.ts";
-import { invokeOp, parseReadVersionResponse } from "../plugin/mod.ts";
+import {
+  invokeOp,
+  parseReadVersionResponse,
+  type TracingHooks,
+} from "../plugin/mod.ts";
 
 // Invokes the `read-version` plugin Op per specs/plugin-contract.md.
 // Sets the env vars dv promises (DV_REPO_ROOT, DV_PACKAGE_NAME,
@@ -18,6 +22,7 @@ export interface InvokeReadVersionArgs {
   pkg: Package;
   resolvedPlugin: ResolvedPlugin;
   timeoutMs: number;
+  tracingHooks?: TracingHooks;
 }
 
 export async function invokeReadVersion(
@@ -32,6 +37,7 @@ export async function invokeReadVersion(
     opName: "read-version",
     environmentVariables: childEnvironment,
     timeoutMs: args.timeoutMs,
+    tracingHooks: args.tracingHooks,
   });
   const validatedResponse = parseReadVersionResponse({
     rawStdout,

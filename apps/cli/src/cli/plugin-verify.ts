@@ -6,7 +6,9 @@ import {
   parseDiscoverResponse,
   parseFinalizeResponse,
   parseReadVersionResponse,
+  type TracingHooks,
 } from "../subtools/plugin/mod.ts";
+import { makeStderrTracingHooks } from "./debug-trace.ts";
 import { parsePluginPositional } from "./parse-plugin-positional.ts";
 import { makeStyler } from "./styler.ts";
 
@@ -39,6 +41,7 @@ export interface RunPluginVerifyOptions {
   timeoutMs?: number;
   emitJson: boolean;
   colorEnabled: boolean;
+  debug?: boolean;
 }
 
 export type CheckOutcome = "pass" | "fail" | "skipped";
@@ -70,6 +73,9 @@ export async function runPluginVerify(
   });
   const opTimeoutMs = options.timeoutMs ?? DEFAULT_VERIFY_TIMEOUT_MS;
   const discoverGlob = options.discoverGlob ?? DEFAULT_VERIFY_GLOB;
+  const tracingHooks: TracingHooks | undefined = options.debug
+    ? makeStderrTracingHooks({ colorEnabled: options.colorEnabled })
+    : undefined;
 
   const checks: CheckReport[] = [];
 
@@ -84,6 +90,7 @@ export async function runPluginVerify(
     const infoResponse = await invokeInfo({
       resolvedPlugin,
       timeoutMs: opTimeoutMs,
+      tracingHooks,
     });
     supportedOps = new Set(infoResponse.supportedOps);
     const nameSuffix =
@@ -128,6 +135,7 @@ export async function runPluginVerify(
           extra: { DV_DISCOVER_GLOB: discoverGlob },
         }),
         timeoutMs: opTimeoutMs,
+        tracingHooks,
       });
       const discoverResponse = parseDiscoverResponse({
         rawStdout: discoverInvocation.rawStdout,
@@ -173,6 +181,7 @@ export async function runPluginVerify(
               },
             }),
             timeoutMs: opTimeoutMs,
+            tracingHooks,
           });
           const readVersionResponse = parseReadVersionResponse({
             rawStdout: readVersionInvocation.rawStdout,
@@ -228,6 +237,7 @@ export async function runPluginVerify(
           },
         }),
         timeoutMs: opTimeoutMs,
+        tracingHooks,
       });
       const finalizeResponse = parseFinalizeResponse({
         rawStdout: finalizeInvocation.rawStdout,
@@ -263,6 +273,7 @@ export async function runPluginVerify(
       opName: BOGUS_OP_NAME,
       environmentVariables: buildVerifyEnvironment({ repoRootPath }),
       timeoutMs: opTimeoutMs,
+      tracingHooks,
     });
     // If we got here, the plugin returned exit 0 for a nonsense op
     // — that's a contract violation. The contract says bad input

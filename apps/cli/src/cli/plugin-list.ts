@@ -13,6 +13,8 @@ import {
   resolvePlugin,
 } from "../subtools/discovery/resolve.ts";
 import { requireRepoRoot } from "../subtools/git/mod.ts";
+import type { TracingHooks } from "../subtools/plugin/mod.ts";
+import { makeStderrTracingHooks } from "./debug-trace.ts";
 import { makeStyler } from "./styler.ts";
 
 // `dv plugin list` — read-only audit answering "did my config wire up
@@ -30,6 +32,7 @@ import { makeStyler } from "./styler.ts";
 export interface RunPluginListOptions {
   emitJson: boolean;
   colorEnabled: boolean;
+  debug?: boolean;
 }
 
 export type PluginListEntryStatus = "ok" | "resolve-failed" | "discover-failed";
@@ -58,6 +61,9 @@ export async function runPluginList(
 ): Promise<RunPluginListResult> {
   const repoRootPath = await requireRepoRoot();
   const loadedConfig = await loadConfig(configPath(repoRootPath));
+  const tracingHooks: TracingHooks | undefined = options.debug
+    ? makeStderrTracingHooks({ colorEnabled: options.colorEnabled })
+    : undefined;
 
   // Resolve and discover each assignment independently so one
   // broken plugin doesn't hide the rest. The whole-config
@@ -78,6 +84,7 @@ export async function runPluginList(
         assignmentIndex,
         pluginAssignment,
         repoRootPath,
+        tracingHooks,
       }),
     );
   }
@@ -125,6 +132,7 @@ interface BuildEntryArgs {
   assignmentIndex: number;
   pluginAssignment: PluginAssignment;
   repoRootPath: string;
+  tracingHooks?: TracingHooks;
 }
 
 async function buildEntry(args: BuildEntryArgs): Promise<PluginListEntry> {
@@ -162,6 +170,7 @@ async function buildEntry(args: BuildEntryArgs): Promise<PluginListEntry> {
       pluginAssignment: args.pluginAssignment,
       assignmentIndex: args.assignmentIndex,
       repoRootPath: args.repoRootPath,
+      tracingHooks: args.tracingHooks,
     });
   } catch (caughtError) {
     return {

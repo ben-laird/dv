@@ -6,6 +6,7 @@ import {
   invokeOp,
   parseReleaseResponse,
   type ReleaseResponse,
+  type TracingHooks,
 } from "../plugin/mod.ts";
 import { buildOpEnvironment } from "../versioning/read-version.ts";
 
@@ -40,6 +41,7 @@ export interface InvokeReleaseArgs {
   // publish) are legitimately slow and variable. `undefined` here
   // means "no timeout."
   timeoutMs?: number;
+  tracingHooks?: TracingHooks;
 }
 
 export async function invokeRelease(
@@ -74,6 +76,7 @@ export async function invokeRelease(
     opName: "release",
     environmentVariables: childEnvironment,
     timeoutMs: args.timeoutMs,
+    tracingHooks: args.tracingHooks,
   });
   return parseReleaseResponse({
     rawStdout,

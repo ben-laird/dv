@@ -9,6 +9,7 @@ import {
   resolvePlugin,
 } from "../subtools/discovery/resolve.ts";
 import { assertCleanTree, requireRepoRoot } from "../subtools/git/mod.ts";
+import type { TracingHooks } from "../subtools/plugin/mod.ts";
 import { invokeRelease } from "../subtools/publishing/mod.ts";
 import {
   computeAwaitingRelease,
@@ -23,6 +24,7 @@ import {
   type PackageCurrentVersionEntry,
   type Plan,
 } from "../subtools/versioning/mod.ts";
+import { makeStderrTracingHooks } from "./debug-trace.ts";
 import {
   makeLiveProgressReporter,
   makeSilentProgressReporter,
@@ -59,6 +61,7 @@ export interface RunReleaseOptions {
   // skip the check. false → force it on. Flag pair: `--allow-dirty`
   // / `--no-allow-dirty`.
   allowDirty?: boolean;
+  debug?: boolean;
 }
 
 export interface ReleaseOpOutcome {
@@ -84,6 +87,9 @@ export async function runRelease(
   const repoRootPath = await requireRepoRoot();
   const configFilePath = configPath(repoRootPath);
   const loadedConfig = await loadConfig(configFilePath);
+  const tracingHooks: TracingHooks | undefined = options.debug
+    ? makeStderrTracingHooks({ colorEnabled: options.colorEnabled })
+    : undefined;
 
   const effectiveDryRun = options.dryRun ?? loadedConfig.safety.dryRunByDefault;
   const effectivePush = options.push ?? loadedConfig.git.autoPush;
@@ -101,6 +107,7 @@ export async function runRelease(
   const discoveredPackages = await discoverPackages({
     config: loadedConfig,
     repoRootPath,
+    tracingHooks,
   });
   const resolvedPluginsByUseString = await resolveAllPlugins({
     pluginAssignments: loadedConfig.discovery.plugins,
@@ -110,6 +117,7 @@ export async function runRelease(
     discoveredPackages,
     resolvedPluginsByUseString,
     repoRootPath,
+    tracingHooks,
   });
 
   const packagesByName = new Map(
@@ -265,6 +273,7 @@ export async function runRelease(
     repoRootPath,
     timeoutMs: resolvePublishingTimeoutMs(loadedConfig.publishing.timeout),
     progressReporter,
+    tracingHooks,
   });
 
   if (effectivePush && pushSequence !== "push-then-publish") {
@@ -433,6 +442,7 @@ interface RunReleasePhaseArgs {
   repoRootPath: string;
   timeoutMs?: number;
   progressReporter: ProgressReporter;
+  tracingHooks?: TracingHooks;
 }
 
 async function runReleasePhase(
@@ -465,6 +475,7 @@ async function runReleasePhase(
         newVersion: parseVersion(entry.version),
         gitTag: entry.tag,
         timeoutMs: args.timeoutMs,
+        tracingHooks: args.tracingHooks,
       });
       if (response.ok) {
         releaseStep.done();
@@ -524,6 +535,7 @@ interface ReadAllCurrentVersionsArgs {
   discoveredPackages: Package[];
   resolvedPluginsByUseString: Map<string, ResolvedPlugin>;
   repoRootPath: string;
+  tracingHooks?: TracingHooks;
 }
 
 async function readAllCurrentVersions(
@@ -540,6 +552,7 @@ async function readAllCurrentVersions(
       pkg: discoveredPackage,
       resolvedPlugin,
       timeoutMs: DEFAULT_FAST_OP_TIMEOUT_MS,
+      tracingHooks: args.tracingHooks,
     });
     entries.push({
       packageName: discoveredPackage.name,

@@ -8,13 +8,17 @@ const { command } = forCtx<DvCtx>();
 export const statusLeaf = command({
   description: "Show what dv would do (read-only)",
   flags: { ...sharedOutputFlags },
-  run: async ({ flags }) => {
+  run: async ({ flags, ctx }) => {
     const colorEnabled = resolveColorEnabled({
       forceColor: flags.color === true,
       suppressColor: flags["no-color"] === true,
       emitJson: flags.json === true,
     });
-    await runStatus({ emitJson: flags.json === true, colorEnabled });
+    await runStatus({
+      emitJson: flags.json === true,
+      colorEnabled,
+      debug: ctx.debugEnabled,
+    });
     return done({ kind: "ok" });
   },
 });

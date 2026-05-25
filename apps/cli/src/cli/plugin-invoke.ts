@@ -10,7 +10,9 @@ import {
   parseReleaseResponse,
   parseUpdateDependencyResponse,
   parseWriteVersionResponse,
+  type TracingHooks,
 } from "../subtools/plugin/mod.ts";
+import { makeStderrTracingHooks } from "./debug-trace.ts";
 import { parsePluginPositional } from "./parse-plugin-positional.ts";
 import { makeStyler } from "./styler.ts";
 
@@ -64,6 +66,7 @@ export interface RunPluginInvokeOptions {
   timeoutMs?: number;
   emitJson: boolean;
   colorEnabled: boolean;
+  debug?: boolean;
 }
 
 export interface RunPluginInvokeResult {
@@ -114,12 +117,20 @@ export async function runPluginInvoke(
     });
   }
 
+  // `dv plugin invoke` already prints the exchange itself; the
+  // tool-wide `--debug` reporter adds a second, deeper view (full
+  // exec line, exit code, duration) for plugin authors who want to
+  // see what the runner observed.
+  const tracingHooks: TracingHooks | undefined = options.debug
+    ? makeStderrTracingHooks({ colorEnabled: options.colorEnabled })
+    : undefined;
   const invocation = await invokeOp({
     resolvedPlugin,
     opName: options.opName,
     environmentVariables,
     stdinPayload,
     timeoutMs: options.timeoutMs ?? DEFAULT_INVOKE_TIMEOUT_MS,
+    tracingHooks,
   });
 
   const parsedResponse = conformanceCheck({

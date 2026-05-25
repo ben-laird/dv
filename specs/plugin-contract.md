@@ -7,6 +7,30 @@ via a documented JSON-over-stdio contract.
 This document is the canonical reference. Plugins that conform to this
 contract — regardless of implementation language — work with `dv`.
 
+## Contract version
+
+This document describes **contract version `"1"`** — the v1 plugin
+contract. `dv` advertises the expected contract version to every plugin
+via `DV_CONTRACT_VERSION` and reads each plugin's claimed version from
+the [`info`](#info) op's `contractVersion` field. A mismatch is a hard
+error (`plugin-contract-mismatch`) raised before any other op runs, so
+contract drift surfaces immediately rather than as confusing downstream
+failures.
+
+The contract version is a flat integer string (no semver decomposition).
+A breaking change to the wire format — renaming or removing an op,
+changing an op's env vars or stdin payload, changing a response shape
+in a way that older plugins wouldn't satisfy — bumps the contract
+version. *Adding* an optional op is non-breaking and ships within the
+same contract version: `info.supportedOps` already gates whether dv
+invokes a given op, so existing plugins keep working without changes.
+
+When a future contract version ships, `dv` and its plugins both have
+to move together; there's no negotiation. The expected lifecycle is
+that a `dv` major release publishes a new contract version and any
+plugin upgrade for that release announces the matching version in its
+`info` response.
+
 ## Plugin shape
 
 A plugin is one of:

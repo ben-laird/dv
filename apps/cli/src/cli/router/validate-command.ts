@@ -8,7 +8,7 @@ const { command } = forCtx<DvCtx>();
 export const validateLeaf = command({
   description: "Lint records and config (CI-friendly)",
   flags: { ...sharedOutputFlags },
-  run: async ({ flags }) => {
+  run: async ({ flags, ctx }) => {
     const colorEnabled = resolveColorEnabled({
       forceColor: flags.color === true,
       suppressColor: flags["no-color"] === true,
@@ -17,6 +17,7 @@ export const validateLeaf = command({
     const validateResult = await runValidate({
       emitJson: flags.json === true,
       colorEnabled,
+      debug: ctx.debugEnabled,
     });
     // validate uses a non-error exit code on a kind:"ok" path
     // (lint failures the user knows about). The framework honors

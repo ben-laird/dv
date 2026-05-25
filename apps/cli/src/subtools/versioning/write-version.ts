@@ -1,7 +1,11 @@
 import type { Package } from "../../domain/package.ts";
 import { formatVersion, type Version } from "../../domain/version.ts";
 import type { ResolvedPlugin } from "../discovery/resolve.ts";
-import { invokeOp, parseWriteVersionResponse } from "../plugin/mod.ts";
+import {
+  invokeOp,
+  parseWriteVersionResponse,
+  type TracingHooks,
+} from "../plugin/mod.ts";
 import { buildOpEnvironment } from "./read-version.ts";
 
 // Invokes the `write-version` plugin Op per specs/plugin-contract.md.
@@ -19,6 +23,7 @@ export interface InvokeWriteVersionArgs {
   resolvedPlugin: ResolvedPlugin;
   newVersion: Version;
   timeoutMs: number;
+  tracingHooks?: TracingHooks;
 }
 
 export async function invokeWriteVersion(
@@ -34,6 +39,7 @@ export async function invokeWriteVersion(
     opName: "write-version",
     environmentVariables: childEnvironment,
     timeoutMs: args.timeoutMs,
+    tracingHooks: args.tracingHooks,
   });
   parseWriteVersionResponse({
     rawStdout,

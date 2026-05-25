@@ -1,6 +1,7 @@
 import { join } from "@std/path";
 import { DvError } from "../../domain/errors.ts";
 import type { ResolvedPlugin } from "../discovery/resolve.ts";
+import type { TracingHooks } from "./tracing.ts";
 
 // Invokes a single plugin Op per specs/plugin-contract.md.
 // JSON-over-stdio, op as argv[1] for single-executable plugins, op-named
@@ -18,6 +19,10 @@ export interface InvokeOpArgs {
   environmentVariables?: Record<string, string>;
   stdinPayload?: string;
   timeoutMs?: number;
+  // Optional observer for `--debug` style tracing. The runner
+  // invokes before/after/error in order so a tracer can log the
+  // full lifecycle of one child process. Default: no-op.
+  tracingHooks?: TracingHooks;
 }
 
 export interface InvokeOpResult {
@@ -52,6 +57,20 @@ export async function invokeOp(args: InvokeOpArgs): Promise<InvokeOpResult> {
   };
   childEnvironment.DV_OPERATION = opName;
 
+  // Snapshot the full invocation up front so tracing hooks (and
+  // the error path) see exactly what dv spawned.
+  const invocationTrace = {
+    pluginPath: resolvedPlugin.path,
+    opName,
+    executablePath,
+    executableArgv,
+    environmentVariables: childEnvironment,
+    stdinPayload: args.stdinPayload,
+    timeoutMs: args.timeoutMs,
+  };
+  args.tracingHooks?.before(invocationTrace);
+  const startTimeMs = performance.now();
+
   const abortController = new AbortController();
   const timeoutHandle =
     args.timeoutMs !== undefined
@@ -71,6 +90,12 @@ export async function invokeOp(args: InvokeOpArgs): Promise<InvokeOpResult> {
   } catch (caughtError) {
     if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
     if (caughtError instanceof Deno.errors.NotFound) {
+      args.tracingHooks?.error(invocationTrace, {
+        durationMs: performance.now() - startTimeMs,
+        errorCode: "plugin-not-executable",
+        rawStdout: "",
+        rawStderr: "",
+      });
       throw new DvError({
         code: "plugin-not-executable",
         message: `plugin executable not found: ${executablePath}`,
@@ -80,6 +105,12 @@ export async function invokeOp(args: InvokeOpArgs): Promise<InvokeOpResult> {
       });
     }
     if (caughtError instanceof Deno.errors.PermissionDenied) {
+      args.tracingHooks?.error(invocationTrace, {
+        durationMs: performance.now() - startTimeMs,
+        errorCode: "plugin-not-executable",
+        rawStdout: "",
+        rawStderr: "",
+      });
       throw new DvError({
         code: "plugin-not-executable",
         message: `plugin not executable (chmod +x?): ${executablePath}`,
@@ -88,6 +119,12 @@ export async function invokeOp(args: InvokeOpArgs): Promise<InvokeOpResult> {
         cause: caughtError,
       });
     }
+    args.tracingHooks?.error(invocationTrace, {
+      durationMs: performance.now() - startTimeMs,
+      errorCode: "uncaught",
+      rawStdout: "",
+      rawStderr: "",
+    });
     throw caughtError;
   }
 
@@ -103,6 +140,12 @@ export async function invokeOp(args: InvokeOpArgs): Promise<InvokeOpResult> {
   } catch (caughtError) {
     if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
     if (abortController.signal.aborted) {
+      args.tracingHooks?.error(invocationTrace, {
+        durationMs: performance.now() - startTimeMs,
+        errorCode: "plugin-timeout",
+        rawStdout: "",
+        rawStderr: "",
+      });
       throw new DvError({
         code: "plugin-timeout",
         message: `plugin ${opName} timed out after ${args.timeoutMs}ms`,
@@ -115,13 +158,26 @@ export async function invokeOp(args: InvokeOpArgs): Promise<InvokeOpResult> {
         cause: caughtError,
       });
     }
+    args.tracingHooks?.error(invocationTrace, {
+      durationMs: performance.now() - startTimeMs,
+      errorCode: "uncaught",
+      rawStdout: "",
+      rawStderr: "",
+    });
     throw caughtError;
   }
   if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
 
   const rawStdout = new TextDecoder().decode(processOutput.stdout);
   const rawStderr = new TextDecoder().decode(processOutput.stderr);
+  const durationMs = performance.now() - startTimeMs;
   if (!processOutput.success) {
+    args.tracingHooks?.error(invocationTrace, {
+      durationMs,
+      errorCode: "plugin-exit-nonzero",
+      rawStdout,
+      rawStderr,
+    });
     const stderrDetail = rawStderr.trim() || `exit ${processOutput.code}`;
     throw new DvError({
       code: "plugin-exit-nonzero",
@@ -134,5 +190,11 @@ export async function invokeOp(args: InvokeOpArgs): Promise<InvokeOpResult> {
       },
     });
   }
+  args.tracingHooks?.after(invocationTrace, {
+    exitCode: processOutput.code,
+    durationMs,
+    rawStdout,
+    rawStderr,
+  });
   return { rawStdout, rawStderr };
 }

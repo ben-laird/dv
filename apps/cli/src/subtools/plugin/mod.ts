@@ -35,3 +35,9 @@ export {
   writeVersionResponseSchema,
 } from "./response.ts";
 export { type InvokeOpArgs, type InvokeOpResult, invokeOp } from "./runner.ts";
+export type {
+  InvocationFailure,
+  InvocationOutcome,
+  InvocationTrace,
+  TracingHooks,
+} from "./tracing.ts";

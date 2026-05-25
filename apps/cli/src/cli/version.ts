@@ -24,7 +24,7 @@ import {
   renderHistorySection,
   upsertHistorySection,
 } from "../subtools/history/mod.ts";
-import { PluginInfoCache } from "../subtools/plugin/mod.ts";
+import { PluginInfoCache, type TracingHooks } from "../subtools/plugin/mod.ts";
 import { listRecords } from "../subtools/records/mod.ts";
 import { loadRenameLedger, renamesPath } from "../subtools/renames/mod.ts";
 import { computeAwaitingRelease } from "../subtools/tagging/mod.ts";
@@ -39,6 +39,7 @@ import {
   type PlanPending,
   renderCommitMessage,
 } from "../subtools/versioning/mod.ts";
+import { makeStderrTracingHooks } from "./debug-trace.ts";
 import {
   makeLiveProgressReporter,
   makeSilentProgressReporter,
@@ -72,6 +73,12 @@ export interface RunVersionOptions {
   // check on even when config says otherwise. The flag pair on the
   // command line is `--allow-dirty` / `--no-allow-dirty`.
   allowDirty?: boolean;
+  // True if the tool-wide `--debug` was set; the runner builds a
+  // stderr tracing reporter and threads it through every plugin
+  // invocation so authors can see exactly what dv asked the plugin.
+  // Optional with a default of false so test callers don't have to
+  // opt out of tracing every time.
+  debug?: boolean;
 }
 
 export interface RunVersionResult {
@@ -113,6 +120,13 @@ export async function runVersion(
   const repoRootPath = await requireRepoRoot();
   const configFilePath = configPath(repoRootPath);
   const loadedConfig = await loadConfig(configFilePath);
+  // Built once; passed to every plugin invoker below so the trace
+  // reflects the full sequence of ops for one `dv version` run.
+  // `undefined` (the default) when --debug wasn't set — the
+  // invokers no-op on missing hooks.
+  const tracingHooks: TracingHooks | undefined = options.debug
+    ? makeStderrTracingHooks({ colorEnabled: options.colorEnabled })
+    : undefined;
 
   const effectiveDryRun = options.dryRun ?? loadedConfig.safety.dryRunByDefault;
 
@@ -135,6 +149,7 @@ export async function runVersion(
   const discoveredPackages = await discoverPackages({
     config: loadedConfig,
     repoRootPath,
+    tracingHooks,
   });
   const recordsListing = await listRecords({
     recordsDirectory: recordsPath(repoRootPath),
@@ -164,11 +179,13 @@ export async function runVersion(
   const pluginInfoCache = await loadInfoForAllPlugins({
     resolvedPluginsByKey: resolvedPluginsByUseString,
     timeoutMs: DEFAULT_FAST_OP_TIMEOUT_MS,
+    tracingHooks,
   });
   const packageCurrentVersions = await readAllCurrentVersions({
     discoveredPackages,
     resolvedPluginsByUseString,
     repoRootPath,
+    tracingHooks,
   });
 
   // Compute the awaiting-release set so the Plan dv version emits
@@ -303,6 +320,7 @@ export async function runVersion(
         resolvedPlugin,
         newVersion: parseVersion(pendingEntry.projectedVersion),
         timeoutMs: DEFAULT_FAST_OP_TIMEOUT_MS,
+        tracingHooks,
       });
       writeStep.done();
     } catch (caughtError) {
@@ -418,6 +436,7 @@ export async function runVersion(
       discoveredPackageByName,
       resolvedPluginsByUseString,
       repoRootPath,
+      tracingHooks,
     });
     cascadeStep.done();
   } catch (caughtError) {
@@ -486,6 +505,7 @@ export async function runVersion(
         bumpedPackages: packagesForPlugin,
         trigger: "version",
         timeoutMs: DEFAULT_FAST_OP_TIMEOUT_MS,
+        tracingHooks,
       });
       for (const additionalFile of finalizeResult.additionalChangedFiles) {
         touchedPaths.push(additionalFile);
@@ -558,6 +578,7 @@ interface RunCascadePassArgs {
   discoveredPackageByName: Map<string, Package>;
   resolvedPluginsByUseString: Map<string, ResolvedPlugin>;
   repoRootPath: string;
+  tracingHooks?: TracingHooks;
 }
 
 async function runCascadePass(
@@ -581,6 +602,7 @@ async function runCascadePass(
         dependencyName: pendingEntry.package,
         newVersion: parseVersion(pendingEntry.projectedVersion),
         timeoutMs: DEFAULT_FAST_OP_TIMEOUT_MS,
+        tracingHooks: args.tracingHooks,
       });
       if (changed) {
         actualUpdates.push({
@@ -624,6 +646,7 @@ async function resolveAllPlugins(
 async function loadInfoForAllPlugins(args: {
   resolvedPluginsByKey: Map<string, ResolvedPlugin>;
   timeoutMs: number;
+  tracingHooks?: TracingHooks;
 }): Promise<PluginInfoCache> {
   const cache = new PluginInfoCache();
   for (const [pluginKey, resolvedPlugin] of args.resolvedPluginsByKey) {
@@ -631,6 +654,7 @@ async function loadInfoForAllPlugins(args: {
       pluginKey,
       resolvedPlugin,
       timeoutMs: args.timeoutMs,
+      tracingHooks: args.tracingHooks,
     });
   }
   return cache;
@@ -640,6 +664,7 @@ interface ReadAllCurrentVersionsArgs {
   discoveredPackages: Package[];
   resolvedPluginsByUseString: Map<string, ResolvedPlugin>;
   repoRootPath: string;
+  tracingHooks?: TracingHooks;
 }
 
 async function readAllCurrentVersions(
@@ -656,6 +681,7 @@ async function readAllCurrentVersions(
       pkg: discoveredPackage,
       resolvedPlugin,
       timeoutMs: DEFAULT_FAST_OP_TIMEOUT_MS,
+      tracingHooks: args.tracingHooks,
     });
     entries.push({
       packageName: discoveredPackage.name,

@@ -3,12 +3,14 @@ import { DvError } from "../domain/errors.ts";
 import { configPath, loadConfig, recordsPath } from "../subtools/config/mod.ts";
 import { discoverPackages } from "../subtools/discovery/mod.ts";
 import { requireRepoRoot } from "../subtools/git/repo-root.ts";
+import type { TracingHooks } from "../subtools/plugin/mod.ts";
 import { listRecords, RecordError } from "../subtools/records/mod.ts";
 import {
   buildRenameResolver,
   loadRenameLedger,
   renamesPath,
 } from "../subtools/renames/mod.ts";
+import { makeStderrTracingHooks } from "./debug-trace.ts";
 
 // `dv validate` per specs/cli.md § dv validate.
 //
@@ -34,6 +36,7 @@ export interface ValidationReport {
 export interface RunValidateOptions {
   emitJson: boolean;
   colorEnabled: boolean;
+  debug?: boolean;
 }
 
 export interface RunValidateResult {
@@ -46,6 +49,9 @@ export async function runValidate(
 ): Promise<RunValidateResult> {
   const repoRootPath = await requireRepoRoot();
   const validationProblems: ValidationProblem[] = [];
+  const tracingHooks: TracingHooks | undefined = options.debug
+    ? makeStderrTracingHooks({ colorEnabled: options.colorEnabled })
+    : undefined;
 
   const loadedConfigOrNull = await tryLoadConfig({
     repoRootPath,
@@ -56,6 +62,7 @@ export async function runValidate(
         config: loadedConfigOrNull,
         repoRootPath,
         validationProblems,
+        tracingHooks,
       })
     : new Set<string>();
 
@@ -152,6 +159,7 @@ interface TryDiscoverPackagesArgs {
   config: Awaited<ReturnType<typeof loadConfig>>;
   repoRootPath: string;
   validationProblems: ValidationProblem[];
+  tracingHooks?: TracingHooks;
 }
 
 async function tryDiscoverPackages(
@@ -161,6 +169,7 @@ async function tryDiscoverPackages(
     const discoveredPackages = await discoverPackages({
       config: args.config,
       repoRootPath: args.repoRootPath,
+      tracingHooks: args.tracingHooks,
     });
     return new Set(discoveredPackages.map((discovered) => discovered.name));
   } catch (caughtError) {

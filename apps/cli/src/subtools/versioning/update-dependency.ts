@@ -1,7 +1,11 @@
 import type { Package } from "../../domain/package.ts";
 import { formatVersion, type Version } from "../../domain/version.ts";
 import type { ResolvedPlugin } from "../discovery/resolve.ts";
-import { invokeOp, parseUpdateDependencyResponse } from "../plugin/mod.ts";
+import {
+  invokeOp,
+  parseUpdateDependencyResponse,
+  type TracingHooks,
+} from "../plugin/mod.ts";
 import { buildOpEnvironment } from "./read-version.ts";
 
 // Invokes the `update-dependency` plugin Op per specs/plugin-contract.md.
@@ -24,6 +28,7 @@ export interface InvokeUpdateDependencyArgs {
   dependencyName: string;
   newVersion: Version;
   timeoutMs: number;
+  tracingHooks?: TracingHooks;
 }
 
 export interface InvokeUpdateDependencyResult {
@@ -49,6 +54,7 @@ export async function invokeUpdateDependency(
     environmentVariables: childEnvironment,
     stdinPayload,
     timeoutMs: args.timeoutMs,
+    tracingHooks: args.tracingHooks,
   });
   const validatedResponse = parseUpdateDependencyResponse({
     rawStdout,

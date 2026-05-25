@@ -21,14 +21,28 @@ destructive — supports `--dry-run`. See [cli.md](cli.md) for specifics.
 ### Plugin contract
 
 - Executable plugins with JSON-over-stdio
-- Operations: `discover`, `read-version`, `write-version`,
-  `update-dependency`, `release`
+- **Contract version `"1"`** advertised via `DV_CONTRACT_VERSION`;
+  plugins echo their claimed version through the mandatory `info` op
+  and dv refuses to run on mismatch. See
+  [plugin-contract.md § Contract version](plugin-contract.md#contract-version).
+- Operations:
+  - **`info`** (mandatory) — declares contract version + supported ops
+  - **`discover`** (mandatory) — lists packages for a glob
+  - `read-version`, `write-version`, `update-dependency` — versioning
+  - **`finalize`** (optional) — refresh generated companion files
+    (lockfiles, etc.) after a `dv version` / `dv v1` run so they ship
+    in the same commit as the manifest edits
+  - `release` — publish hook fired after tagging
+- `info.supportedOps` is the op-declaration mechanism: plugins list
+  every op they implement; dv skips any op the plugin doesn't claim
 - Env vars for scalars, stdin/stdout JSON for structured payloads
 - **Versioned per-op response JSON schemas** so `dv plugin verify` (and
   authors' own CI) can machine-check conformance
 - **Copyable example plugins** (Cargo, npm, pyproject) — reference
   implementations to adapt, not maintained dependencies
-- `--debug` tracing logs full plugin I/O during real runs
+- `--debug` tracing logs full plugin I/O during real runs (op, env,
+  stdin, stdout, exit, duration), as a tool-wide flag on every
+  command that talks to plugins
 - **Per-op timeouts**: fast ops bounded by `discovery.plugins[].timeout`
   (default 60s); `release` bounded by `publishing.timeout` (default none)
 

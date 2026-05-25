@@ -1,5 +1,9 @@
 import type { ResolvedPlugin } from "../discovery/resolve.ts";
-import { invokeOp, parseFinalizeResponse } from "../plugin/mod.ts";
+import {
+  invokeOp,
+  parseFinalizeResponse,
+  type TracingHooks,
+} from "../plugin/mod.ts";
 
 // Invokes the optional `finalize` plugin Op per specs/plugin-contract.md.
 // Fires once per plugin per `dv version` / `dv v1` run, after all
@@ -37,6 +41,7 @@ export interface InvokeFinalizeArgs {
   // routine bump. v1 in v1: just informational.
   trigger: "version" | "v1";
   timeoutMs: number;
+  tracingHooks?: TracingHooks;
 }
 
 export interface InvokeFinalizeResult {
@@ -71,6 +76,7 @@ export async function invokeFinalize(
     opName: "finalize",
     environmentVariables: childEnvironment,
     timeoutMs: args.timeoutMs,
+    tracingHooks: args.tracingHooks,
   });
   const validatedResponse = parseFinalizeResponse({
     rawStdout,

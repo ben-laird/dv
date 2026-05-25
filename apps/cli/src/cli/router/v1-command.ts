@@ -34,7 +34,7 @@ export const v1Leaf = command({
     },
     "no-allow-dirty": { kind: "boolean", description: "Require clean tree" },
   },
-  run: async ({ flags, argv, path }) => {
+  run: async ({ flags, argv, path, ctx }) => {
     if (argv.length !== 1) {
       return done({
         kind: "error",
@@ -69,6 +69,7 @@ export const v1Leaf = command({
       allowDirty: allowDirtyOverride,
       emitJson: flags.json === true,
       colorEnabled,
+      debug: ctx.debugEnabled,
     });
     return done({ kind: "ok" });
   },

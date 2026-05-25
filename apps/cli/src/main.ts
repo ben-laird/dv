@@ -40,12 +40,25 @@ function resolveOutputMode(argv: string[]): {
   return { emitJson, colorEnabled };
 }
 
+// Same boundary-level scan as resolveOutputMode: tool-wide
+// `--debug` is a property of *the dv invocation*, not any one
+// leaf, so we recognise it once here and let leaves consult
+// `ctx.debugEnabled` rather than every leaf flag-checking
+// independently. False positives (a `dv add --message "--debug"`)
+// are tolerable for the same reason — no leaf that accepts
+// arbitrary string content also accepts `--debug` as a
+// behaviour flag.
+function isDebugEnabled(argv: string[]): boolean {
+  return argv.includes("--debug");
+}
+
 export function main(argv: string[]): Promise<number> {
+  const debugEnabled = isDebugEnabled(argv);
   const cli = defineCli<DvCtx>({
     name: "dv",
     version: DV_VERSION,
     rootRouter: dvRoot,
-    makeContext: () => ({ binaryArgv: argv }),
+    makeContext: () => ({ binaryArgv: argv, debugEnabled }),
     resolveOutputMode: ({ argv: incomingArgv }) =>
       resolveOutputMode(incomingArgv),
     humanErrorPrefix: "dv",

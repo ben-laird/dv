@@ -34,7 +34,7 @@ export const versionLeaf = command({
     },
     "no-allow-dirty": { kind: "boolean", description: "Require clean tree" },
   },
-  run: async ({ flags }) => {
+  run: async ({ flags, ctx }) => {
     const dryRunOverride = resolveTristate({
       positiveFlag: flags["dry-run"],
       negativeFlag: flags["no-dry-run"],
@@ -56,6 +56,7 @@ export const versionLeaf = command({
       colorEnabled,
       yes: flags.yes === true,
       allowDirty: allowDirtyOverride,
+      debug: ctx.debugEnabled,
     });
     return done({ kind: "ok" });
   },

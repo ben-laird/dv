@@ -15,6 +15,10 @@ export const sharedOutputFlags = inheritedFlags({
   json: { kind: "boolean", description: "Emit JSON envelope output" },
   color: { kind: "boolean", description: "Force color output" },
   "no-color": { kind: "boolean", description: "Disable color output" },
+  debug: {
+    kind: "boolean",
+    description: "Log every plugin invocation to stderr",
+  },
 });
 
 export interface ResolveColorEnabledArgs {

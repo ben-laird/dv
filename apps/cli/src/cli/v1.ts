@@ -24,7 +24,7 @@ import {
   renderHistorySection,
   upsertHistorySection,
 } from "../subtools/history/mod.ts";
-import { PluginInfoCache } from "../subtools/plugin/mod.ts";
+import { PluginInfoCache, type TracingHooks } from "../subtools/plugin/mod.ts";
 import { listRecords } from "../subtools/records/mod.ts";
 import { loadRenameLedger, renamesPath } from "../subtools/renames/mod.ts";
 import { buildRenameResolver } from "../subtools/renames/resolve.ts";
@@ -39,6 +39,7 @@ import {
   type PlanPending,
   renderCommitMessage,
 } from "../subtools/versioning/mod.ts";
+import { makeStderrTracingHooks } from "./debug-trace.ts";
 import {
   makeLiveProgressReporter,
   makeSilentProgressReporter,
@@ -80,6 +81,7 @@ export interface RunV1Options {
   colorEnabled: boolean;
   yes: boolean;
   allowDirty?: boolean;
+  debug?: boolean;
 }
 
 export interface RunV1Result {
@@ -111,6 +113,9 @@ export async function runV1(options: RunV1Options): Promise<RunV1Result> {
   const repoRootPath = await requireRepoRoot();
   const configFilePath = configPath(repoRootPath);
   const loadedConfig = await loadConfig(configFilePath);
+  const tracingHooks: TracingHooks | undefined = options.debug
+    ? makeStderrTracingHooks({ colorEnabled: options.colorEnabled })
+    : undefined;
 
   const effectiveDryRun = options.dryRun ?? loadedConfig.safety.dryRunByDefault;
   const effectiveRequireCleanTree =
@@ -131,6 +136,7 @@ export async function runV1(options: RunV1Options): Promise<RunV1Result> {
   const discoveredPackages = await discoverPackages({
     config: loadedConfig,
     repoRootPath,
+    tracingHooks,
   });
   const targetPackage = discoveredPackages.find(
     (pkg) => pkg.name === options.packageName,
@@ -154,6 +160,7 @@ export async function runV1(options: RunV1Options): Promise<RunV1Result> {
   const pluginInfoCache = await loadInfoForAllPlugins({
     resolvedPluginsByKey: resolvedPluginsByUseString,
     timeoutMs: DEFAULT_FAST_OP_TIMEOUT_MS,
+    tracingHooks,
   });
   const targetPlugin = resolvedPluginsByUseString.get(targetPackage.plugin);
   if (targetPlugin === undefined) {
@@ -167,6 +174,7 @@ export async function runV1(options: RunV1Options): Promise<RunV1Result> {
     pkg: targetPackage,
     resolvedPlugin: targetPlugin,
     timeoutMs: DEFAULT_FAST_OP_TIMEOUT_MS,
+    tracingHooks,
   });
   if (currentVersion.major !== 0) {
     const currentVersionText = `${currentVersion.major}.${currentVersion.minor}.${currentVersion.patch}`;
@@ -249,6 +257,7 @@ export async function runV1(options: RunV1Options): Promise<RunV1Result> {
     discoveredPackages,
     resolvedPluginsByUseString,
     repoRootPath,
+    tracingHooks,
   });
   const awaitingReleaseLookup = await computeAwaitingRelease({
     repoRootPath,
@@ -358,6 +367,7 @@ export async function runV1(options: RunV1Options): Promise<RunV1Result> {
       resolvedPlugin: targetPlugin,
       newVersion: parseVersion("1.0.0"),
       timeoutMs: DEFAULT_FAST_OP_TIMEOUT_MS,
+      tracingHooks,
     });
     writeStep.done();
   } catch (caughtError) {
@@ -447,6 +457,7 @@ export async function runV1(options: RunV1Options): Promise<RunV1Result> {
       ),
       resolvedPluginsByUseString,
       repoRootPath,
+      tracingHooks,
     });
     cascadeStep.done();
   } catch (caughtError) {
@@ -491,6 +502,7 @@ export async function runV1(options: RunV1Options): Promise<RunV1Result> {
         ],
         trigger: "v1",
         timeoutMs: DEFAULT_FAST_OP_TIMEOUT_MS,
+        tracingHooks,
       });
       for (const additionalFile of finalizeResult.additionalChangedFiles) {
         touchedPaths.push(additionalFile);
@@ -597,6 +609,7 @@ interface RunCascadePassArgs {
   otherPackages: Package[];
   resolvedPluginsByUseString: Map<string, ResolvedPlugin>;
   repoRootPath: string;
+  tracingHooks?: TracingHooks;
 }
 
 async function runCascadePass(
@@ -615,6 +628,7 @@ async function runCascadePass(
       dependencyName: args.bumpedPackage.name,
       newVersion: parseVersion(args.bumpedVersion),
       timeoutMs: DEFAULT_FAST_OP_TIMEOUT_MS,
+      tracingHooks: args.tracingHooks,
     });
     if (response.changed) {
       cascadedUpdates.push({
@@ -657,6 +671,7 @@ async function resolveAllPlugins(
 async function loadInfoForAllPlugins(args: {
   resolvedPluginsByKey: Map<string, ResolvedPlugin>;
   timeoutMs: number;
+  tracingHooks?: TracingHooks;
 }): Promise<PluginInfoCache> {
   const cache = new PluginInfoCache();
   for (const [pluginKey, resolvedPlugin] of args.resolvedPluginsByKey) {
@@ -664,6 +679,7 @@ async function loadInfoForAllPlugins(args: {
       pluginKey,
       resolvedPlugin,
       timeoutMs: args.timeoutMs,
+      tracingHooks: args.tracingHooks,
     });
   }
   return cache;
@@ -673,6 +689,7 @@ interface ReadAllCurrentVersionsArgs {
   discoveredPackages: Package[];
   resolvedPluginsByUseString: Map<string, ResolvedPlugin>;
   repoRootPath: string;
+  tracingHooks?: TracingHooks;
 }
 
 async function readAllCurrentVersions(
@@ -689,6 +706,7 @@ async function readAllCurrentVersions(
       pkg: discoveredPackage,
       resolvedPlugin,
       timeoutMs: DEFAULT_FAST_OP_TIMEOUT_MS,
+      tracingHooks: args.tracingHooks,
     });
     entries.push({
       packageName: discoveredPackage.name,

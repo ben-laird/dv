@@ -32,7 +32,7 @@ export const releaseLeaf = command({
     },
     "no-allow-dirty": { kind: "boolean", description: "Require clean tree" },
   },
-  run: async ({ flags }) => {
+  run: async ({ flags, ctx }) => {
     const dryRunOverride = resolveTristate({
       positiveFlag: flags["dry-run"],
       negativeFlag: flags["no-dry-run"],
@@ -58,6 +58,7 @@ export const releaseLeaf = command({
       emitJson: flags.json === true,
       colorEnabled,
       allowDirty: allowDirtyOverride,
+      debug: ctx.debugEnabled,
     });
     // Non-zero exit when any release Op failed (push failures throw
     // and the framework surfaces them through the kind:"error" path).

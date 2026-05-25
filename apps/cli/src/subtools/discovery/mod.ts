@@ -2,7 +2,11 @@ import type { Config, PluginAssignment } from "../../domain/config.ts";
 import { pluginReferenceKey } from "../../domain/config.ts";
 import { DvError } from "../../domain/errors.ts";
 import type { Package } from "../../domain/package.ts";
-import { invokeOp, parseDiscoverResponse } from "../plugin/mod.ts";
+import {
+  invokeOp,
+  parseDiscoverResponse,
+  type TracingHooks,
+} from "../plugin/mod.ts";
 import { parseDurationMs } from "./duration.ts";
 import { matchesAny, normalizePath, splitMatch } from "./match.ts";
 import { resolvePlugin } from "./resolve.ts";
@@ -16,6 +20,7 @@ const DEFAULT_FAST_OP_TIMEOUT = "60s";
 interface DiscoverPackagesArgs {
   config: Config;
   repoRootPath: string;
+  tracingHooks?: TracingHooks;
 }
 
 export async function discoverPackages(
@@ -33,6 +38,7 @@ export async function discoverPackages(
       pluginAssignment,
       assignmentIndex,
       repoRootPath,
+      tracingHooks: args.tracingHooks,
     });
     for (const discoveredPackage of packagesFromThisAssignment) {
       const normalizedPackagePath = normalizePath(discoveredPackage.path);
@@ -70,6 +76,7 @@ export interface RunDiscoveryAssignmentArgs {
   pluginAssignment: PluginAssignment;
   assignmentIndex: number;
   repoRootPath: string;
+  tracingHooks?: TracingHooks;
 }
 
 // Exported so `dv plugin list` can audit one assignment at a time
@@ -116,6 +123,7 @@ export async function runDiscoveryAssignment(
       opName: "discover",
       environmentVariables: childEnvironment,
       timeoutMs: opTimeoutMs,
+      tracingHooks: args.tracingHooks,
     });
     const validatedResponse = parseDiscoverResponse({
       rawStdout,

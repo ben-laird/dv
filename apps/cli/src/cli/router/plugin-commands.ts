@@ -33,7 +33,7 @@ export const pluginRouter = router({
     list: command({
       description: "Resolve every plugin in the config and show its packages",
       flags: { ...sharedOutputFlags },
-      run: async ({ flags }) => {
+      run: async ({ flags, ctx }) => {
         const colorEnabled = resolveColorEnabled({
           forceColor: flags.color === true,
           suppressColor: flags["no-color"] === true,
@@ -47,6 +47,7 @@ export const pluginRouter = router({
         const listResult = await runPluginList({
           emitJson: flags.json === true,
           colorEnabled,
+          debug: ctx.debugEnabled,
         });
         return done({
           kind: "ok",
@@ -77,7 +78,7 @@ export const pluginRouter = router({
         },
         "stdin-json": { kind: "string" },
       },
-      run: async ({ flags, argv, path }) => {
+      run: async ({ flags, argv, path, ctx }) => {
         if (argv.length !== 2) {
           return done({
             kind: "error",
@@ -138,6 +139,7 @@ export const pluginRouter = router({
           stdinJson: flags["stdin-json"],
           emitJson: flags.json === true,
           colorEnabled,
+          debug: ctx.debugEnabled,
         });
         return done({ kind: "ok" });
       },
@@ -150,7 +152,7 @@ export const pluginRouter = router({
         "repo-root": { kind: "string" },
         glob: { kind: "string" },
       },
-      run: async ({ flags, argv, path }) => {
+      run: async ({ flags, argv, path, ctx }) => {
         if (argv.length !== 1) {
           return done({
             kind: "error",
@@ -176,6 +178,7 @@ export const pluginRouter = router({
           discoverGlob: flags.glob,
           emitJson: flags.json === true,
           colorEnabled,
+          debug: ctx.debugEnabled,
         });
         return done({
           kind: "ok",

@@ -6,6 +6,7 @@ import {
   parseInfoResponse,
 } from "./response.ts";
 import { invokeOp } from "./runner.ts";
+import type { TracingHooks } from "./tracing.ts";
 
 // Invokes the mandatory `info` plugin Op. dv calls this exactly
 // once per plugin per run (via PluginInfoCache) before invoking
@@ -29,6 +30,7 @@ const DEFAULT_INFO_TIMEOUT_MS = 30_000;
 export interface InvokeInfoArgs {
   resolvedPlugin: ResolvedPlugin;
   timeoutMs?: number;
+  tracingHooks?: TracingHooks;
 }
 
 export async function invokeInfo(args: InvokeInfoArgs): Promise<InfoResponse> {
@@ -38,6 +40,7 @@ export async function invokeInfo(args: InvokeInfoArgs): Promise<InfoResponse> {
     opName: "info",
     environmentVariables: buildInfoEnvironment(),
     timeoutMs: args.timeoutMs ?? DEFAULT_INFO_TIMEOUT_MS,
+    tracingHooks: args.tracingHooks,
   });
   const validatedResponse = parseInfoResponse({
     rawStdout,
@@ -123,12 +126,14 @@ export class PluginInfoCache {
     pluginKey: string;
     resolvedPlugin: ResolvedPlugin;
     timeoutMs?: number;
+    tracingHooks?: TracingHooks;
   }): Promise<InfoResponse> {
     const cached = this.cacheByKey.get(args.pluginKey);
     if (cached !== undefined) return cached;
     const fresh = await invokeInfo({
       resolvedPlugin: args.resolvedPlugin,
       timeoutMs: args.timeoutMs,
+      tracingHooks: args.tracingHooks,
     });
     this.cacheByKey.set(args.pluginKey, fresh);
     return fresh;

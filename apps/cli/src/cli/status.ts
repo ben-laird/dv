@@ -19,6 +19,7 @@ import {
   resolvePlugin,
 } from "../subtools/discovery/resolve.ts";
 import { requireRepoRoot } from "../subtools/git/repo-root.ts";
+import type { TracingHooks } from "../subtools/plugin/mod.ts";
 import { listRecords, type RecordsListing } from "../subtools/records/mod.ts";
 import { loadRenameLedger, renamesPath } from "../subtools/renames/mod.ts";
 import { computeAwaitingRelease } from "../subtools/tagging/mod.ts";
@@ -28,6 +29,7 @@ import {
   type PackageCurrentVersionEntry,
   type Plan,
 } from "../subtools/versioning/mod.ts";
+import { makeStderrTracingHooks } from "./debug-trace.ts";
 import { makeStyler, type Styler } from "./styler.ts";
 
 // `dv status` is a read-only preview of `dv version` (specs/cli.md §
@@ -45,6 +47,7 @@ const DEFAULT_FAST_OP_TIMEOUT_MS = 60_000;
 export interface RunStatusOptions {
   emitJson: boolean;
   colorEnabled: boolean;
+  debug?: boolean;
 }
 
 export interface RunStatusResult {
@@ -57,6 +60,9 @@ export async function runStatus(
 ): Promise<RunStatusResult> {
   const repoRootPath = await requireRepoRoot();
   const configFilePath = configPath(repoRootPath);
+  const tracingHooks: TracingHooks | undefined = options.debug
+    ? makeStderrTracingHooks({ colorEnabled: options.colorEnabled })
+    : undefined;
 
   let loadedConfig: Config | null = null;
   try {
@@ -87,6 +93,7 @@ export async function runStatus(
   const discoveredPackages = await discoverPackages({
     config: loadedConfig,
     repoRootPath,
+    tracingHooks,
   });
   const recordsListing = await listRecords({
     recordsDirectory: recordsPath(repoRootPath),
@@ -98,6 +105,7 @@ export async function runStatus(
     discoveredPackages,
     pluginAssignments: loadedConfig.discovery.plugins,
     repoRootPath,
+    tracingHooks,
   });
 
   // Compute the awaiting-release set via the tagging subtool: per
@@ -155,6 +163,7 @@ interface ReadCurrentVersionsArgs {
   discoveredPackages: Package[];
   pluginAssignments: PluginAssignment[];
   repoRootPath: string;
+  tracingHooks?: TracingHooks;
 }
 
 // Reads the current Version of every discovered Package. Plugin handles
@@ -186,6 +195,7 @@ export async function readCurrentVersionsForPackages(
       pkg: discoveredPackage,
       resolvedPlugin,
       timeoutMs: DEFAULT_FAST_OP_TIMEOUT_MS,
+      tracingHooks: args.tracingHooks,
     });
     entries.push({
       packageName: discoveredPackage.name,
