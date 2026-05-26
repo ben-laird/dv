@@ -151,6 +151,7 @@ export default defineConfig({
         items: [
           { text: "Cut a release", link: "/guides/cut-a-release" },
           { text: "Write a plugin", link: "/guides/write-a-plugin" },
+          { text: "CI integration", link: "/guides/ci-integration" },
           { text: "Troubleshooting", link: "/guides/troubleshooting" },
         ],
       },
