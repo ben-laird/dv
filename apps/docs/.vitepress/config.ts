@@ -147,6 +147,14 @@ export default defineConfig({
         ],
       },
       {
+        text: "Guides",
+        items: [
+          { text: "Cut a release", link: "/guides/cut-a-release" },
+          { text: "Write a plugin", link: "/guides/write-a-plugin" },
+          { text: "Troubleshooting", link: "/guides/troubleshooting" },
+        ],
+      },
+      {
         text: "Reference",
         items: [
           { text: "CLI", link: "/reference/cli" },

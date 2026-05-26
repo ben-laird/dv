@@ -1,0 +1,320 @@
+# Cut a release
+
+This guide walks through running a real release end-to-end, including
+the things you'll actually do in practice — previewing first, gating
+on review, handling failures. If you've never used dv, start with the
+[Getting started tutorial](/getting-started) first; this assumes you
+already know what Records are.
+
+Skim the page top-to-bottom the first time. After that, the **TL;DR**
+at the top is what most days look like.
+
+## TL;DR
+
+```sh
+# 1. Verify the plan
+$ dv status
+
+# 2. Land the Release PR
+$ dv version --dry-run    # preview
+$ dv version              # for real (one commit)
+# → review, merge
+
+# 3. Tag + publish
+$ dv release --dry-run    # preview
+$ dv release              # for real
+```
+
+Three commands, two phases, plus the merge. The rest of this page is
+the *why* and the edge cases.
+
+## Step 1: see what's pending with `dv status`
+
+Before you do anything destructive, check what dv would do:
+
+```sh
+$ dv status
+
+Pending Records — 3 records, 2 packages (run `dv version`):
+  @my/api       1.2.3 → 1.3.0    minor  (2 feat, 1 fix)
+       └ would update dependents: @my/client
+  @my/client    0.4.0 → 0.5.0    minor  (1 feat)
+
+Awaiting release — 1 package (run `dv release`):
+  @my/utils    2.1.0  would tag @my/utils@2.1.0
+
+Tracked packages — 3 total:
+  @my/api      1.2.3  packages/api
+  @my/client   0.4.0  packages/client
+  @my/utils    2.1.0  packages/utils
+```
+
+What this is telling you:
+
+- **Pending Records** — there are 3 Records in `.dv/records/` that
+  would consume into 2 package bumps. `@my/api` gets `minor` (max of
+  one `feat` + one `fix`, plus another `feat`); `@my/client` gets
+  `minor` (one `feat`). The cascade would also rewrite `@my/client`'s
+  constraint on `@my/api`.
+- **Awaiting release** — `@my/utils` is at `2.1.0` in its manifest
+  but has no `@my/utils@2.1.0` git tag yet. `dv release` would mint
+  it. (This could happen if someone hand-edited a manifest, or if a
+  previous `dv release` failed mid-flight.)
+- **Tracked packages** — every package dv discovered, with its
+  current version. Useful as a sanity check after config changes.
+
+If the pending plan looks wrong (a bump you didn't expect, a package
+you didn't intend to bump), stop here and inspect `.dv/records/`. The
+Records are the source of every bump; if the bump looks wrong, a
+Record is the cause.
+
+## Step 2: preview with `--dry-run`
+
+`dv status` shows what `dv version` *would* do, but it doesn't show
+the full Plan (the byte-for-byte JSON or the human-readable Plan
+that the real command would execute). For that:
+
+```sh
+$ dv version --dry-run
+
+Plan (dry-run):
+  @my/api 1.2.3 → 1.3.0 (minor)
+       └ would update dependents: @my/client
+  @my/client 0.4.0 → 0.5.0 (minor)
+```
+
+This output is **byte-identical** to what the real run will execute.
+The same plan-building code that produced this preview powers the
+real version pass — there's no separate dry-run path that could drift
+(see [Two-phase release](/concepts/two-phase-release) for the why).
+
+For automation, add `--json`:
+
+```sh
+$ dv version --dry-run --json | jq '.pending[] | {package, projectedVersion, bump}'
+{ "package": "@my/api",    "projectedVersion": "1.3.0", "bump": "minor" }
+{ "package": "@my/client", "projectedVersion": "0.5.0", "bump": "minor" }
+```
+
+The `--json` shape is documented in the [Plan schema](https://github.com/benlaird0/dv/blob/main/specs/schemas/plan.json)
+and is stable across the three commands (`dv status`, `dv version
+--dry-run`, `dv release --dry-run`).
+
+## Step 3: land the Release PR with `dv version`
+
+```sh
+$ dv version
+
+✓ versioned 2 packages, committed a1b2c3d
+  @my/api 1.2.3 → 1.3.0 (minor)
+  @my/client 0.4.0 → 0.5.0 (minor)
+  ↳ updated 1 dependent constraint (@my/client)
+  ↳ refreshed 1 file (deno.lock)
+```
+
+What dv did:
+
+1. **Read versions** from each discovered package's manifest.
+2. **Built the Plan** (same as the dry-run).
+3. **Wrote the new versions** to each bumped manifest.
+4. **Prepended CHANGELOG entries** (and HISTORY entries, if
+   `history.enabled: true`).
+5. **Cascaded constraint updates** — `@my/client`'s `^1.2.3` on
+   `@my/api` became `^1.3.0`.
+6. **Deleted the consumed Records.**
+7. **Refreshed lockfiles** via the plugin's `finalize` op.
+8. **Staged everything** into one commit.
+
+That commit is the **Release PR**. Open it as a PR, review it, merge it.
+
+### Reviewing the Release PR
+
+Things to look at:
+
+- **The CHANGELOG entries** read as you'd want them to. Each Record's
+  `notes` field became one CHANGELOG bullet. If the bullet reads
+  poorly, you can edit the CHANGELOG in a follow-up commit on the
+  same PR — there's no separate "edit CHANGELOG" command, just
+  normal markdown.
+- **The version bumps match expectations.** A `feat` should produce
+  `minor`; a `fix` should produce `patch`. A breaking change marker
+  (`feat!`/`fix!`) in a Stable package should produce `major`.
+- **Lockfiles refreshed cleanly.** No spurious unrelated changes; no
+  resolution conflicts. If a lockfile diff looks weird, the plugin's
+  `finalize` op is the place to look.
+- **No unexpected packages bumped.** Discovery returned the right
+  set — eyeball the `tracked` list in `dv status` before running
+  `dv version` if you've recently added or moved packages.
+
+### `--no-commit`: stage without committing
+
+If you'd rather review the working-tree state before committing
+(useful in CI flows that have separate "compute" and "commit" steps):
+
+```sh
+$ dv version --no-commit
+# changes are staged in the index; no commit was made
+
+$ git diff --cached --stat
+# inspect…
+
+$ git commit -m "$(your custom message)"
+```
+
+This overrides `git.auto-commit: true` for one run.
+
+### `--prune`: drop Unresolved References
+
+If a Record points at a package dv can't find (the package was
+deleted, or renamed without a `dv rename` edge), `dv version` halts:
+
+```sh
+$ dv version
+dv error[unresolved-reference]: 1 record references a Package not found
+  — pass --prune to drop them, or use `dv rename` to record the lineage
+```
+
+Two recovery paths:
+
+```sh
+# Option A: record the rename
+$ dv rename @my/old-name @my/new-name
+$ dv version
+
+# Option B: drop the stale Record
+$ dv version --prune
+```
+
+`--prune` is the right call when the Record references a name that
+was a typo, or a package that's genuinely gone. `dv rename` is the
+right call when a package was renamed and old Records should resolve
+to the new name. See [Packages and plugins](/concepts/packages-and-plugins)
+for more on the rename ledger.
+
+## Step 4: the merge
+
+Nothing dv-specific here. Whatever your team's PR workflow is —
+review, approval, merge button — applies. After the Release PR
+merges to `main`, the manifests and CHANGELOGs are committed; the
+git tags don't exist yet.
+
+## Step 5: tag + publish with `dv release`
+
+```sh
+$ dv release --dry-run
+
+Plan (dry-run):
+  mint  @my/api@1.3.0
+  mint  @my/client@0.5.0
+  mint  @my/utils@2.1.0
+  release: 3 publish ops would run
+```
+
+For real:
+
+```sh
+$ dv release
+About to release 3 packages. Continue? [y/N] y
+
+✓ minted 3 tags
+  @my/api@1.3.0
+  @my/client@0.5.0
+  @my/utils@2.1.0
+(release plugin invoked for each — see plugin output)
+```
+
+What dv did:
+
+1. **Read versions** from each manifest.
+2. **Computed the awaiting-release set** — every `(package,
+   version)` with no matching git tag.
+3. **Minted tags** with the configured format
+   (default: `{package}@{version}`).
+4. **Fired each package's `release` plugin op** — that's where
+   publishing actually happens.
+5. **Optionally pushed tags** (`--push` or `git.auto-push`).
+
+The release state is in the tags. Re-running `dv release` after this
+is a no-op — every current version has a matching tag.
+
+### `--push` vs. `--no-push`
+
+By default, `dv release` mints tags locally and **does not push** them.
+You'd push manually (`git push --tags`) or via CI. To push as part of
+the release:
+
+```sh
+$ dv release --push
+```
+
+Or set `git.auto-push: true` in `.dv/config.yaml` to make this the
+default. The flag always overrides the config setting per-run.
+
+The push-sequence (config: `git.push-sequence`) controls when the
+push happens relative to the publish ops:
+
+- `publish-then-push` (default) — publish first; only push tags if
+  every publish succeeded. Safer: a failed publish doesn't leave a
+  pushed tag that can never be re-published.
+- `push-then-publish` — push tags first; then publish. Useful if your
+  publish op depends on the tag being visible upstream.
+
+### Handling a partial-failure
+
+Publishing is the part most likely to fail (npm registry hiccup,
+network blip, auth issue). When one package's `release` op fails:
+
+```sh
+$ dv release
+✓ minted 3 tags
+  @my/api@1.3.0
+  @my/client@0.5.0
+  @my/utils@2.1.0
+✗ @my/api@1.3.0: publish failed (npm error: 503)
+✓ @my/client@0.5.0: published
+✓ @my/utils@2.1.0: published
+
+dv error[release-partial-failure]: 1 of 3 package(s) failed to publish
+  hint: rerun `dv release --force` after addressing each sub-error
+        (tags are already in place)
+```
+
+A few important things to know:
+
+- **Tags are NOT rolled back on publish failure.** Tags are the
+  release state; rolling them back would mean the next run would
+  re-mint them, possibly with different content. Better to leave the
+  tag and let the user fix forward.
+- **The exit code is non-zero** so CI fails loudly. The `--json`
+  envelope (`release-partial-failure`) lists every failed package so
+  automation can dispatch follow-ups.
+- **`dv release --force` retries everything**, including
+  already-tagged packages. That's what you want for the "publish was
+  the only thing that failed" case — the tag is already there, but
+  the publish op needs to re-run.
+
+### `--force`: re-publish already-tagged packages
+
+```sh
+$ dv release --force
+```
+
+`--force` re-runs the `release` op for every package, regardless of
+whether its tag exists. No new tags are minted (they're already
+there); the publish ops just fire again.
+
+Use cases:
+
+- Publish failed; the registry is recovered; you want to retry.
+- You want to re-trigger a downstream effect of the release op (e.g.
+  notifying a chat channel, kicking off a deploy).
+- The publish op was changed and you want it to apply to a previous
+  release.
+
+## What's next
+
+- **[Promote to 1.0](/concepts/semver-and-stability#dv-v1-is-the-only-escape-hatch)** —
+  the one bump that's not in this flow.
+- **[Troubleshooting](/guides/troubleshooting)** — common errors and
+  how to recover from them.
+- **[CLI reference](/reference/cli)** — every flag for every command.

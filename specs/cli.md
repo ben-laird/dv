@@ -213,24 +213,52 @@ $ dv release --yes
 ## `dv v1`
 
 ```
-dv v1 <package> [--yes]
+dv v1 [<package>] [--dry-run] [--no-commit] [--prune]
+                  [--allow-dirty | --no-allow-dirty] [--yes]
 ```
 
 The 1.0 commitment. Promotes a single pre-1.0 (`Unstable`) Package to
 `1.0.0`: a phase-one operation that consumes its pending Records, sets the
-Version to `1.0.0`, and commits. Scoped strictly to the `0.x → 1.0.0`
-transition — it **errors if the Package is already `≥ 1.0`**.
+Version to `1.0.0`, updates dependents' constraints to `^1.0.0` (the
+constraint-only cascade), and commits. Scoped strictly to the
+`0.x → 1.0.0` transition — it **errors if the Package is already `≥ 1.0`**.
 
 This command exists because no Record can ever produce a `1.0.0`: the bump
 algebra caps `Unstable` Packages below `major` (see
 [language.md](language.md) Algebra §3). Crossing 1.0 is therefore always a
 deliberate, gated act, never an accident.
 
-| Flag    | Meaning                                            |
-| ------- | -------------------------------------------------- |
-| `--yes` | Skip the confirmation gate (required in non-TTY).  |
+**`<package>` is required for a real run; optional under `--dry-run`.**
+When `--dry-run` is set and `<package>` is omitted, `dv v1` enters
+**catalog mode**: it lists every discovered Package currently in the
+`Unstable` regime (`0.x.y`) along with the per-package Plan that
+`dv v1 <pkg> --dry-run` would emit. Useful for answering "which of
+these are ready to promote?" without invoking the command once per
+candidate. A real run still requires the explicit `<package>` —
+catalog mode is a discovery aid, not a bulk-promote.
+
+`dv v1` shares its flag surface with [`dv version`](#dv-version): the same
+clean-tree gating, dry-run-by-default support, Unresolved Reference
+handling, and commit override all apply. The differences are that
+`dv v1` targets exactly one package, pins the new version to `1.0.0`, and
+prompts for confirmation (or requires `--yes`) because the promotion is a
+stability commitment.
+
+| Flag                                | Meaning                                                                    |
+| ----------------------------------- | -------------------------------------------------------------------------- |
+| `--dry-run`                         | Compute and print the Plan; make zero changes. Same Plan shape as `dv version --dry-run`. |
+| `--no-dry-run`                      | Force a real run even when `safety.dry-run-by-default` is on.              |
+| `--no-commit`                       | Stage the changes instead of committing (overrides `git.auto-commit`).     |
+| `--prune`                           | Drop Records with Unresolved References rather than halting.               |
+| `--allow-dirty` / `--no-allow-dirty`| Override `git.require-clean-tree` for this invocation.                     |
+| `--yes`                             | Skip the confirmation gate (required in non-TTY).                          |
 
 ```
+$ dv v1 core --dry-run
+Plan (dry-run):
+  core 0.7.4 → 1.0.0 (first stable!)
+       └ would update dependents: cli
+
 $ dv v1 core
 About to commit core to 1.0.0 — this is a stability promise. Proceed? [y/N]
 ```
