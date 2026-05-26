@@ -25,6 +25,14 @@ it are load-bearing:
   schemas, walkthrough, v1-scope. The site's job is to present it; the
   spec library remains the source of truth. If a doc reads wrong on the
   site, fix it in `specs/`, not here.
+- **`srcDir` is the repo root, not `apps/docs/`.** The config sets
+  `srcDir: "../.."` so the spec library (`../../specs/*.md`) and the
+  landing page (`apps/docs/index.md`) both live inside the source
+  tree. `rewrites` maps `specs/foo.md → /foo` so URLs read naturally;
+  `srcExclude` filters out READMEs, CLAUDEs, `examples/`, `packages/`,
+  and other non-page markdown. New spec files become pages
+  automatically — but they need an explicit entry in `themeConfig.sidebar`
+  to appear in the nav.
 
 ## Tasks
 

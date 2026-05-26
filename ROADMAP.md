@@ -100,11 +100,14 @@ From the v1 audit (2026-05-25). Each is independently shippable.
   including `info` and `finalize` (runs `npm install` to refresh
   `package-lock.json`). Optional — skip if you'd rather wait for
   the first real npm user.
-- **Vitepress docs site.** Wire the spec library
-  ([specs/](specs/)) into the site so it actually publishes the
-  authoritative content; today `apps/docs/` has the VitePress
-  scaffold but no sidebar/rewrites. Source of truth stays in
-  `specs/` per `apps/docs/CLAUDE.md`.
+- **Vitepress docs site** — wired up. `apps/docs/.vitepress/config.ts`
+  anchors `srcDir` at the repo root and uses `rewrites` so
+  `specs/foo.md` serves as `/foo`; `srcExclude` keeps READMEs,
+  CLAUDEs, and other meta files out of the published surface.
+  Landing page stays at `apps/docs/index.md`. Sidebar follows
+  the read order from [apps/docs/CLAUDE.md](apps/docs/CLAUDE.md):
+  Start here → Reference → Product. `deno task build` runs in
+  `apps/docs/`; build output is gitignored.
 
 ### Deferred to later (architecturally accommodated)
 

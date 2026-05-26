@@ -25,9 +25,15 @@ deno task preview   # serve the built site
 apps/docs/
 ├── deno.json              # workspace member + vitepress dep + tasks
 ├── .vitepress/
-│   └── config.ts          # title, nav, sidebar — point at ../../specs/
+│   └── config.ts          # srcDir: "../.."; rewrites strip the
+│                          # specs/ prefix; sidebar links each spec
 └── index.md               # landing page (site-only content)
 ```
+
+Spec content stays in `../../specs/` and is rendered straight from
+there. New spec files become pages automatically once they exist; they
+only need a sidebar entry in `.vitepress/config.ts` to be discoverable
+in the nav.
 
 ## Deploy target
 
