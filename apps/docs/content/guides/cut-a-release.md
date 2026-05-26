@@ -315,6 +315,6 @@ Use cases:
 
 - **[Promote to 1.0](/concepts/semver-and-stability#dv-v1-is-the-only-escape-hatch)** —
   the one bump that's not in this flow.
-- **[Troubleshooting](/guides/troubleshooting)** — common errors and
+- **[Troubleshooting](/reference/troubleshooting)** — common errors and
   how to recover from them.
 - **[CLI reference](/reference/cli)** — every flag for every command.

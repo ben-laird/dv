@@ -10,7 +10,7 @@ hero:
       link: /getting-started
     - theme: alt
       text: Why dv?
-      link: /why-dv
+      link: /about/why-dv
 features:
   - title: Records, not commit messages
     details: Contributors declare intent in a tracked file. No commit-message style enforcement; no CI fighting your team's PRs.
@@ -66,6 +66,6 @@ dv is designed around the observation that **commit-message parsing is a style f
 
 The other half: **dv does one job well and exposes machine-readable interfaces** so any orchestration layer can drive it. Shell scripts, CI pipelines, AI agents — same automation surface, no privileged tier. No embedded AI, no hosted service, no account.
 
-[Read the philosophy →](/why-dv)
+[Read the philosophy →](/about/why-dv)
 
 </div>

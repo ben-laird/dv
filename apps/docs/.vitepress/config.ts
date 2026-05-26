@@ -56,20 +56,22 @@ export default defineConfig({
     /^\.?\.?\/(language|design|walkthrough|v1-scope)$/,
   ],
   srcDir: "../..",
-  // Map source paths to public URLs. The pattern is:
-  //   apps/docs/<page>          → /<page>
-  //   apps/docs/content/<page>  → /<page>
-  //   specs/<reference>         → /reference/<reference>
-  // The four reference specs (cli, config-format, record-format,
-  // plugin-contract) are user-facing reference and get republished
-  // under /reference/. The other specs (language, design,
-  // walkthrough, v1-scope) are internal and don't appear here at
-  // all — they're srcExcluded.
+  // Map source paths to public URLs. The directory layout follows
+  // the Diátaxis split: tutorials/ teach by doing, guides/ are
+  // task-oriented how-tos, concepts/ are explanation, reference/
+  // is information lookup. about/ is non-Diátaxis (pitch and
+  // positioning material that doesn't fit the four-mode framework).
+  //
+  // Internal specs (language, design, walkthrough, v1-scope) stay
+  // off the public site entirely — see srcExclude.
   rewrites: {
     "apps/docs/index.md": "index.md",
     "apps/docs/content/:slug.md": ":slug.md",
+    "apps/docs/content/about/:slug.md": "about/:slug.md",
+    "apps/docs/content/tutorials/:slug.md": "tutorials/:slug.md",
     "apps/docs/content/concepts/:slug.md": "concepts/:slug.md",
     "apps/docs/content/guides/:slug.md": "guides/:slug.md",
+    "apps/docs/content/reference/:slug.md": "reference/:slug.md",
     // Keep the original filenames in the URL so cross-references
     // from within the spec library (e.g. `./config-format`) keep
     // resolving without rewrite-aware link-mangling. The sidebar
@@ -109,23 +111,30 @@ export default defineConfig({
   ],
   themeConfig: {
     nav: [
-      { text: "Guide", link: "/getting-started" },
+      { text: "Get started", link: "/getting-started" },
       { text: "Reference", link: "/reference/cli" },
-      { text: "Why dv?", link: "/why-dv" },
+      { text: "Why dv?", link: "/about/why-dv" },
     ],
-    // Sidebar shape follows Diátaxis: Learn (tutorial), Concepts
-    // (explanation), Guides (how-to), Reference (information).
+    // Sidebar shape follows the Diátaxis four-mode framework
+    // (https://diataxis.fr): Tutorials teach by doing, Concepts
+    // explain the model, Guides solve specific tasks, Reference is
+    // for lookup. "About" sits outside the framework — pitch and
+    // positioning material doesn't fit any of the four modes, and
+    // pretending it's a tutorial blurs the boundary for readers
+    // arriving to "learn dv."
+    //
     // Adoption journey reads top-to-bottom: a new user starts with
-    // Getting started, drops into a Concept page when something
-    // feels unfamiliar, hits a Guide when they want to *do*
-    // something specific, and lives in Reference once dv is part
-    // of their daily workflow.
+    // Getting started (a Tutorial), drops into a Concept page when
+    // something feels unfamiliar, hits a Guide when they want to
+    // *do* something specific, and lives in Reference once dv is
+    // part of their daily workflow. About is for the
+    // pre-evaluation reader deciding whether to invest.
     sidebar: [
       {
-        text: "Learn",
+        text: "Tutorials",
         items: [
           { text: "Getting started", link: "/getting-started" },
-          { text: "Why dv?", link: "/why-dv" },
+          { text: "Write a plugin", link: "/tutorials/write-a-plugin" },
         ],
       },
       {
@@ -150,9 +159,7 @@ export default defineConfig({
         text: "Guides",
         items: [
           { text: "Cut a release", link: "/guides/cut-a-release" },
-          { text: "Write a plugin", link: "/guides/write-a-plugin" },
           { text: "CI integration", link: "/guides/ci-integration" },
-          { text: "Troubleshooting", link: "/guides/troubleshooting" },
         ],
       },
       {
@@ -162,7 +169,12 @@ export default defineConfig({
           { text: "Config", link: "/reference/config-format" },
           { text: "Records", link: "/reference/record-format" },
           { text: "Plugin contract", link: "/reference/plugin-contract" },
+          { text: "Troubleshooting", link: "/reference/troubleshooting" },
         ],
+      },
+      {
+        text: "About",
+        items: [{ text: "Why dv?", link: "/about/why-dv" }],
       },
     ],
     socialLinks: [],

@@ -374,7 +374,7 @@ gets caught the same way Records do:
 `dv plugin verify` exercises every safe op (`info`, `discover`,
 `read-version`, `finalize`, bad-input rejection) and reports
 skipped ops for the side-effectful ones. Exit code is non-zero if
-any check fails. See [Write a plugin § dv plugin verify](/guides/write-a-plugin#dv-plugin-verify-contract-conformance)
+any check fails. See [Write a plugin § dv plugin verify](/tutorials/write-a-plugin#dv-plugin-verify-contract-conformance)
 for the local equivalent.
 
 ## Things to know going in
@@ -384,7 +384,7 @@ A few non-obvious bits of context that'll save you debugging time:
 - **dv is non-interactive by default in CI.** All commands accept
   `--yes` to skip confirmation prompts. Forgetting it on a TTY-less
   runner manifests as a `confirmation-required` error (see
-  [Troubleshooting](/guides/troubleshooting#confirmation-required)).
+  [Troubleshooting](/reference/troubleshooting#confirmation-required)).
 - **The exit codes are stable.** Document them once and rely on
   them: 0 = success, non-zero = failure, with specific codes (like
   `release-partial-failure`) for cases that automation should treat
@@ -408,7 +408,7 @@ A few non-obvious bits of context that'll save you debugging time:
 - **[Cut a release](/guides/cut-a-release)** — the same flow,
   walked through interactively. Useful for understanding what the
   CI workflow above is automating.
-- **[Troubleshooting](/guides/troubleshooting)** — every error code
+- **[Troubleshooting](/reference/troubleshooting)** — every error code
   dv emits, indexed by symptom. Bookmark for when CI fails at 2am.
 - **[CLI reference](/reference/cli)** — every flag for every
   command. The automation surface (`--yes`, `--json`, `--dry-run`)
