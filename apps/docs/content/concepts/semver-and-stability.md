@@ -93,6 +93,25 @@ Proceed? [y/N] y
   ↳ updated 2 dependent constraints (@my/client, @my/cli)
 ```
 
+To see which packages in your repo would be candidates for promotion,
+run `dv v1 --dry-run` without naming one — that's **catalog mode**, a
+discovery aid that lists every `0.x` package with its projected
+promotion:
+
+```sh
+$ dv v1 --dry-run
+
+Catalog (dry-run): 2 eligible Packages:
+  @my/api 0.7.4 → 1.0.0 (first stable!) (3 records)
+       └ would update dependents: @my/client, @my/cli
+  @my/utils 0.2.0 → 1.0.0 (first stable!) (no pending records)
+
+Promote one with `dv v1 <package>`.
+```
+
+Catalog mode is preview-only — there's no bulk-promote. Each
+package's 1.0 ceremony is its own deliberate decision.
+
 `dv v1` does everything `dv version` does — consumes Records, projects
 the new version, writes manifests, cascades constraints, commits — but
 with two differences:

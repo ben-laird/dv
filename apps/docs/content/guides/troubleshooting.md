@@ -413,8 +413,12 @@ and that discovery is finding the package you mean.
 
 ### `v1-bad-args` / `v1-cancelled`
 
-- `v1-bad-args` — wrong number of arguments. `dv v1` takes exactly
-  one `<package>` (or zero in dry-run catalog mode).
+- `v1-bad-args` — wrong number of arguments, or `dv v1` was invoked
+  without a `<package>` outside of catalog mode. Two valid shapes:
+  - `dv v1 <package>` — promote one package (real run or `--dry-run`).
+  - `dv v1 --dry-run` — catalog mode: list every `0.x` package with
+    its projected promotion. No `<package>` argument; preview-only,
+    no bulk-promote.
 - `v1-cancelled` — you declined the confirmation prompt. Re-run with
   `--yes` to skip it.
 

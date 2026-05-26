@@ -1,7 +1,7 @@
 import { assertEquals, assertRejects, assertStringIncludes } from "@std/assert";
 import { join } from "@std/path";
 import { DvError } from "../domain/errors.ts";
-import { runV1 } from "./v1.ts";
+import { runV1, runV1Catalog } from "./v1.ts";
 
 // Integration tests for `dv v1 <package>`. The fixture mirrors
 // version.test.ts: a real git working tree with a shell plugin
@@ -367,6 +367,123 @@ Deno.test("runV1 emits the Plan JSON envelope under --json", async () => {
     // The progress reporter is silenced under --json so stdout is
     // clean — no `▸ ...` lines leak into it.
     assertEquals(capturedStdout.includes("▸"), false);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+Deno.test("runV1Catalog lists eligible Unstable packages with per-package projections under --dry-run", async () => {
+  // Given an Unstable package and pending records targeting it
+  const fixture = await setUpFixture({
+    initialVersion: "0.7.4",
+    recordFiles: {
+      "first.md": `---
+type: feat
+packages:
+  - core
+---
+
+Add /v2 endpoint
+`,
+    },
+  });
+  try {
+    // When runV1Catalog runs in dry-run mode (no package specified)
+    const { result, capturedStdout } = await captureStdout(() =>
+      runV1Catalog({
+        dryRun: true,
+        prune: false,
+        emitJson: false,
+        colorEnabled: false,
+      }),
+    );
+
+    // Then exactly one eligible package is reported, projected to 1.0.0
+    assertEquals(result.eligibleCount, 1);
+    assertEquals(result.plan.pending.length, 1);
+    assertEquals(result.plan.pending[0]?.package, "core");
+    assertEquals(result.plan.pending[0]?.currentVersion, "0.7.4");
+    assertEquals(result.plan.pending[0]?.projectedVersion, "1.0.0");
+    assertEquals(result.plan.pending[0]?.bump, "major");
+    assertEquals(result.plan.pending[0]?.records, ["first.md"]);
+    // And the human output names the catalog mode
+    assertStringIncludes(capturedStdout, "Catalog (dry-run)");
+    assertStringIncludes(capturedStdout, "1 eligible Package");
+    assertStringIncludes(capturedStdout, "core");
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+Deno.test("runV1Catalog reports zero eligible packages when every package is already >= 1.0", async () => {
+  // Given a Stable (>=1.0) package — nothing is eligible for v1
+  const fixture = await setUpFixture({ initialVersion: "1.2.3" });
+  try {
+    const { result, capturedStdout } = await captureStdout(() =>
+      runV1Catalog({
+        dryRun: true,
+        prune: false,
+        emitJson: false,
+        colorEnabled: false,
+      }),
+    );
+
+    // Then the catalog is empty and the human output says so
+    assertEquals(result.eligibleCount, 0);
+    assertEquals(result.plan.pending.length, 0);
+    assertStringIncludes(capturedStdout, "no packages eligible");
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+Deno.test("runV1Catalog refuses to run when dry-run is false (catalog mode is preview-only)", async () => {
+  // Given any fixture (the check happens before discovery)
+  const fixture = await setUpFixture({});
+  try {
+    // When runV1Catalog runs WITHOUT dry-run
+    // Then it throws v1-bad-args explaining the constraint
+    const caughtError = await assertRejects(
+      () =>
+        runV1Catalog({
+          dryRun: false,
+          prune: false,
+          emitJson: false,
+          colorEnabled: false,
+        }),
+      DvError,
+    );
+    assertEquals(caughtError.kind.code, "v1-bad-args");
+    assertStringIncludes(
+      caughtError.message,
+      "catalog mode (omitted package) requires --dry-run",
+    );
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+Deno.test("runV1Catalog emits a Plan JSON envelope under --json", async () => {
+  const fixture = await setUpFixture({ initialVersion: "0.3.0" });
+  try {
+    const { capturedStdout } = await captureStdout(() =>
+      runV1Catalog({
+        dryRun: true,
+        prune: false,
+        emitJson: true,
+        colorEnabled: false,
+      }),
+    );
+
+    // Then stdout is the standard Plan envelope, parseable as JSON
+    const parsed = JSON.parse(capturedStdout) as {
+      schema: string;
+      pending: { package: string; projectedVersion: string }[];
+    };
+    assertEquals(parsed.schema, "urn:dv:schema:v1:plan");
+    assertEquals(parsed.pending.length, 1);
+    assertEquals(parsed.pending[0]?.package, "core");
+    assertEquals(parsed.pending[0]?.projectedVersion, "1.0.0");
   } finally {
     await fixture.cleanup();
   }

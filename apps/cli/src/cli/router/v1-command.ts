@@ -1,5 +1,5 @@
 import { CliError, done, forCtx } from "@seshat/cli";
-import { runV1 } from "../v1.ts";
+import { runV1, runV1Catalog } from "../v1.ts";
 import type { DvCtx } from "./ctx.ts";
 import {
   resolveColorEnabled,
@@ -35,18 +35,19 @@ export const v1Leaf = command({
     "no-allow-dirty": { kind: "boolean", description: "Require clean tree" },
   },
   run: async ({ flags, argv, path, ctx }) => {
-    if (argv.length !== 1) {
+    // Two arities: 0 args (catalog mode, dry-run-only) or 1 arg
+    // (the package to promote). Anything else is a usage error.
+    if (argv.length > 1) {
       return done({
         kind: "error",
         error: new CliError({
           code: "v1-bad-args",
-          message: `expected exactly one <package> argument; got ${argv.length}`,
+          message: `expected at most one <package> argument; got ${argv.length}`,
           hint: `run '${path.join(" ")} --help' for usage`,
           exitCode: 2,
         }),
       });
     }
-    const packageName = argv[0] ?? "";
     const dryRunOverride = resolveTristate({
       positiveFlag: flags["dry-run"],
       negativeFlag: flags["no-dry-run"],
@@ -60,6 +61,23 @@ export const v1Leaf = command({
       suppressColor: flags["no-color"] === true,
       emitJson: flags.json === true,
     });
+
+    if (argv.length === 0) {
+      // Catalog mode: list every Unstable Package with its
+      // projected promotion. runV1Catalog enforces the
+      // dry-run-only invariant (the leaf doesn't read config so
+      // can't pre-check `safety.dry-run-by-default`).
+      await runV1Catalog({
+        dryRun: dryRunOverride,
+        prune: flags.prune === true,
+        emitJson: flags.json === true,
+        colorEnabled,
+        debug: ctx.debugEnabled,
+      });
+      return done({ kind: "ok" });
+    }
+
+    const packageName = argv[0] ?? "";
     await runV1({
       packageName,
       dryRun: dryRunOverride,

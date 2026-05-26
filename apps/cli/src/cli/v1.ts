@@ -805,6 +805,295 @@ interface RenderHumanSummaryArgs {
   colorEnabled: boolean;
 }
 
+// === catalog mode (dv v1 --dry-run with no package) =============
+//
+// Lists every discovered Package currently in the Unstable regime
+// (major == 0) along with the per-package Plan that
+// `dv v1 <pkg> --dry-run` would emit. A discovery aid for "which
+// of these is ready to promote?" — *not* a bulk-promote, which is
+// why catalog mode is dry-run-only.
+
+export interface RunV1CatalogOptions {
+  // Honors the same dry-run resolution as runV1 (flag > config >
+  // false). Catalog mode requires effective dry-run to be true —
+  // it has no real-run path because there's no single target to
+  // promote. The leaf passes through whatever the user supplied;
+  // we resolve + enforce here so the policy lives in one place.
+  dryRun?: boolean;
+  prune: boolean;
+  emitJson: boolean;
+  colorEnabled: boolean;
+  debug?: boolean;
+}
+
+export interface RunV1CatalogResult {
+  // A standard Plan with N pending entries — one per Unstable
+  // Package — each projected to 1.0.0. Tracked still lists every
+  // discovered Package so callers comparing against `dv status`'
+  // output see the same shape. unresolvedReferences are computed
+  // against the *whole* Record set, same as runV1, so the catalog
+  // surfaces ledger issues that would block any actual promotion.
+  plan: Plan;
+  // Convenience counters for human callers; redundant with plan
+  // but matches the shape RunV1Result returns.
+  eligibleCount: number;
+}
+
+export async function runV1Catalog(
+  options: RunV1CatalogOptions,
+): Promise<RunV1CatalogResult> {
+  const repoRootPath = await requireRepoRoot();
+  const configFilePath = configPath(repoRootPath);
+  const loadedConfig = await loadConfig(configFilePath);
+  const tracingHooks: TracingHooks | undefined = options.debug
+    ? makeStderrTracingHooks({ colorEnabled: options.colorEnabled })
+    : undefined;
+
+  const effectiveDryRun = options.dryRun ?? loadedConfig.safety.dryRunByDefault;
+  if (!effectiveDryRun) {
+    // Catalog mode is preview-only. The leaf reaches here when
+    // <package> was omitted; without dry-run that's just a usage
+    // error — bulk-promote isn't a feature.
+    throw new DvError({
+      code: "v1-bad-args",
+      message:
+        "dv v1 requires <package> for a real run; catalog mode (omitted package) requires --dry-run",
+      hint: "pass `dv v1 --dry-run` for the catalog, or `dv v1 <package>` to promote one Package",
+    });
+  }
+
+  const discoveredPackages = await discoverPackages({
+    config: loadedConfig,
+    repoRootPath,
+    tracingHooks,
+  });
+  const resolvedPluginsByUseString = await resolveAllPlugins({
+    pluginAssignments: loadedConfig.discovery.plugins,
+    repoRootPath,
+  });
+  // Load info eagerly so contract-version mismatches surface here
+  // (same reason as runV1 / runVersion). The result isn't otherwise
+  // used in catalog mode, but the up-front check matters.
+  await loadInfoForAllPlugins({
+    resolvedPluginsByKey: resolvedPluginsByUseString,
+    timeoutMs: DEFAULT_FAST_OP_TIMEOUT_MS,
+    tracingHooks,
+  });
+
+  const allPackageCurrentVersions = await readAllCurrentVersions({
+    discoveredPackages,
+    resolvedPluginsByUseString,
+    repoRootPath,
+    tracingHooks,
+  });
+  const versionByPackageName = new Map(
+    allPackageCurrentVersions.map(
+      (entry) => [entry.packageName, entry.currentVersion] as const,
+    ),
+  );
+
+  // Load + parse Records once; resolve rename targets so per-package
+  // Record bucketing routes old names to current identities (same
+  // rules as runV1).
+  const recordsListing = await listRecords({
+    recordsDirectory: recordsPath(repoRootPath),
+  });
+  if (recordsListing.failures.length > 0) {
+    throw new DvError({
+      code: "malformed-records",
+      message: `${recordsListing.failures.length} record file${
+        recordsListing.failures.length === 1 ? "" : "s"
+      } failed to parse — run \`dv validate\` to see details`,
+      hint: "run `dv validate` for per-record diagnostics",
+      context: { failureCount: recordsListing.failures.length },
+    });
+  }
+  const renameLedger = await loadRenameLedger({
+    ledgerPath: renamesPath(repoRootPath),
+  });
+  const renameResolver = buildRenameResolver({ ledger: renameLedger });
+  const discoveredNames = new Set(discoveredPackages.map((pkg) => pkg.name));
+
+  // Bucket Records by the package they target (post-rename). One
+  // Record can target multiple packages → it shows up in multiple
+  // buckets. Unresolved References get collected once.
+  const recordsByTargetName = new Map<string, DvRecord[]>();
+  const unresolvedReferences: { record: string; reference: string }[] = [];
+  for (const parsedRecord of recordsListing.parsedRecords) {
+    for (const referenced of parsedRecord.packages) {
+      const resolved = renameResolver.resolve(referenced) ?? referenced;
+      if (!discoveredNames.has(resolved)) {
+        unresolvedReferences.push({
+          record: parsedRecord.filename,
+          reference: referenced,
+        });
+        continue;
+      }
+      const existingForName = recordsByTargetName.get(resolved) ?? [];
+      existingForName.push(parsedRecord);
+      recordsByTargetName.set(resolved, existingForName);
+    }
+  }
+
+  // Honor --prune semantics for parity with runV1: without it, an
+  // Unresolved Reference is information the catalog should surface
+  // but not a hard halt (catalog is preview-only — the actual
+  // promotion will halt later if the user hasn't resolved the issue).
+  // We dedupe so the same (record, reference) doesn't appear twice
+  // if the Record listed it multiple times.
+  const dedupedUnresolved = dedupeUnresolvedReferences(unresolvedReferences);
+
+  // Build one PlanPending per Unstable Package.
+  const pendingEntries: PlanPending[] = [];
+  for (const pkg of discoveredPackages) {
+    const currentVersion = versionByPackageName.get(pkg.name);
+    if (currentVersion === undefined) continue;
+    if (currentVersion.major !== 0) continue;
+    const recordsForThisPackage = recordsByTargetName.get(pkg.name) ?? [];
+    const constraintUpdates = discoveredPackages
+      .filter((otherPkg) => otherPkg.name !== pkg.name)
+      .map((otherPkg) => ({
+        dependent: otherPkg.name,
+        newConstraint: "^1.0.0",
+      }))
+      .sort((leftUpdate, rightUpdate) =>
+        leftUpdate.dependent.localeCompare(rightUpdate.dependent),
+      );
+    const currentVersionText = `${currentVersion.major}.${currentVersion.minor}.${currentVersion.patch}`;
+    pendingEntries.push({
+      package: pkg.name,
+      currentVersion: currentVersionText,
+      projectedVersion: "1.0.0",
+      bump: "major",
+      stability: "Stable",
+      changeCounts: computeChangeCounts(recordsForThisPackage),
+      records: recordsForThisPackage.map((rec) => rec.filename).sort(),
+      constraintUpdates,
+    });
+  }
+  // Sort by package name so output is byte-stable across runs.
+  pendingEntries.sort((leftEntry, rightEntry) =>
+    leftEntry.package.localeCompare(rightEntry.package),
+  );
+
+  const packagesByName = new Map(
+    discoveredPackages.map((pkg) => [pkg.name, pkg] as const),
+  );
+  const awaitingReleaseLookup = await computeAwaitingRelease({
+    repoRootPath,
+    tagFormatTemplate: loadedConfig.tagging.format,
+    packagesWithVersions: allPackageCurrentVersions.flatMap((entry) => {
+      const pkg = packagesByName.get(entry.packageName);
+      return pkg === undefined
+        ? []
+        : [{ pkg, currentVersion: entry.currentVersion }];
+    }),
+  });
+
+  const plan: Plan = {
+    schema: "urn:dv:schema:v1:plan",
+    command: "version",
+    pending: pendingEntries,
+    awaitingRelease: awaitingReleaseLookup,
+    unresolvedReferences: dedupedUnresolved,
+    tracked: allPackageCurrentVersions.map((entry) => {
+      const pkg = packagesByName.get(entry.packageName);
+      const versionText = `${entry.currentVersion.major}.${entry.currentVersion.minor}.${entry.currentVersion.patch}`;
+      return {
+        package: entry.packageName,
+        currentVersion: versionText,
+        path: pkg?.path ?? "",
+      };
+    }),
+  };
+
+  if (options.emitJson) {
+    console.log(JSON.stringify(plan, null, 2));
+  } else {
+    renderCatalogHumanPlan({
+      plan,
+      colorEnabled: options.colorEnabled,
+      prune: options.prune,
+    });
+  }
+
+  return {
+    plan,
+    eligibleCount: pendingEntries.length,
+  };
+}
+
+function dedupeUnresolvedReferences(
+  unresolvedReferences: { record: string; reference: string }[],
+): { record: string; reference: string }[] {
+  const seen = new Set<string>();
+  const out: { record: string; reference: string }[] = [];
+  for (const entry of unresolvedReferences) {
+    const key = `${entry.record}\x00${entry.reference}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(entry);
+  }
+  return out;
+}
+
+interface RenderCatalogHumanPlanArgs {
+  plan: Plan;
+  colorEnabled: boolean;
+  prune: boolean;
+}
+
+function renderCatalogHumanPlan(args: RenderCatalogHumanPlanArgs): void {
+  const styler = makeStyler(args.colorEnabled);
+  console.log("");
+  if (args.plan.pending.length === 0) {
+    console.log(
+      `${styler.dim("no packages eligible for")} ${styler.cyan("`dv v1`")} ${styler.dim("— every Package is already ≥ 1.0 or undiscovered")}`,
+    );
+    console.log("");
+    return;
+  }
+  const headerSuffix = args.plan.pending.length === 1 ? "" : `s`;
+  console.log(
+    `${styler.bold(`Catalog (dry-run): ${args.plan.pending.length} eligible Package${headerSuffix}`)}:`,
+  );
+  for (const pending of args.plan.pending) {
+    const recordSuffix =
+      pending.records.length === 0
+        ? styler.dim(" (no pending records)")
+        : styler.dim(
+            ` (${pending.records.length} record${pending.records.length === 1 ? "" : "s"})`,
+          );
+    console.log(
+      `  ${styler.bold(pending.package)} ${pending.currentVersion} → ${styler.yellow(styler.bold(pending.projectedVersion))} (${styler.yellow("first stable!")})${recordSuffix}`,
+    );
+    if (pending.constraintUpdates.length > 0) {
+      const dependentNames = pending.constraintUpdates
+        .map((update) => update.dependent)
+        .join(", ");
+      console.log(
+        `       ${styler.dim(`└ would update dependents: ${dependentNames}`)}`,
+      );
+    }
+  }
+  if (args.plan.unresolvedReferences.length > 0) {
+    console.log("");
+    console.log(
+      `${styler.yellow(styler.bold("Unresolved references"))} (would halt ${styler.cyan("dv v1")} without ${styler.cyan("--prune")}):`,
+    );
+    for (const unresolved of args.plan.unresolvedReferences) {
+      console.log(
+        `  ${styler.dim(unresolved.record)} → ${unresolved.reference}`,
+      );
+    }
+  }
+  console.log("");
+  console.log(
+    `${styler.dim("Promote one with")} ${styler.cyan("`dv v1 <package>`")}${args.prune ? styler.dim(" --prune") : ""}${styler.dim(".")}`,
+  );
+  console.log("");
+}
+
 function renderHumanSummary(args: RenderHumanSummaryArgs): void {
   const styler = makeStyler(args.colorEnabled);
   console.log("");

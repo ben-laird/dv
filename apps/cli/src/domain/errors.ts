@@ -155,7 +155,8 @@ export type DvErrorShape =
       code: "v1-already-stable";
       context: { package: string; currentVersion: string };
     }
-  | { code: "v1-cancelled" };
+  | { code: "v1-cancelled" }
+  | { code: "v1-bad-args" };
 
 // DvError is the throw type for every dv-internal failure. Extends
 // CliError with the DvErrorShape union pinned, so throw sites get
