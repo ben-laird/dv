@@ -100,6 +100,8 @@ export async function runPluginInvoke(
     discoverGlob: options.discoverGlob,
     newVersion: options.newVersion,
     gitTag: options.gitTag,
+    finalizeTrigger: options.finalizeTrigger,
+    bumpedPackagesJson: options.bumpedPackagesJson,
   });
 
   const stdinPayload = resolveStdinPayload({

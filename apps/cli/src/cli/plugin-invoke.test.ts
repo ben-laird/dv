@@ -170,6 +170,43 @@ Deno.test("runPluginInvoke rejects read-version without --package + --path", asy
   }
 });
 
+Deno.test("runPluginInvoke threads --trigger and --bumped-packages through to the finalize env vars", async () => {
+  // Regression: an earlier dispatcher dropped these two options on
+  // the floor when constructing the child env, so finalize always
+  // saw DV_FINALIZE_TRIGGER='version' and DV_BUMPED_PACKAGES='[]'
+  // regardless of what the user passed. The plugin then either
+  // refused to refresh the right lockfile or no-op'd the run.
+  const fixture = await setUpRepo({
+    packages: [{ name: "pkg-a", path: "packages/pkg-a", version: "1.0.0" }],
+  });
+  try {
+    const bumpedPackagesJson = JSON.stringify([
+      { name: "pkg-a", path: "packages/pkg-a", new_version: "1.1.0" },
+    ]);
+    const result = await silenceStdout(() =>
+      runPluginInvoke({
+        pluginPositional: fixture.pluginInvocation,
+        opName: "finalize",
+        repoRoot: fixture.repoRootPath,
+        finalizeTrigger: "v1",
+        bumpedPackagesJson,
+        emitJson: false,
+        colorEnabled: false,
+      }),
+    );
+
+    // Then the env captured for the child process reflects what
+    // the user supplied — not the defaults.
+    assertEquals(result.environmentVariables.DV_FINALIZE_TRIGGER, "v1");
+    assertEquals(
+      result.environmentVariables.DV_BUMPED_PACKAGES,
+      bumpedPackagesJson,
+    );
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
 Deno.test("runPluginInvoke rejects update-dependency without --stdin-json", async () => {
   const fixture = await setUpRepo({
     packages: [{ name: "pkg-a", path: "packages/pkg-a", version: "1.0.0" }],
