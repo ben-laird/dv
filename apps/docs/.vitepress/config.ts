@@ -1,50 +1,88 @@
 import { defineConfig } from "vitepress";
 
-// VitePress site for dv.
+// VitePress site for dv. The public site is end-user-facing — it
+// teaches dv to someone evaluating or adopting it, and exposes the
+// reference docs for day-to-day use. The internal spec library at
+// `../../specs/` is separate: those docs target the implementer
+// (and AI coding agents picking up the project), use formal
+// notation, and are the design source of truth for the team — not
+// adoption material.
 //
-// Source layout (`apps/docs/CLAUDE.md`): the spec library lives in
-// `../../specs/` and is the source of truth. The site renders those
-// files directly via `srcDir: '../..'` (anchoring at the repo root)
-// plus `rewrites` that strip the `specs/` prefix from URLs, so
-// `specs/language.md` is served as `/language`. Site-only content
-// (landing page, theme) stays under `apps/docs/`.
+// Source layout:
 //
-// Why srcDir at the repo root rather than `srcDir: '../../specs'`:
-// the landing page (`apps/docs/index.md`) needs to live somewhere
-// inside `srcDir` to be a page, and we don't want it polluting
-// `specs/`. Anchoring at the repo root lets both trees coexist
-// without symlinks or build-time copies (`apps/docs/CLAUDE.md` is
-// explicit that we should not fork spec content).
+//   apps/docs/
+//     index.md                  — landing
+//     content/
+//       getting-started.md      — 5-min tutorial
+//       why-dv.md               — pitch + comparison
+//       concepts/*.md           — Explanation (end-user voice)
+//       guides/*.md             — How-To (task-oriented; grows over time)
+//     .vitepress/config.ts      — this file
 //
-// `srcExclude` keeps the source set tight: every meta/README/CLAUDE
-// file that exists for other reasons (orientation, package
-// scaffolding, agent guidance) stays out of the published site.
+//   specs/
+//     cli.md, config-format.md, record-format.md,
+//     plugin-contract.md        — reference; surfaced on the public
+//                                 site under /reference/* via rewrites
+//     language.md, design.md, walkthrough.md, v1-scope.md
+//                               — internal; NOT on the public site
+//
+// `srcDir` anchors at the repo root so both trees fit inside the
+// source set without symlinks or build-time copies. `rewrites`
+// maps each source path to its clean public URL; `srcExclude`
+// keeps everything else (READMEs, CLAUDEs, internal specs,
+// examples, packages) out of the published surface.
 
 export default defineConfig({
   title: "dv",
   description:
-    "A language-agnostic, git-native changelog CLI for monorepos.",
+    "A git-native changelog CLI for monorepos. Records, not commit messages.",
   cleanUrls: true,
-  // The spec library legitimately links into source code (e.g. a
-  // module path in `apps/cli/src/subtools/...`). Those aren't
-  // pages on this site — they're navigational hints for readers
-  // browsing the repo on GitHub. Tell VitePress not to flag them
-  // as dead. Function form lets us be precise: only ignore links
-  // that point at source dirs, not arbitrary typos in spec text.
-  ignoreDeadLinks: [/^\.?\.?\/.*\/(apps|packages|examples)\//],
+  // Two classes of "dead" links exist in the spec content that are
+  // intentional and shouldn't fail the build:
+  //
+  //   1. Source-code breadcrumbs (apps/cli/src/..., packages/...,
+  //      examples/...) — useful when reading specs on GitHub, but
+  //      they're not pages on this site.
+  //
+  //   2. Cross-spec links to *internal* specs (language, design,
+  //      walkthrough, v1-scope). The reference specs we publish
+  //      (cli, config-format, record-format, plugin-contract)
+  //      link to each other and to internal specs as siblings —
+  //      that's correct in the spec library, but the internal
+  //      ones aren't on the public site, so the link names look
+  //      "dead" to VitePress. Allowlist them by name.
+  ignoreDeadLinks: [
+    /^\.?\.?\/.*\/(apps|packages|examples)\//,
+    /^\.?\.?\/(language|design|walkthrough|v1-scope)$/,
+  ],
   srcDir: "../..",
-  // Map specs/foo.md → /foo so spec URLs read naturally. The
-  // landing page sits at apps/docs/index.md and is the
-  // explicit root via a self-rewrite (Vitepress treats the
-  // un-rewritten apps/docs/index.md as a buried URL otherwise).
+  // Map source paths to public URLs. The pattern is:
+  //   apps/docs/<page>          → /<page>
+  //   apps/docs/content/<page>  → /<page>
+  //   specs/<reference>         → /reference/<reference>
+  // The four reference specs (cli, config-format, record-format,
+  // plugin-contract) are user-facing reference and get republished
+  // under /reference/. The other specs (language, design,
+  // walkthrough, v1-scope) are internal and don't appear here at
+  // all — they're srcExcluded.
   rewrites: {
     "apps/docs/index.md": "index.md",
-    "specs/:slug.md": ":slug.md",
+    "apps/docs/content/:slug.md": ":slug.md",
+    "apps/docs/content/concepts/:slug.md": "concepts/:slug.md",
+    "apps/docs/content/guides/:slug.md": "guides/:slug.md",
+    // Keep the original filenames in the URL so cross-references
+    // from within the spec library (e.g. `./config-format`) keep
+    // resolving without rewrite-aware link-mangling. The sidebar
+    // labels them with friendly names regardless.
+    "specs/cli.md": "reference/cli.md",
+    "specs/config-format.md": "reference/config-format.md",
+    "specs/record-format.md": "reference/record-format.md",
+    "specs/plugin-contract.md": "reference/plugin-contract.md",
   },
-  // Excludes anything that isn't a published page. The spec
-  // library + the landing page are the only sources; every other
-  // markdown file in the tree exists for orientation, package
-  // scaffolding, or agent guidance.
+  // Keep the public source surface tight: only the explicitly
+  // rewritten paths above survive. Everything else is excluded.
+  // (Vitepress applies these as glob excludes against the srcDir
+  // tree; the rewrites above pull specific files back in.)
   srcExclude: [
     "**/README.md",
     "**/CLAUDE.md",
@@ -54,41 +92,68 @@ export default defineConfig({
     "**/HISTORY.md",
     "examples/**",
     "packages/**",
+    "apps/cli/**",
     ".dv/**",
     "node_modules/**",
-    // schemas/ holds JSON Schemas plus a brief README, not pages.
+    // Internal specs: language is the implementer's vocabulary
+    // (formal set-theory notation); design is the per-decision
+    // rationale; walkthrough is a long-form reference; v1-scope
+    // is the product-shape doc. None of these are adoption
+    // material. The team-facing source of truth stays in /specs/;
+    // the public site teaches dv in its own voice.
+    "specs/language.md",
+    "specs/design.md",
+    "specs/walkthrough.md",
+    "specs/v1-scope.md",
     "specs/schemas/**",
   ],
   themeConfig: {
     nav: [
-      { text: "Guide", link: "/walkthrough" },
-      { text: "Reference", link: "/cli" },
+      { text: "Guide", link: "/getting-started" },
+      { text: "Reference", link: "/reference/cli" },
+      { text: "Why dv?", link: "/why-dv" },
     ],
-    // Sidebar follows the read order from apps/docs/CLAUDE.md:
-    // language first (the ubiquitous vocabulary), then design
-    // (the why), then the per-spec references. v1-scope sits in
-    // its own section as the product-shape doc.
+    // Sidebar shape follows Diátaxis: Learn (tutorial), Concepts
+    // (explanation), Guides (how-to), Reference (information).
+    // Adoption journey reads top-to-bottom: a new user starts with
+    // Getting started, drops into a Concept page when something
+    // feels unfamiliar, hits a Guide when they want to *do*
+    // something specific, and lives in Reference once dv is part
+    // of their daily workflow.
     sidebar: [
       {
-        text: "Start here",
+        text: "Learn",
         items: [
-          { text: "Walkthrough", link: "/walkthrough" },
-          { text: "Language", link: "/language" },
-          { text: "Design", link: "/design" },
+          { text: "Getting started", link: "/getting-started" },
+          { text: "Why dv?", link: "/why-dv" },
+        ],
+      },
+      {
+        text: "Concepts",
+        items: [
+          { text: "Records", link: "/concepts/records" },
+          {
+            text: "Packages and plugins",
+            link: "/concepts/packages-and-plugins",
+          },
+          {
+            text: "Two-phase release",
+            link: "/concepts/two-phase-release",
+          },
+          {
+            text: "SemVer and stability",
+            link: "/concepts/semver-and-stability",
+          },
         ],
       },
       {
         text: "Reference",
         items: [
-          { text: "CLI", link: "/cli" },
-          { text: "Record format", link: "/record-format" },
-          { text: "Config format", link: "/config-format" },
-          { text: "Plugin contract", link: "/plugin-contract" },
+          { text: "CLI", link: "/reference/cli" },
+          { text: "Config", link: "/reference/config-format" },
+          { text: "Records", link: "/reference/record-format" },
+          { text: "Plugin contract", link: "/reference/plugin-contract" },
         ],
-      },
-      {
-        text: "Product",
-        items: [{ text: "v1 scope", link: "/v1-scope" }],
       },
     ],
     socialLinks: [],

@@ -25,15 +25,25 @@ deno task preview   # serve the built site
 apps/docs/
 ├── deno.json              # workspace member + vitepress dep + tasks
 ├── .vitepress/
-│   └── config.ts          # srcDir: "../.."; rewrites strip the
-│                          # specs/ prefix; sidebar links each spec
-└── index.md               # landing page (site-only content)
+│   └── config.ts          # srcDir: "../.."; rewrites map both content
+│                          # and reference specs into clean URLs
+├── index.md               # landing page
+└── content/               # adoption-oriented user content
+    ├── getting-started.md
+    ├── why-dv.md
+    ├── concepts/          # Explanation pages
+    │   ├── records.md
+    │   ├── packages-and-plugins.md
+    │   ├── two-phase-release.md
+    │   └── semver-and-stability.md
+    └── guides/            # How-to pages (grows over time)
 ```
 
-Spec content stays in `../../specs/` and is rendered straight from
-there. New spec files become pages automatically once they exist; they
-only need a sidebar entry in `.vitepress/config.ts` to be discoverable
-in the nav.
+Reference specs (`cli`, `config-format`, `record-format`,
+`plugin-contract`) are surfaced via `rewrites` from `../../specs/` and
+published under `/reference/*`. Internal specs (`language`, `design`,
+`walkthrough`, `v1-scope`) stay in `specs/` and don't appear on the
+public site — they're design docs for the team.
 
 ## Deploy target
 

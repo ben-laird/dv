@@ -20,19 +20,35 @@ it are load-bearing:
 - This `deno.json` deliberately omits `name`/`version`/`exports` — the
   site isn't a publishable library, just a workspace member with its
   own tasks and deps.
-- **`specs/` is upstream.** The content rendered here lives in `../../specs/`
-  — language, design, cli, record-format, config-format, plugin-contract,
-  schemas, walkthrough, v1-scope. The site's job is to present it; the
-  spec library remains the source of truth. If a doc reads wrong on the
-  site, fix it in `specs/`, not here.
-- **`srcDir` is the repo root, not `apps/docs/`.** The config sets
-  `srcDir: "../.."` so the spec library (`../../specs/*.md`) and the
-  landing page (`apps/docs/index.md`) both live inside the source
-  tree. `rewrites` maps `specs/foo.md → /foo` so URLs read naturally;
-  `srcExclude` filters out READMEs, CLAUDEs, `examples/`, `packages/`,
-  and other non-page markdown. New spec files become pages
-  automatically — but they need an explicit entry in `themeConfig.sidebar`
-  to appear in the nav.
+- **Two content sources, one site.** The site renders content from
+  two trees:
+  - `apps/docs/content/` — user-facing pages written for adoption.
+    Tutorial (`getting-started.md`), pitch (`why-dv.md`), Concepts
+    (Records / Packages and plugins / Two-phase release / SemVer and
+    stability), and (later) Guides.
+  - `../../specs/` — the internal spec library. Only the **reference**
+    specs (`cli`, `config-format`, `record-format`, `plugin-contract`)
+    are surfaced on the public site, republished under `/reference/*`.
+    The other specs (`language`, `design`, `walkthrough`, `v1-scope`)
+    are **deliberately not on the public site** — they're internal
+    design docs using formal notation, written for implementers /
+    AI agents, and would confuse end users. They stay in `specs/`
+    as the team's source of truth.
+- **Two audiences, two voices.** When editing:
+  - End-user content lives in `apps/docs/content/` — write for
+    someone evaluating or adopting `dv`, in plain language. Link
+    to Concept pages instead of repeating definitions.
+  - Internal specs in `../../specs/` stay terse and formal — they're
+    the design source of truth for the team. If a spec needs to be
+    user-facing, rewrite it as a Concept page in `apps/docs/content/`
+    rather than softening the spec itself.
+- **`srcDir` is the repo root.** Config sets `srcDir: "../.."` so
+  both trees fit inside the source set without symlinks or build-time
+  copies. `rewrites` controls URLs; `srcExclude` keeps everything
+  else (READMEs, CLAUDEs, internal specs, examples, packages) off
+  the public site. New pages need both a rewrite entry (if the
+  filename differs from the URL) and a sidebar entry to be
+  discoverable.
 
 ## Tasks
 
@@ -44,12 +60,19 @@ From `apps/docs/`:
 
 ## Editing rules
 
-- Don't fork spec content into `apps/docs/`. Reference `../../specs/*.md`
-  from the VitePress config (sidebar, `srcDir`, includes, or rewrites) so
-  there's exactly one copy.
-- Site-only content (landing page, theming, custom components) lives here.
-- Keep dependencies minimal. VitePress + its default theme is the baseline;
-  add plugins only when a doc actually needs them.
+- **Reference specs are republished, not forked.** The four reference
+  specs (`cli`, `config-format`, `record-format`, `plugin-contract`)
+  are surfaced via `rewrites` from `../../specs/`. To change their
+  content, edit the spec. New user-facing content (Concepts, Guides,
+  tutorials) lives in `apps/docs/content/` and is the right place
+  for adoption-oriented material.
+- **Don't promote internal specs to public pages without rewriting
+  them.** `language.md`, `design.md`, `walkthrough.md`, and
+  `v1-scope.md` use formal notation and assume implementer context.
+  If a Concept page needs material from one of them, distill it in
+  plain language for the public site — don't just publish the spec.
+- Keep dependencies minimal. VitePress + its default theme is the
+  baseline; add plugins only when a doc actually needs them.
 
 ## Don't invent
 
