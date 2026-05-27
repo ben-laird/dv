@@ -4,6 +4,12 @@ All notable changes to this Package are documented in this file. The
 format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this Package adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.7.0] - 2026-05-27
+
+### Added
+
+- feat(release): add get-dependencies plugin op + topological publish order
+
 ## [0.6.0] - 2026-05-27
 
 ### Changed
