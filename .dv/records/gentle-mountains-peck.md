@@ -1,7 +1,7 @@
 ---
 type: fix
 packages:
-  - '@seshat/dv'
+  - '@dv-cli/dv'
 notes: >-
   Adds a `↳ refreshed N files (path1, path2)` line to the human summary so users can see what
   additional files (typically lockfiles) finalize staged into the commit. RunVersionResult and

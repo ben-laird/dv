@@ -13,14 +13,14 @@ cross-cutting work that doesn't fit a single spec section.
 
 ### Breaking changes to land *before* the next 1.0 attempt
 
-We tried promoting `@seshat/dv` to 1.0.0 once and walked it back (see
+We tried promoting `@dv-cli/dv` to 1.0.0 once and walked it back (see
 revert of `a9a32c1`) because the use-key redesign became visible
 *during* the ceremony. Anything here would force a v2 if it landed
 post-1.0; SemVer treats them as breaking, so they have to ship first.
 
 *(Empty for now — the discriminated use-key redesign and its
 migration command both landed pre-1.0, see Done below. The
-@seshat/dv → 1.0.0 ceremony can rerun once we've audited the
+@dv-cli/dv → 1.0.0 ceremony can rerun once we've audited the
 remaining v1 commands.)*
 
 ### Commands shipped (the v1 surface)
@@ -58,7 +58,7 @@ authoritative for behavior.
   non-functional. Bookkeeping only: never touches the actual
   package.
 - **`dv v1 <package>`** — commit `06cc1de`. Not yet exercised
-  against `@seshat/dv` itself, pending another audit pass.
+  against `@dv-cli/dv` itself, pending another audit pass.
 - **Discriminated `discovery.plugins[].use` key** — commits
   `40ab432` (path/builtin/command arms) and a follow-up adding the
   fourth `run:` arm for interpreter-style invocations like
@@ -88,8 +88,8 @@ From the v1 audit (2026-05-25). Each is independently shippable.
   2026-05-25. `dv migrate config --dry-run` reports already-current
   shape; `dv version --dry-run` projects 0.5.0 → 0.6.0 (the two
   pending Records for finalize-summary and info-op); `dv v1
-  @seshat/dv --dry-run --yes` projects 0.5.0 → 1.0.0 with
-  @seshat/cli's constraint rewritten; `dv plugin verify` against
+  @dv-cli/dv --dry-run --yes` projects 0.5.0 → 1.0.0 with
+  @dv-cli/clipc's constraint rewritten; `dv plugin verify` against
   the deno example reports 4 pass, 0 fail. The real `dv v1`
   promotion is left as a deliberate next step rather than an
   autonomous one — 1.0 is one-way.
@@ -140,7 +140,7 @@ later](specs/v1-scope.md#deferred-to-later). Highlights:
 Tracked here because they're scaffolding/quality work that isn't
 user-visible — the user-facing scope docs are the wrong home.
 
-- **Errors-as-values in `@seshat/cli`.** Landed via the router
+- **Errors-as-values in `@dv-cli/clipc`.** Landed via the router
   framework's `CliResponse` discriminated union (`{ kind: "ok" |
   "error" | "help" }`). Effect-style: typed errors are returned by
   runners and rendered by the framework; thrown errors are bugs we

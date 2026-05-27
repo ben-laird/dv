@@ -1,4 +1,4 @@
-import { CliError, done, forCtx } from "@seshat/cli";
+import { CliError, done, forCtx } from "@dv-cli/clipc";
 import { runV1, runV1Catalog } from "../v1.ts";
 import type { DvCtx } from "./ctx.ts";
 import {

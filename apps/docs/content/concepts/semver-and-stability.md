@@ -155,7 +155,7 @@ useful heuristics:
   the API stays where you described it.
 
 For `dv` itself, none of these are met yet — which is why
-`@seshat/dv` is still `0.x`. The cap protects the project from
+`@dv-cli/dv` is still `0.x`. The cap protects the project from
 accidentally shipping a 1.0 that turns out to be wrong.
 
 ## Constraint cascading

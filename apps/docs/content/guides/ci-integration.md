@@ -31,18 +31,18 @@ idempotent and safe to run on every push.
 ## Installing dv in CI
 
 `dv` is a Deno program. The intended distribution channel is JSR
-(`@seshat/dv`), which gives you a one-line install in any CI runner
+(`@dv-cli/dv`), which gives you a one-line install in any CI runner
 with Deno available:
 
 ```yaml
 - uses: denoland/setup-deno@v2
   with:
     deno-version: v2.x
-- run: deno install --global --allow-all --name dv jsr:@seshat/dv
+- run: deno install --global --allow-all --name dv jsr:@dv-cli/dv
 ```
 
 ::: warning Pre-1.0 status
-As of writing, `@seshat/dv` is still pre-1.0 (no JSR publish yet).
+As of writing, `@dv-cli/dv` is still pre-1.0 (no JSR publish yet).
 Until the first release, install from source:
 
 ```yaml
@@ -53,7 +53,7 @@ Until the first release, install from source:
 - run: deno install --global --allow-all --name dv /tmp/dv/apps/cli/src/main.ts
 ```
 
-Once `dv release` ships `@seshat/dv` to JSR, the install shrinks to
+Once `dv release` ships `@dv-cli/dv` to JSR, the install shrinks to
 the one-liner above.
 :::
 
@@ -87,7 +87,7 @@ jobs:
           deno-version: v2.x
 
       # Install dv (see "Installing dv in CI" above for the JSR
-      # one-liner once @seshat/dv is published).
+      # one-liner once @dv-cli/dv is published).
       - run: git clone --depth 1 https://github.com/benlaird0/dv /tmp/dv
       - run: deno install --global --allow-all --name dv /tmp/dv/apps/cli/src/main.ts
 

@@ -17,7 +17,7 @@
   ],
   "additionalProperties": false,
   "title": "CLI error envelope",
-  "description": "The JSON shape emitted on stderr when a `@seshat/cli`-based CLI exits with an error under `--json` mode. The top-level `schema` field carries the URN so downstream tools (shell scripts, agent fleets) can version-gate before parsing.",
+  "description": "The JSON shape emitted on stderr when a `@dv-cli/clipc`-based CLI exits with an error under `--json` mode. The top-level `schema` field carries the URN so downstream tools (shell scripts, agent fleets) can version-gate before parsing.",
   "$defs": {
     "__schema0": {
       "type": "object",

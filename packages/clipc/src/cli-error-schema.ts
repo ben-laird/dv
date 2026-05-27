@@ -81,7 +81,7 @@ export const rawCliErrorEnvelopeSchema: z.ZodType<RawCliErrorEnvelope> = z
   .meta({
     title: "CLI error envelope",
     description:
-      "The JSON shape emitted on stderr when a `@seshat/cli`-based CLI exits with an error under `--json` mode. The top-level `schema` field carries the URN so downstream tools (shell scripts, agent fleets) can version-gate before parsing.",
+      "The JSON shape emitted on stderr when a `@dv-cli/clipc`-based CLI exits with an error under `--json` mode. The top-level `schema` field carries the URN so downstream tools (shell scripts, agent fleets) can version-gate before parsing.",
   });
 // `RawCliErrorEnvelope` is the public type users would import to type
 // the envelope; declared as an interface above (rather than via

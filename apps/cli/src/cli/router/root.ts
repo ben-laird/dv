@@ -1,4 +1,4 @@
-import { forCtx } from "@seshat/cli";
+import { forCtx } from "@dv-cli/clipc";
 import { addLeaf } from "./add-command.ts";
 import type { DvCtx } from "./ctx.ts";
 import { initLeaf } from "./init-command.ts";

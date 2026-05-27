@@ -353,8 +353,8 @@ $ dv plugin list
 Plugins (1 configured):
 
   ✓ run:deno run -A ./examples/plugins/deno/main.ts  2 packages  matches: apps/*, packages/*
-      @seshat/dv               apps/cli
-      @seshat/cli              packages/cli
+      @dv-cli/dv               apps/cli
+      @dv-cli/clipc              packages/cli
 ```
 
 Exit code: `0` when every assignment resolved and discovered cleanly,

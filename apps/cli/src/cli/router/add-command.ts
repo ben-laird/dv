@@ -1,4 +1,4 @@
-import { CliError, done, forCtx } from "@seshat/cli";
+import { CliError, done, forCtx } from "@dv-cli/clipc";
 import { relative } from "@std/path";
 import { CHANGE_TYPES, isChangeType } from "../../domain/change-type.ts";
 import { runAdd } from "../add.ts";

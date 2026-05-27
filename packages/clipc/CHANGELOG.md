@@ -22,4 +22,4 @@ and this Package adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- Introduce @seshat/cli — a minimal argv-dispatch framework
+- Introduce @dv-cli/clipc — a minimal argv-dispatch framework

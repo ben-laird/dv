@@ -80,7 +80,7 @@ per capability; commands compose them and hold no domain logic of their own.
   `no-sync-fn-in-async-fn`, etc.) Biome doesn't know about.
   `deno task lint` runs both.
 
-See [`../../CONVENTIONS.md`](../../CONVENTIONS.md) for the cross-cutting
+See [`../../.claude/CONVENTIONS.md`](../../.claude/CONVENTIONS.md) for the cross-cutting
 engineering grain (test naming, Given/When/Then, function-param objects,
 descriptive variable names).
 

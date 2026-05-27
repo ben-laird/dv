@@ -9,7 +9,7 @@ import { z } from "zod";
 // no `.transform()` calls — `z.toJSONSchema()` cannot represent them.
 // The Plan is already camelCased internally so the parser-shape schema
 // is just a re-export; the pair is kept for symmetry with config and
-// records (specs/CONVENTIONS.md § Schemas).
+// records (.claude/CONVENTIONS.md § Schemas).
 
 const SEMVER_PATTERN =
   /^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$/;

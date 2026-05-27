@@ -14,7 +14,7 @@ and this Package adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- Migrate every command to the @seshat/cli router framework
+- Migrate every command to the @dv-cli/clipc router framework
 
 ## [0.3.0] - 2026-05-22
 

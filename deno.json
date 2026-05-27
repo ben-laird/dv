@@ -1,10 +1,10 @@
 {
-  "workspace": ["./apps/cli", "./apps/docs", "./packages/cli"],
+  "workspace": ["./apps/cli", "./apps/docs", "./packages/clipc"],
   "nodeModulesDir": "auto",
   "tasks": {
-    "dv": "deno task --filter @seshat/dv dv",
+    "dv": "deno task --filter @dv-cli/dv dv",
     "test": "deno test -A",
-    "check": "deno task --filter '@seshat/*' check",
+    "check": "deno task --filter '@dv-cli/*' check",
     "fmt": "deno run -A npm:@biomejs/biome@2.4.15 format --write .",
     "fmt:check": "deno run -A npm:@biomejs/biome@2.4.15 format .",
     "lint": "deno task lint:biome && deno task lint:deno",

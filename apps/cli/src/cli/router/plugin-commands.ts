@@ -1,4 +1,4 @@
-import { CliError, done, forCtx } from "@seshat/cli";
+import { CliError, done, forCtx } from "@dv-cli/clipc";
 import {
   isPluginOpName,
   PLUGIN_OP_NAMES,

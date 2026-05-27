@@ -1,7 +1,7 @@
 ---
 type: feat!
 packages:
-  - '@seshat/dv'
+  - '@dv-cli/dv'
 notes: >-
   New mandatory `info` op every plugin must implement. dv invokes it once per plugin per run
   (cached) before any other op. Returns `{contractVersion, supportedOps, name?, version?}`. dv

@@ -2,10 +2,8 @@
 
 A language-agnostic, git-native changelog CLI for monorepos.
 
-Project codename **Seshat** (the Egyptian goddess of writing and
-record-keeping, who in mythology tracked the reigns of pharaohs and the
-contents of libraries). The CLI itself is `dv` — read as *dv*, the calculus
-notation for a tiny change in v(ersion).
+The name `dv` reads as the calculus notation for a tiny change in
+v(ersion).
 
 ## What it is
 
@@ -58,44 +56,34 @@ can be reviewed in a "Release PR" before tags get cut and publishes fire.
 
 ## Status
 
-Milestones 1, 2, and 3 ship: `dv init`, `dv status`, plugin-driven package
-discovery, `dv add` (interactive + flag-driven), `dv validate`, and
-`dv version` (read-version → bump → CHANGELOG → delete records → commit).
-The rest of v1 — constraint cascading, tagging, and release — is in flight
-per [specs/v1-scope.md](specs/v1-scope.md).
+v1 ships. The whole v1 command surface from [specs/cli.md](specs/cli.md)
+is implemented: `dv init`, `dv add`, `dv status`, `dv validate`,
+`dv version`, `dv release`, `dv v1` (with catalog mode under
+`--dry-run`), `dv rename`, `dv migrate config`, and
+`dv plugin list|invoke|verify`.
 
 Try it from the repo:
 
 ```sh
 deno task install                                # adds `dv` to your PATH
 dv status                                        # show pending bumps
-dv add --type fix --packages @seshat/dv \
+dv add --type fix --packages @dv-cli/dv \
        --message "Demo record"                   # file a Record
 dv validate                                      # lint records + config
 dv version --dry-run                             # preview the version commit
 dv version                                       # apply: bump, CHANGELOG, commit
 ```
 
-Contributing: see [CONVENTIONS.md](CONVENTIONS.md) for toolchain (Biome +
-`deno lint`), test layout, and the Zod-generates-JSON-Schema flow.
+Contributing: see [CONTRIBUTING.md](CONTRIBUTING.md) for the PR flow,
+how to file Records alongside your code change, and how to run the
+test suite locally.
 
 ## Docs
 
-New here? Read the [walkthrough](specs/walkthrough.md) — `dv` end to end on a
-sample monorepo — then dip into the rest as needed.
+Adoption-oriented docs (Tutorials, Concepts, Guides, Reference) live in
+[apps/docs/](apps/docs/) and publish via VitePress. Start with the
+[getting-started tutorial](apps/docs/content/getting-started.md).
 
-**Concepts**
-- [Ubiquitous language](specs/language.md) — the canonical vocabulary and the
-  algebra of the domain; the doc every other doc defers to
-- [Design overview and rationale](specs/design.md) — architectural decisions
-  and the *why* behind each
-
-**Reference**
-- [CLI reference](specs/cli.md) — every command, flag, and example
-- [Record file format](specs/record-format.md) — the file users write
-- [Config file format](specs/config-format.md) — `.dv/config.yaml`
-- [Plugin contract](specs/plugin-contract.md) — the extension surface
-- [Schemas](specs/schemas/) — versioned config, plugin-response, and Plan contracts
-
-**Planning**
-- [v1 scope and roadmap](specs/v1-scope.md) — what ships, what's deferred
+The internal spec library at [specs/](specs/) is the design source of
+truth — formal vocabulary, algebra, contracts. Useful if you're
+contributing or reading the *why* behind a behavior.

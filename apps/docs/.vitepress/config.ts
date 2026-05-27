@@ -88,8 +88,9 @@ export default defineConfig({
   srcExclude: [
     "**/README.md",
     "**/CLAUDE.md",
-    "CONVENTIONS.md",
+    ".claude/**",
     "ROADMAP.md",
+    "CONTRIBUTING.md",
     "**/CHANGELOG.md",
     "**/HISTORY.md",
     "examples/**",

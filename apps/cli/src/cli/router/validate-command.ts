@@ -1,4 +1,4 @@
-import { done, forCtx } from "@seshat/cli";
+import { done, forCtx } from "@dv-cli/clipc";
 import { runValidate } from "../validate.ts";
 import type { DvCtx } from "./ctx.ts";
 import { resolveColorEnabled, sharedOutputFlags } from "./shared-flags.ts";

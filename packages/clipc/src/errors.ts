@@ -1,12 +1,12 @@
 // CliError is the framework's structured error class. CLIs using
-// @seshat/cli throw subclasses (e.g. dv's DvError) so the framework
+// @dv-cli/clipc throw subclasses (e.g. dv's DvError) so the framework
 // can render them uniformly to either human stderr (renderCliError
 // human mode) or a JSON envelope (--json mode). The shape is the
 // public contract; the rendering is the framework's concern.
 //
 // The error's identity lives in a single `kind: TShape` field, where
 // TShape is a discriminated union the consumer declares (see
-// @seshat/dv's DvErrorShape). That single field is what makes
+// @dv-cli/dv's DvErrorShape). That single field is what makes
 // catch-site narrowing work cleanly: `if (err.kind.code === "x")`
 // narrows `err.kind.context` along with it, the way Rust's `enum`
 // variants do. Sibling fields like `message`, `hint`, `subErrors`,

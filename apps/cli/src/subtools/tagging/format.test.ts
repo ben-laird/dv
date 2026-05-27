@@ -37,28 +37,28 @@ Deno.test("formatTag substitutes {package-path} for users whose tag scheme mirro
   // Given a template referencing the package's path
   // When the tag is rendered
   const tag = formatTag({
-    package: buildPackage("@seshat/cli", "packages/cli"),
+    package: buildPackage("@dv-cli/clipc", "packages/clipc"),
     version: "0.1.0",
     template: "{package-path}-{version}",
   });
 
   // Then the directory path lands in the tag, useful for monorepo
   // tag schemes that name by path rather than registry name
-  assertEquals(tag, "packages/cli-0.1.0");
+  assertEquals(tag, "packages/clipc-0.1.0");
 });
 
 Deno.test("formatTag handles scoped npm-style names that contain '@'", () => {
-  // Given a scoped package name (the `@seshat/dv` shape) and the
+  // Given a scoped package name (the `@dv-cli/dv` shape) and the
   // default template — both inputs carry literal `@` characters
   // that the substitution should NOT touch
   // When the tag is rendered
   const tag = formatTag({
-    package: buildPackage("@seshat/dv", "apps/cli"),
+    package: buildPackage("@dv-cli/dv", "apps/cli"),
     version: "0.3.0",
     template: "{package}@{version}",
   });
 
   // Then the literal `@` in the package name survives alongside the
   // `@` introduced by the template — no double-interpretation
-  assertEquals(tag, "@seshat/dv@0.3.0");
+  assertEquals(tag, "@dv-cli/dv@0.3.0");
 });

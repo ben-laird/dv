@@ -11,7 +11,7 @@ CHANGELOG.md.
 
 ## [0.4.0] - 2026-05-25
 
-### Migrate every command to the @seshat/cli router framework
+### Migrate every command to the @dv-cli/clipc router framework
 
 ## [0.3.0] - 2026-05-22
 

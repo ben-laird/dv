@@ -1291,7 +1291,7 @@
     "members": {
       "apps/cli": {
         "dependencies": [
-          "jsr:@seshat/cli@0.2"
+          "jsr:@dv-cli/clipc@0.2"
         ]
       },
       "apps/docs": {

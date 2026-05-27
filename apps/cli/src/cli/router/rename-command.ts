@@ -1,4 +1,4 @@
-import { CliError, done, forCtx } from "@seshat/cli";
+import { CliError, done, forCtx } from "@dv-cli/clipc";
 import { runRename } from "../rename.ts";
 import type { DvCtx } from "./ctx.ts";
 import { resolveColorEnabled, sharedOutputFlags } from "./shared-flags.ts";

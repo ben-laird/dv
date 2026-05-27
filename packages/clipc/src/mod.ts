@@ -1,4 +1,4 @@
-// Public surface of @seshat/cli. The framework is a router-based,
+// Public surface of @dv-cli/clipc. The framework is a router-based,
 // trampoline-dispatched CLI builder: define a tree of `command()`
 // leaves and `router()` nodes, hand the root to `defineCli`, and the
 // framework owns argv parsing, dispatch, help generation, and error

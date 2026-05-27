@@ -1,4 +1,4 @@
-// Public surface of the @seshat/cli router-based API. Re-exported
+// Public surface of the @dv-cli/clipc router-based API. Re-exported
 // from the package's top-level mod.ts; consumers shouldn't import
 // from `./router/*.ts` directly (those paths aren't stable).
 

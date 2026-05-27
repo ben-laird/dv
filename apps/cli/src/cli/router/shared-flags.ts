@@ -1,4 +1,4 @@
-import { inheritedFlags } from "@seshat/cli";
+import { inheritedFlags } from "@dv-cli/clipc";
 
 // The dv-wide flags that every command surface accepts: `--json`,
 // `--color`, `--no-color`. Declared once via the framework's

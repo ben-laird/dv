@@ -1,13 +1,16 @@
 # Engineering conventions
 
-This document captures the conventions that apply across the `dv` /
-Seshat codebase. They sit *underneath* the architectural decisions in
-`.claude/CLAUDE.md` and `specs/` — those govern *what* `dv` does; this
-governs *how* we write the code.
+Internal contributor + agent reference. Captures the conventions that
+apply across the `dv` / Seshat codebase. They sit *underneath* the
+architectural decisions in [CLAUDE.md](CLAUDE.md) and `../specs/` —
+those govern *what* `dv` does; this governs *how* we write the code.
 
-If you're an agent picking up this repo, read [.claude/CLAUDE.md](.claude/CLAUDE.md)
-first, then `specs/language.md`, then this file. Each is shorter than
-the last.
+Read order: [CLAUDE.md](CLAUDE.md) (agent orientation) → `../specs/language.md`
+(vocabulary + algebra) → this file (engineering grain). Each is shorter
+than the last.
+
+For the human-facing PR / contribution flow, see [../CONTRIBUTING.md](../CONTRIBUTING.md)
+at the repo root.
 
 ## Toolchain
 

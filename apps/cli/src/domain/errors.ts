@@ -1,4 +1,4 @@
-import { CliError, type CliErrorInit } from "@seshat/cli";
+import { CliError, type CliErrorInit } from "@dv-cli/clipc";
 
 // dv's error model. DvErrorShape is the source of truth for every
 // error code dv produces — the discriminated union welds each code

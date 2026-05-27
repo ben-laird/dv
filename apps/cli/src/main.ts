@@ -3,7 +3,7 @@
 // resolves the output mode from the raw argv and hands off to the
 // framework. No subcommand dispatch lives here.
 
-import { defineCli } from "@seshat/cli";
+import { defineCli } from "@dv-cli/clipc";
 import type { DvCtx } from "./cli/router/ctx.ts";
 import { dvRoot } from "./cli/router/root.ts";
 import { DV_VERSION } from "./dv-version.ts";

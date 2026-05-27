@@ -9,7 +9,7 @@
 // Output is hand-deterministic: 2-space indentation, trailing newline,
 // keys ordered as Zod emits them.
 
-import { rawCliErrorEnvelopeSchema } from "@seshat/cli";
+import { rawCliErrorEnvelopeSchema } from "@dv-cli/clipc";
 import { resolve } from "@std/path";
 import { z } from "zod";
 import { rawConfigLayerSchema } from "../subtools/config/schema.ts";
