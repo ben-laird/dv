@@ -4,6 +4,12 @@ All notable changes to this Package are documented in this file. The
 format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this Package adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - 2026-05-27
+
+### Changed
+
+- **BREAKING** Rename packages from @seshat/* to @dv-cli/*
+
 ## [0.2.0] - 2026-05-25
 
 ### Added
