@@ -4,6 +4,11 @@
 // specs/cli.md § dv release).
 
 export {
+  type InvokeGetDependenciesArgs,
+  type InvokeGetDependenciesResult,
+  invokeGetDependencies,
+} from "./get-dependencies.ts";
+export {
   type InvokeReleaseArgs,
   invokeRelease,
 } from "./release.ts";

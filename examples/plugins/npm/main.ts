@@ -63,6 +63,9 @@ switch (op) {
   case "update-dependency":
     await runUpdateDependency();
     break;
+  case "get-dependencies":
+    await runGetDependencies();
+    break;
   case "release":
     runRelease();
     break;
@@ -90,6 +93,7 @@ function runInfo(): void {
         "read-version",
         "write-version",
         "update-dependency",
+        "get-dependencies",
         "release",
         "finalize",
       ],
@@ -337,6 +341,92 @@ function rewriteConstraintVersion(
   const preservedPrefix =
     rangePrefix === "" || rangePrefix === "=" ? "^" : rangePrefix;
   return `${preservedPrefix}${nextVersion}`;
+}
+
+// === get-dependencies ==========================================
+
+// Reports which OTHER discovered packages this one depends on, so
+// `dv release` can publish dependencies before their dependents
+// (npm registry doesn't reject unpublished imports the way JSR
+// does — but the topological order is still cleaner because
+// `npm install` resolves transitive deps against the registry at
+// install time, so consumers can install your fresh release
+// immediately after publish).
+//
+// Implementation: walk every `*Dependencies` field in package.json
+// (the same set the cascade walks) and pull out any keys that
+// appear in the candidate list. Matching is by package name
+// alone; we don't parse constraint syntax.
+
+async function runGetDependencies(): Promise<void> {
+  const packagePath = Deno.env.get("DV_PACKAGE_PATH");
+  if (!packagePath) {
+    console.error("DV_PACKAGE_PATH is required");
+    Deno.exit(1);
+  }
+  // get-dependencies reads `candidates` from stdin so the plugin
+  // can scope its match without re-running discovery. dv passes
+  // every OTHER discovered package's name; we return the subset
+  // present in this package's manifest.
+  const stdinText = await new Response(Deno.stdin.readable).text();
+  let payload: { candidates?: unknown };
+  try {
+    payload = JSON.parse(stdinText);
+  } catch (caughtError) {
+    const reason =
+      caughtError instanceof Error ? caughtError.message : String(caughtError);
+    console.log(
+      JSON.stringify({ ok: false, error: `stdin not valid JSON: ${reason}` }),
+    );
+    Deno.exit(1);
+  }
+  if (!Array.isArray(payload.candidates)) {
+    console.log(
+      JSON.stringify({
+        ok: false,
+        error: "stdin payload missing `candidates` array",
+      }),
+    );
+    Deno.exit(1);
+  }
+  const candidateSet = new Set<string>(
+    payload.candidates.filter(
+      (candidate): candidate is string => typeof candidate === "string",
+    ),
+  );
+
+  const manifestPath = join(packagePath, "package.json");
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(await Deno.readTextFile(manifestPath));
+  } catch (caughtError) {
+    const reason =
+      caughtError instanceof Error ? caughtError.message : String(caughtError);
+    console.log(
+      JSON.stringify({
+        ok: false,
+        error: `cannot read package.json: ${reason}`,
+      }),
+    );
+    Deno.exit(1);
+  }
+
+  // Walk every dependency-bearing field. A package may list the
+  // same dep under multiple fields (dependencies + peer, say) —
+  // emit it once.
+  const foundDependencies = new Set<string>();
+  for (const fieldName of DEPENDENCY_FIELDS) {
+    const fieldValue = parsed[fieldName];
+    if (fieldValue === null || typeof fieldValue !== "object") continue;
+    const dependencyMap = fieldValue as Record<string, string>;
+    for (const dependencyName of Object.keys(dependencyMap)) {
+      if (candidateSet.has(dependencyName)) {
+        foundDependencies.add(dependencyName);
+      }
+    }
+  }
+  const dependencies = [...foundDependencies].sort();
+  console.log(JSON.stringify({ ok: true, dependencies }));
 }
 
 // === release ===================================================

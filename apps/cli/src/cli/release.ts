@@ -9,8 +9,12 @@ import {
   resolvePlugin,
 } from "../subtools/discovery/resolve.ts";
 import { assertCleanTree, requireRepoRoot } from "../subtools/git/mod.ts";
-import type { TracingHooks } from "../subtools/plugin/mod.ts";
-import { invokeRelease } from "../subtools/publishing/mod.ts";
+import { PluginInfoCache, type TracingHooks } from "../subtools/plugin/mod.ts";
+import {
+  invokeGetDependencies,
+  invokeRelease,
+} from "../subtools/publishing/mod.ts";
+import { topologicalSort } from "../subtools/publishing/topological-sort.ts";
 import {
   computeAwaitingRelease,
   formatTag,
@@ -113,6 +117,16 @@ export async function runRelease(
     pluginAssignments: loadedConfig.discovery.plugins,
     repoRootPath,
   });
+  // Load plugin info up-front: surfaces contract-version mismatches
+  // before any work-side ops run, and tells us which plugins
+  // implement the optional `get-dependencies` op for the
+  // topological sort below. Cheap (one info call per unique plugin)
+  // and matches the pattern in version.ts / v1.ts.
+  const pluginInfoCache = await loadInfoForAllPlugins({
+    resolvedPluginsByKey: resolvedPluginsByUseString,
+    timeoutMs: DEFAULT_FAST_OP_TIMEOUT_MS,
+    tracingHooks,
+  });
   const packageCurrentVersions = await readAllCurrentVersions({
     discoveredPackages,
     resolvedPluginsByUseString,
@@ -178,12 +192,27 @@ export async function runRelease(
   // Build the per-Package work list. With --force, also include
   // already-tagged Packages (they get their release Op re-run but no
   // new tag is minted).
-  const workList = buildReleaseWorkList({
+  const unsortedWorkList = buildReleaseWorkList({
     plan,
     force: options.force,
     packagesByName,
     packageCurrentVersions,
     tagFormatTemplate: loadedConfig.tagging.format,
+  });
+
+  // Topologically sort by intra-workspace dependency edges so
+  // dependent packages publish *after* the packages they depend on
+  // — a hard requirement for registries (JSR, npm) that resolve
+  // manifest imports at publish time. Falls back to the input order
+  // (alphabetical-by-path from discovery) when no plugin in this
+  // run declares get-dependencies, so monorepos with no
+  // cross-package deps see unchanged behavior.
+  const workList = await sortWorkListByDependencyOrder({
+    unsortedWorkList,
+    resolvedPluginsByUseString,
+    pluginInfoCache,
+    repoRootPath,
+    tracingHooks,
   });
 
   // Progress reporter — live to stderr in human mode, silent under
@@ -560,6 +589,123 @@ async function readAllCurrentVersions(
     });
   }
   return entries;
+}
+
+// Mirror of version.ts / v1.ts's info loader. Surfaces plugin
+// contract-version mismatches before any per-package op runs, and
+// populates the cache so the work-list sort below can ask whether
+// a plugin declares the optional `get-dependencies` op.
+async function loadInfoForAllPlugins(args: {
+  resolvedPluginsByKey: Map<string, ResolvedPlugin>;
+  timeoutMs: number;
+  tracingHooks?: TracingHooks;
+}): Promise<PluginInfoCache> {
+  const cache = new PluginInfoCache();
+  for (const [pluginKey, resolvedPlugin] of args.resolvedPluginsByKey) {
+    await cache.getOrLoad({
+      pluginKey,
+      resolvedPlugin,
+      timeoutMs: args.timeoutMs,
+      tracingHooks: args.tracingHooks,
+    });
+  }
+  return cache;
+}
+
+interface SortWorkListByDependencyOrderArgs {
+  unsortedWorkList: ReleaseWorkEntry[];
+  resolvedPluginsByUseString: Map<string, ResolvedPlugin>;
+  pluginInfoCache: PluginInfoCache;
+  repoRootPath: string;
+  tracingHooks?: TracingHooks;
+}
+
+// Topologically orders the work list so dependents publish AFTER
+// the packages they depend on. The dep graph comes from the
+// optional `get-dependencies` plugin op:
+//
+//   - For each work-list entry whose plugin declares get-dependencies,
+//     we invoke it once with `candidates` = every other work-list
+//     package's name. The plugin returns the subset it actually
+//     depends on.
+//   - For entries whose plugin DOESN'T declare the op, we treat
+//     them as having no dependencies. They sort to their input
+//     position (the alphabetical-by-path fallback), and other
+//     packages can still declare dependencies on THEM if those
+//     packages' plugins implement the op.
+//   - The graph feeds into the pure-function topologicalSort
+//     helper; a cycle is a hard error (release-cycle).
+//
+// Performance: one extra plugin invocation per work-list package
+// whose plugin supports the op. For a typical 2–5 package monorepo
+// this is fast enough to not matter; for very large workspaces it
+// could be worth caching across runs, but that's a future
+// optimisation.
+async function sortWorkListByDependencyOrder(
+  args: SortWorkListByDependencyOrderArgs,
+): Promise<ReleaseWorkEntry[]> {
+  // Build the candidate list once: every package in the work list.
+  // Each plugin call gets EVERY other name, including those whose
+  // plugins don't implement the op — the plugin doesn't care
+  // whether dv could in principle invoke get-dependencies on a
+  // candidate, only whether THIS package's manifest references it.
+  const allWorkListNames = args.unsortedWorkList.map((entry) => entry.pkg.name);
+
+  // Per-package: invoke get-dependencies (if supported) and
+  // collect the names. Skipping the op when the plugin doesn't
+  // claim it is the documented fallback.
+  const dependenciesByPackageName = new Map<string, string[]>();
+  for (const entry of args.unsortedWorkList) {
+    const pluginKey = entry.pkg.plugin;
+    const resolvedPlugin = args.resolvedPluginsByUseString.get(pluginKey);
+    if (resolvedPlugin === undefined) {
+      // Shouldn't happen — the work list came from packages dv
+      // discovered, so their plugins should be resolved. Defensive:
+      // treat as no deps and let the sort handle it.
+      dependenciesByPackageName.set(entry.pkg.name, []);
+      continue;
+    }
+    const pluginInfo = args.pluginInfoCache.get(pluginKey);
+    const supportsOp =
+      pluginInfo?.supportedOps.includes("get-dependencies") === true;
+    if (!supportsOp) {
+      dependenciesByPackageName.set(entry.pkg.name, []);
+      continue;
+    }
+    // Other-than-self list. The plugin uses it to scope its match,
+    // so it doesn't have to know about the workspace structure.
+    const candidateNames = allWorkListNames.filter(
+      (candidateName) => candidateName !== entry.pkg.name,
+    );
+    const { dependencyNames } = await invokeGetDependencies({
+      repoRootPath: args.repoRootPath,
+      pkg: entry.pkg,
+      resolvedPlugin,
+      candidateNames,
+      timeoutMs: DEFAULT_FAST_OP_TIMEOUT_MS,
+      tracingHooks: args.tracingHooks,
+    });
+    dependenciesByPackageName.set(entry.pkg.name, dependencyNames);
+  }
+
+  // Topologically sort the work list. The pure-function helper
+  // preserves input position for ties so packages without
+  // dependencies still publish in alphabetical-by-path order.
+  const sortResult = topologicalSort({
+    nodes: args.unsortedWorkList,
+    identityOf: (entry) => entry.pkg.name,
+    dependenciesOf: (entry) =>
+      dependenciesByPackageName.get(entry.pkg.name) ?? [],
+  });
+  if (sortResult.kind === "cycle") {
+    throw new DvError({
+      code: "release-cycle",
+      message: `cannot order release: dependency cycle detected among ${sortResult.cyclicMembers.join(", ")}`,
+      hint: "remove the circular dependency before releasing; cycles can't be safely published to most registries",
+      context: { cyclicMembers: sortResult.cyclicMembers },
+    });
+  }
+  return sortResult.ordered;
 }
 
 // publishing.timeout is "duration | 'none'"; the runner expects a

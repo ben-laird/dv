@@ -41,6 +41,9 @@ switch (op) {
   case "update-dependency":
     await runUpdateDependency();
     break;
+  case "get-dependencies":
+    await runGetDependencies();
+    break;
   case "release":
     await runRelease();
     break;
@@ -68,6 +71,7 @@ function runInfo(): void {
         "read-version",
         "write-version",
         "update-dependency",
+        "get-dependencies",
         "release",
         "finalize",
       ],
@@ -277,6 +281,86 @@ function rewriteSpecifierVersion(
   const preservedPrefix =
     rangePrefix === "^" || rangePrefix === "~" ? rangePrefix : "^";
   return `${prefixBeforeAt}@${preservedPrefix}${nextVersion}`;
+}
+
+// === get-dependencies ==========================================
+
+// Reports which packages in the workspace this one depends on. dv
+// uses the result to topologically order `dv release` so the
+// dependency (e.g. @dv-cli/clipc) publishes BEFORE the dependent
+// (e.g. @dv-cli/dv). JSR resolves manifest imports at publish
+// time and rejects publishes that reference unpublished packages.
+//
+// Implementation: walk the deno.json `imports` map and pull out
+// every entry whose specifier resolves to a candidate name (with
+// the `jsr:`/`npm:` prefix and version range stripped). External
+// deps (registry-only) and aliases that don't match a candidate
+// are silently dropped — the response is the strict subset of
+// candidates this package's manifest references.
+
+async function runGetDependencies(): Promise<void> {
+  const packagePath = Deno.env.get("DV_PACKAGE_PATH");
+  if (!packagePath) {
+    console.error("DV_PACKAGE_PATH is required");
+    Deno.exit(1);
+  }
+  // get-dependencies reads `candidates` from stdin so the plugin
+  // can scope its match without re-running discovery. dv passes
+  // every OTHER discovered package's name; we return the subset
+  // present in this package's manifest.
+  const stdinText = await new Response(Deno.stdin.readable).text();
+  let payload: { candidates?: unknown };
+  try {
+    payload = JSON.parse(stdinText);
+  } catch (caughtError) {
+    const reason =
+      caughtError instanceof Error ? caughtError.message : String(caughtError);
+    console.log(
+      JSON.stringify({ ok: false, error: `stdin not valid JSON: ${reason}` }),
+    );
+    Deno.exit(1);
+  }
+  if (!Array.isArray(payload.candidates)) {
+    console.log(
+      JSON.stringify({
+        ok: false,
+        error: "stdin payload missing `candidates` array",
+      }),
+    );
+    Deno.exit(1);
+  }
+  const candidateSet = new Set<string>(
+    payload.candidates.filter(
+      (candidate): candidate is string => typeof candidate === "string",
+    ),
+  );
+
+  const manifestPath = join(packagePath, "deno.json");
+  let parsed: { imports?: Record<string, string> };
+  try {
+    parsed = JSON.parse(await Deno.readTextFile(manifestPath));
+  } catch (caughtError) {
+    const reason =
+      caughtError instanceof Error ? caughtError.message : String(caughtError);
+    console.log(
+      JSON.stringify({ ok: false, error: `cannot read deno.json: ${reason}` }),
+    );
+    Deno.exit(1);
+  }
+  // Deno's `imports` map keys are the bare specifier the package
+  // imports under. For Deno workspaces dv targets, the key IS the
+  // package name (`"@dv-cli/clipc": "jsr:@dv-cli/clipc@^0.3.0"`),
+  // so matching by key is direct. We don't need to parse the
+  // specifier value.
+  const importsMap = parsed.imports ?? {};
+  const dependencies: string[] = [];
+  for (const importKey of Object.keys(importsMap)) {
+    if (candidateSet.has(importKey)) {
+      dependencies.push(importKey);
+    }
+  }
+  dependencies.sort();
+  console.log(JSON.stringify({ ok: true, dependencies }));
 }
 
 // === release ===================================================

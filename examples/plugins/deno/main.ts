@@ -37,6 +37,9 @@ switch (op) {
   case "update-dependency":
     await runUpdateDependency();
     break;
+  case "get-dependencies":
+    await runGetDependencies();
+    break;
   case "release":
     runRelease();
     break;
@@ -64,6 +67,7 @@ function runInfo(): void {
         "read-version",
         "write-version",
         "update-dependency",
+        "get-dependencies",
         "release",
         "finalize",
       ],
@@ -273,6 +277,82 @@ function rewriteSpecifierVersion(
   const preservedPrefix =
     rangePrefix === "^" || rangePrefix === "~" ? rangePrefix : "^";
   return `${prefixBeforeAt}@${preservedPrefix}${nextVersion}`;
+}
+
+// === get-dependencies ==========================================
+
+// Reports which OTHER discovered packages this one depends on, so
+// `dv release` can publish dependencies before their dependents
+// (JSR rejects publishes that reference unpublished imports).
+//
+// Implementation: walk the deno.json `imports` map. Each entry's
+// key is the bare specifier the package imports under — for Deno
+// workspaces this is typically the package name itself (e.g.
+// `"@scope/clipc": "jsr:@scope/clipc@^0.3.0"`). Match keys against
+// `candidates`; the result is the strict subset of names present.
+//
+// External deps (registry packages, std-lib) and aliases that
+// don't match a candidate are silently dropped — they don't
+// affect intra-workspace publish ordering.
+
+async function runGetDependencies(): Promise<void> {
+  const packagePath = Deno.env.get("DV_PACKAGE_PATH");
+  if (!packagePath) {
+    console.error("DV_PACKAGE_PATH is required");
+    Deno.exit(1);
+  }
+  // get-dependencies reads `candidates` from stdin so the plugin
+  // can scope its match without re-running discovery. dv passes
+  // every OTHER discovered package's name; we return the subset
+  // present in this package's manifest.
+  const stdinText = await new Response(Deno.stdin.readable).text();
+  let payload: { candidates?: unknown };
+  try {
+    payload = JSON.parse(stdinText);
+  } catch (caughtError) {
+    const reason =
+      caughtError instanceof Error ? caughtError.message : String(caughtError);
+    console.log(
+      JSON.stringify({ ok: false, error: `stdin not valid JSON: ${reason}` }),
+    );
+    Deno.exit(1);
+  }
+  if (!Array.isArray(payload.candidates)) {
+    console.log(
+      JSON.stringify({
+        ok: false,
+        error: "stdin payload missing `candidates` array",
+      }),
+    );
+    Deno.exit(1);
+  }
+  const candidateSet = new Set<string>(
+    payload.candidates.filter(
+      (candidate): candidate is string => typeof candidate === "string",
+    ),
+  );
+
+  const manifestPath = join(packagePath, "deno.json");
+  let parsed: { imports?: Record<string, string> };
+  try {
+    parsed = JSON.parse(await Deno.readTextFile(manifestPath));
+  } catch (caughtError) {
+    const reason =
+      caughtError instanceof Error ? caughtError.message : String(caughtError);
+    console.log(
+      JSON.stringify({ ok: false, error: `cannot read deno.json: ${reason}` }),
+    );
+    Deno.exit(1);
+  }
+  const importsMap = parsed.imports ?? {};
+  const dependencies: string[] = [];
+  for (const importKey of Object.keys(importsMap)) {
+    if (candidateSet.has(importKey)) {
+      dependencies.push(importKey);
+    }
+  }
+  dependencies.sort();
+  console.log(JSON.stringify({ ok: true, dependencies }));
 }
 
 // === release ===================================================
