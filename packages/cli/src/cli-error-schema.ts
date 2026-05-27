@@ -57,7 +57,18 @@ export const rawCliErrorPayloadSchema: z.ZodType<RawCliErrorPayload> = z
       "One node in the error tree. Recursive via `subErrors`. Wire shape is flat (code/context/etc. at the top level) — the `kind` nesting in the in-process class is a TS-narrowing convenience, not a wire concern.",
   });
 
-export const rawCliErrorEnvelopeSchema = z
+// Matches the wire shape of `rawCliErrorEnvelopeSchema`. Spelled out
+// as an interface so the schema below can carry an explicit
+// `z.ZodType<...>` annotation — JSR rejects slow types in public
+// exports, and Zod's inferred output type is opaque enough that the
+// type-checker can't compute it without help. Same trick as
+// `RawCliErrorPayload` above.
+export interface RawCliErrorEnvelope {
+  schema: string;
+  error: RawCliErrorPayload;
+}
+
+export const rawCliErrorEnvelopeSchema: z.ZodType<RawCliErrorEnvelope> = z
   .object({
     schema: z
       .string()
@@ -72,5 +83,7 @@ export const rawCliErrorEnvelopeSchema = z
     description:
       "The JSON shape emitted on stderr when a `@seshat/cli`-based CLI exits with an error under `--json` mode. The top-level `schema` field carries the URN so downstream tools (shell scripts, agent fleets) can version-gate before parsing.",
   });
-
-export type RawCliErrorEnvelope = z.infer<typeof rawCliErrorEnvelopeSchema>;
+// `RawCliErrorEnvelope` is the public type users would import to type
+// the envelope; declared as an interface above (rather than via
+// `z.infer`) so the export carries an explicit signature for JSR's
+// fast-types check.

@@ -326,6 +326,42 @@ recorded rename core → engine in .dv/renames.yaml
 
 ---
 
+## `dv plugin list`
+
+```
+dv plugin list [--json]
+```
+
+Read-only audit: resolves every Plugin in `.dv/config.yaml`, runs
+per-assignment discovery, and shows which Packages each Plugin claims.
+The whole-config sibling of [`dv plugin verify`](#dv-plugin-verify)
+(per-plugin deep check) and [`dv status`](#dv-status) (per-Record
+preview). Fail-soft per row — a broken Plugin produces a
+`resolve-failed` or `discover-failed` row without hiding the rest, so
+one bad config entry doesn't blind the audit.
+
+No destructive ops fire. Use this before `dv version` / `dv release` to
+sanity-check that discovery agrees with the package set you expect.
+
+| Flag     | Meaning                                                                              |
+| -------- | ------------------------------------------------------------------------------------ |
+| `--json` | Emit `urn:dv:schema:v1:plugin-list-result` envelope on stdout. Suppresses the human summary. |
+
+```
+$ dv plugin list
+
+Plugins (1 configured):
+
+  ✓ run:deno run -A ./examples/plugins/deno/main.ts  2 packages  matches: apps/*, packages/*
+      @seshat/dv               apps/cli
+      @seshat/cli              packages/cli
+```
+
+Exit code: `0` when every assignment resolved and discovered cleanly,
+`1` when any row reports `resolve-failed` or `discover-failed`.
+
+---
+
 ## `dv plugin invoke`
 
 ```

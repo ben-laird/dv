@@ -1,0 +1,59 @@
+name: Feature request
+description: A new capability or a refinement to an existing one.
+title: "[feat]: "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing: read [v1-scope.md](https://github.com/benlaird0/dv/blob/main/specs/v1-scope.md)
+        and [ROADMAP.md](https://github.com/benlaird0/dv/blob/main/ROADMAP.md).
+        Many ideas have a deliberate "not in v1" or "non-goal" answer
+        with the reasoning — if yours is one of those, the conversation
+        is "should we revisit?", which is fine but starts in a
+        different place.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: |
+        What can't you do today, or what's painful? Lead with the user
+        problem; we'll figure out the right shape together. A request
+        framed as "dv should have X" is harder to evaluate than
+        "I'm trying to do Y and X would help."
+      placeholder: |
+        When a release plugin fails to publish, I have to re-read the CI
+        log to figure out which package broke. The exit code says non-zero
+        but it'd be useful to have a structured artifact I can attach to
+        the PR.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed shape (optional)
+      description: |
+        How you'd imagine it working. If you've got a sketch of the
+        flag, the config, the JSON shape — share it. We don't need a
+        full design; "here's what I'd type" is plenty.
+      placeholder: |
+        `dv release --json` already emits per-package outcomes; maybe
+        `--report <path>` writes them to disk for CI artifacts?
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you've considered
+      description: |
+        What workarounds exist today? Are there other tools that solve
+        this in a way you've liked or disliked?
+
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope check
+      options:
+        - label: I've read v1-scope.md and this isn't in the deferred or non-goal list.
+        - label: This is in scope for v1, or this is a request to reconsider a deferral.

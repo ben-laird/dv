@@ -1,0 +1,11 @@
+# Disable blank issues — funnel everything through the bug/feature
+# templates above. The templates collect the fields we'd otherwise
+# have to ask for in a follow-up comment, which costs everyone time.
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://github.com/benlaird0/dv/tree/main/apps/docs/content
+    about: User-facing docs (Tutorials, Concepts, Guides, Reference). The Troubleshooting page lists every error code dv emits.
+  - name: Internal specs (design source of truth)
+    url: https://github.com/benlaird0/dv/tree/main/specs
+    about: The internal design library — useful if you're proposing a feature and want the reasoning behind a deferral, or contributing code.

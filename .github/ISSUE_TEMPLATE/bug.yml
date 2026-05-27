@@ -1,0 +1,90 @@
+name: Bug report
+description: Something `dv` did that it shouldn't, or didn't do that it should.
+title: "[bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing. The fields below are the minimum we need
+        to reproduce — `--debug` output in particular is usually the
+        difference between "fixed in a day" and "open for a month."
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: One or two sentences. The behavior you saw vs. what you expected.
+      placeholder: |
+        Ran `dv version` after authoring a `feat!` Record against `@my/api`,
+        expected a major bump, got a minor bump.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: |
+        The exact commands. If you can put the repro in a public repo or
+        a tarball, link it — that's worth 10x more than prose.
+      placeholder: |
+        1. `git clone …` or `mkdir repro && cd repro && git init`
+        2. `dv init`
+        3. `dv add --type feat! --packages @my/api --notes "break the API"`
+        4. `dv version --dry-run`
+        5. Expected: major bump. Actual: minor bump.
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: debug-trace
+    attributes:
+      label: --debug output
+      description: |
+        Re-run the failing command with `--debug` and paste the stderr
+        output. This shows every plugin invocation with full env vars,
+        stdin, stdout, exit code, duration. Most bug reports become
+        obvious from this alone.
+      placeholder: |
+        $ dv version --dry-run --debug 2>&1 | tee /tmp/dv-debug.txt
+        [dv:debug] ▶ discover via …
+        …
+      render: text
+
+  - type: input
+    id: dv-version
+    attributes:
+      label: dv version
+      description: Output of `dv --version`.
+      placeholder: "0.5.0"
+    validations:
+      required: true
+
+  - type: input
+    id: deno-version
+    attributes:
+      label: Deno version
+      description: Output of `deno --version` (first line).
+      placeholder: "deno 2.x.x"
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: OS + arch
+      placeholder: "macOS 14 / arm64, Ubuntu 22.04 / x86_64, etc."
+    validations:
+      required: true
+
+  - type: textarea
+    id: config
+    attributes:
+      label: .dv/config.yaml
+      description: |
+        The full file. Sensitive values (paths to local plugins,
+        internal package names) are usually fine to share but redact
+        anything you wouldn't paste in a Stack Overflow answer.
+      render: yaml

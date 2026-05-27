@@ -2,6 +2,8 @@
   "name": "@seshat/dv",
   "version": "0.5.0",
   "exports": "./src/main.ts",
+  "license": "MIT",
+  "description": "A language-agnostic, git-native changelog CLI for monorepos. Records, not commit messages.",
   "tasks": {
     "dv": "deno run -A src/main.ts",
     "test": "deno test -A",

@@ -1,9 +1,11 @@
 {
   "name": "@seshat/cli",
+  "version": "0.2.0",
   "exports": "./src/mod.ts",
+  "license": "MIT",
+  "description": "A typed CLI framework: routers, leaves, flag specs, and structured error responses. The substrate dv is built on.",
   "tasks": {
     "test": "deno test -A",
     "check": "deno check src/mod.ts"
-  },
-  "version": "0.2.0"
+  }
 }
