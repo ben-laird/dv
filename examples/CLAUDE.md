@@ -18,11 +18,26 @@ promoting an example to a supported builtin is a separate, future decision.
 - **No shared framework** between examples. Each stands alone so it can be
   lifted out wholesale. Duplication across examples is fine and expected.
 
-## Planned set (v1)
+## Ecosystem-plugin set
 
-- `plugins/cargo` — Rust crates (`Cargo.toml`).
-- `plugins/npm` — npm packages (`package.json`).
-- `plugins/pyproject` — Python (`pyproject.toml`).
+- `plugins/deno` — Deno workspaces (`deno.json`). Ships.
+- `plugins/npm` — npm packages (`package.json`). Ships.
+- `plugins/cargo` — Rust crates (`Cargo.toml`). Planned.
+- `plugins/pyproject` — Python (`pyproject.toml`). Planned.
 
-Any language is allowed — a shell script is a perfectly good plugin. The set
-above is just the most common ecosystems to seed.
+Any language is allowed — a shell script is a perfectly good plugin. The
+set above is just the most common ecosystems to seed.
+
+## Release-only plugins
+
+A second category: plugins that don't read or write manifests, only
+publish. They implement `info`, `discover` (typically returning an empty
+list), `read-version` (typically returning `0.0.0`), and `release`.
+
+- `plugins/github-releases` — creates a GitHub Release via `gh release
+  create` after dv mints the tag. Wiring this in as a SECOND release
+  channel alongside an ecosystem plugin (publish to JSR AND post a GH
+  Release for the same package) requires a contract change we haven't
+  made yet; see ROADMAP § "Opt into multi-channel publishing". For now
+  the plugin exists as a reference + runs cleanly via `dv plugin
+  invoke` / `verify`.

@@ -109,6 +109,73 @@ From the v1 audit (2026-05-25). Each is independently shippable.
   Start here → Reference → Product. `deno task build` runs in
   `apps/docs/`; build output is gitignored.
 
+### Post-first-release follow-ups (filed 2026-05-27)
+
+Surfaced by dogfooding the full Release-PR bot loop end-to-end for
+the first time (PRs #1 and #2, shipped `@dv-cli/dv` 0.7.0 via CI in
+56 seconds). The loop worked; these are real warts the dogfood
+exposed. Each is independently shippable.
+
+- **`dv-prepare-release.yml` PR body templating runs at the wrong
+  time.** The workflow runs `dv version` first (which consumes the
+  pending Records), then runs `dv status --json | jq` to render the
+  PR body. By that point pending Records are empty so the body's
+  "Pending bumps" section is blank, even though the PR diff
+  obviously contains bumps. Fix: either capture the dry-run plan
+  BEFORE `dv version` runs and reuse it, or have `dv version`
+  itself emit a structured summary that the workflow can pipe into
+  the PR body. See [.github/workflows/dv-prepare-release.yml](.github/workflows/dv-prepare-release.yml).
+- **`tools/dv-release` finalize didn't stage `deno.lock` on the
+  last release.** Observed in @dv-cli/dv 0.6.0's release commit: I
+  had to `git add deno.lock` and amend the commit by hand before
+  publishing. The finalize op runs `deno install --quiet` which
+  should refresh the lockfile, and we expect dv to stage any
+  changed files the plugin reports — but the lockfile change
+  wasn't in the commit. Either the install isn't actually
+  refreshing, or the plugin isn't reporting the file, or dv's
+  staging path isn't picking it up. Worth a small investigation
+  + a targeted test.
+- **`@dv-cli/clipc` JSR score is 52%.** Easy wins: more JSDoc on
+  public exports (router, command builders), a longer package
+  README, maybe enable provenance once that's a stable JSR
+  feature. The CLI itself (`@dv-cli/dv`) likely has the same
+  opportunity. Cosmetic but visible on the JSR package page;
+  raises adoption confidence.
+
+### Opt into multi-channel publishing
+
+A real product question, not just a bug. Today dv's release model
+is **one plugin owns one package** — the package's plugin owns
+every op including `release`. That means you can't have JSR + a
+GitHub Release for the same package without writing both into one
+plugin's `release` op.
+
+A clean v2 design would let users wire a package to a primary
+plugin (manifest ownership: read/write/update/finalize) AND one or
+more publish-only "channels" that each fire their own `release` op
+after tag minting. Concretely:
+
+```yaml
+discovery:
+  plugins:
+    - match: ["apps/*"]
+      use: { run: "deno run -A ./tools/dv-release/main.ts" }
+publishing:
+  channels:
+    - { for: "@dv-cli/dv", use: { run: "deno run -A ./tools/gh-releases.ts" } }
+```
+
+This is a contract change (new `info.supportedOps` shape for
+channel-only plugins; new config section; dv release runs all
+matching channels after the primary publish). Out of scope for v1;
+worth doing once enough users want a second channel.
+
+A working example release-only plugin already ships in
+[examples/plugins/github-releases/main.ts](examples/plugins/github-releases/main.ts)
+as the precedent — runnable via `dv plugin verify` / `dv plugin
+invoke` today, ready to be wired in when the channels contract
+lands.
+
 ### Deferred to later (architecturally accommodated)
 
 Out of scope for v1 — see the full list with rationale in
