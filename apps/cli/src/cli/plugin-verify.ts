@@ -5,6 +5,7 @@ import {
   invokeOp,
   parseDiscoverResponse,
   parseFinalizeResponse,
+  parseGetDependenciesResponse,
   parseReadVersionResponse,
   type TracingHooks,
 } from "../subtools/plugin/mod.ts";
@@ -263,6 +264,70 @@ export async function runPluginVerify(
         outcome: "fail",
         detail: describeError(caughtError),
       });
+    }
+  }
+
+  // ── get-dependencies per discovered package (only if declared) ──
+  // Read-only op (like read-version) so verify can safely exercise
+  // it end-to-end. Empty `candidates` is a valid input (the plugin
+  // should return `dependencies: []`) so we don't need a real
+  // workspace.
+  if (supportedOps.has("get-dependencies")) {
+    if (discoveredPackages.length === 0) {
+      checks.push({
+        name: "get-dependencies",
+        outcome: "skipped",
+        detail:
+          "discover returned no packages — pass `--glob` so verify can exercise get-dependencies against a real package",
+      });
+    } else {
+      for (const discoveredPackage of discoveredPackages) {
+        try {
+          const getDependenciesInvocation = await invokeOp({
+            resolvedPlugin,
+            opName: "get-dependencies",
+            environmentVariables: buildVerifyEnvironment({
+              repoRootPath,
+              extra: {
+                DV_PACKAGE_NAME: discoveredPackage.name,
+                DV_PACKAGE_PATH: discoveredPackage.path,
+              },
+            }),
+            // Empty candidates → plugin should respond `{ok: true,
+            // dependencies: []}`. Tests that the op runs cleanly
+            // without testing any particular dep-graph shape.
+            stdinPayload: JSON.stringify({ candidates: [] }),
+            timeoutMs: opTimeoutMs,
+            tracingHooks,
+          });
+          const getDependenciesResponse = parseGetDependenciesResponse({
+            rawStdout: getDependenciesInvocation.rawStdout,
+            pluginPath: resolvedPlugin.path,
+          });
+          // With empty candidates the plugin MUST return empty deps
+          // (the response is a strict subset of candidates per the
+          // contract). If it returns anything, that's a contract bug.
+          if (getDependenciesResponse.dependencies.length === 0) {
+            checks.push({
+              name: `get-dependencies[${discoveredPackage.name}]`,
+              outcome: "pass",
+              detail: "empty-candidates probe returned an empty subset",
+            });
+          } else {
+            checks.push({
+              name: `get-dependencies[${discoveredPackage.name}]`,
+              outcome: "fail",
+              detail: `plugin returned dependencies for empty candidates: ${getDependenciesResponse.dependencies.join(", ")}`,
+            });
+          }
+        } catch (caughtError) {
+          checks.push({
+            name: `get-dependencies[${discoveredPackage.name}]`,
+            outcome: "fail",
+            detail: describeError(caughtError),
+          });
+        }
+      }
     }
   }
 

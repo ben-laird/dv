@@ -80,7 +80,7 @@ decomposition). The mapping:
 | -------------- | ---------------------------------------------------------------- |
 | **discovery**  | `discover`                                                       |
 | **versioning** | `read-version`, `write-version`, `update-dependency`, `finalize` |
-| **publishing** | `release`                                                        |
+| **publishing** | `release`, `get-dependencies`                                    |
 
 The `records`, `changelog`, and `tagging` subtools need no plugin
 delegation — Record parsing and CHANGELOG rendering are format
@@ -219,6 +219,55 @@ What the plugin actually *does* is its business: `npm publish`, `cargo publish`,
 `gh release create`, post to Slack, nothing. Failures here do not roll back
 the tags (publishing is intentionally side-effectful and idempotency is the
 plugin's problem).
+
+### `get-dependencies` (optional)
+
+Reports the names of other discovered Packages that this one depends on.
+dv uses the result to **topologically order `dv release`'s work list** so
+dependent packages publish *after* the packages they depend on — a hard
+requirement for registries (JSR, npm, etc.) that resolve manifest
+imports at publish time.
+
+When the op is omitted from `info.supportedOps`, dv falls back to
+alphabetical-by-path ordering (the pre-op default). Plugins SHOULD
+implement this op when packages in their ecosystem can reference each
+other within the same repo.
+
+**Input:** `DV_PACKAGE_NAME`, `DV_PACKAGE_PATH` (same as other
+per-Package ops), plus stdin JSON listing every other discovered
+Package's name so the plugin can scope its match without re-reading
+the workspace:
+
+```json
+{ "candidates": ["@my/api", "@my/cli", "lodash"] }
+```
+
+`candidates` is the full set of discovered Package names *other than*
+this one. The plugin returns the subset that appear as dependencies
+in this Package's manifest.
+
+**Output:**
+
+```json
+{ "ok": true, "dependencies": ["@my/api"] }
+```
+
+`dependencies` is the subset of `candidates` that this Package
+declares as a dependency in any form (runtime, dev, peer, optional —
+the plugin's call which fields count). External dependencies that
+aren't in `candidates` (npm packages from the registry, std-lib,
+etc.) MUST be omitted — the topological sort only considers
+*intra-workspace* edges.
+
+The op SHOULD be a pure read of the manifest. No I/O outside reading
+the package's own manifest file is expected; dv may invoke this op
+repeatedly across a workspace and ordering depends on consistent
+results.
+
+`{ ok: false, error: "..." }` is a hard error and aborts the
+release pre-tag. The plugin should reserve this for genuine read
+failures (manifest missing, parse error), not "no dependencies"
+(`{ ok: true, dependencies: [] }` is the right response there).
 
 ### `finalize` (optional)
 

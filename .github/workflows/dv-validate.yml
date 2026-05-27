@@ -38,17 +38,29 @@ jobs:
         with:
           deno-version: v2.x
 
-      # Install dv from the working tree. Once @dv-cli/dv is on JSR
-      # in a known-good version, this becomes
-      # `deno install -A --global jsr:@dv-cli/dv` instead.
-      # Custom install matches the project-dogfood-install pattern in
-      # the memory bank: a shim pointing at live source, so edits flow
-      # through immediately on the next dv invocation.
+      # Install dv from the working tree. We write our own launcher
+      # script rather than `deno install --global`: the latter would
+      # snapshot the file but lose the workspace context, so the
+      # workspace's `imports` map (and therefore `@dv-cli/clipc`)
+      # wouldn't resolve. The launcher we write is the same one
+      # `deno task install` writes locally — runs `deno run --config
+      # <deno.json> <main.ts>` so workspace state is live.
+      #
+      # Once @dv-cli/dv is on JSR in a known-good version this could
+      # become `deno install -A --global jsr:@dv-cli/dv` instead,
+      # which would be a single-line replacement.
       - name: install dv from source
         run: |
-          deno install --global --allow-all --name dv \
-            "$GITHUB_WORKSPACE/apps/cli/src/main.ts"
-          echo "$HOME/.deno/bin" >> "$GITHUB_PATH"
+          mkdir -p "$HOME/.local/bin"
+          cat > "$HOME/.local/bin/dv" <<EOF
+          #!/bin/sh
+          exec deno run --allow-all \\
+            --config "$GITHUB_WORKSPACE/apps/cli/deno.json" \\
+            "$GITHUB_WORKSPACE/apps/cli/src/main.ts" \\
+            "\$@"
+          EOF
+          chmod +x "$HOME/.local/bin/dv"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       # === code-quality gates ===
 

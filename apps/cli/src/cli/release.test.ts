@@ -587,3 +587,98 @@ Deno.test("runRelease in a non-TTY context without --yes throws DvError('confirm
     await fixture.cleanup();
   }
 });
+
+// Regression for the topological-sort fix: when one workspace
+// package imports another, `dv release` must publish the dependency
+// before the dependent. Without the get-dependencies + topological
+// sort, both packages would publish in alphabetical-by-path order
+// (pkg-a → pkg-b), which is wrong if pkg-a depends on pkg-b.
+Deno.test("runRelease publishes dependencies before dependents (topological order)", async () => {
+  // Given pkg-a depends on pkg-b via its imports map (the same
+  // shape dv-cli/dv → dv-cli/clipc has). The fixture creates them
+  // alphabetically (pkg-a before pkg-b on disk) so a naive
+  // alphabetical-order run would publish them in the WRONG order.
+  const fixture = await setUpReleaseFixture({});
+  try {
+    // Modify pkg-a's manifest to declare pkg-b as a workspace dep.
+    // Imports-map shape matches the Deno workspace pattern.
+    const manifestA = JSON.parse(
+      await Deno.readTextFile(fixture.manifestPathA),
+    );
+    manifestA.imports = { "pkg-b": "jsr:pkg-b@^1.0.0" };
+    await Deno.writeTextFile(
+      fixture.manifestPathA,
+      `${JSON.stringify(manifestA, null, 2)}\n`,
+    );
+
+    // When dv release runs (both packages awaiting release;
+    // --allow-dirty because the manifest mutation above leaves an
+    // uncommitted change — the fixture itself doesn't auto-commit)
+    const result = await runRelease({
+      force: false,
+      yes: true,
+      emitJson: false,
+      colorEnabled: false,
+      allowDirty: true,
+    });
+
+    // Then the per-package outcomes appear in dep-first order:
+    // pkg-b (the dependency) before pkg-a (the dependent).
+    // releaseOpOutcomes is the work-list order — the same order
+    // the release op was invoked in.
+    assertEquals(result.releaseOpOutcomes.length, 2);
+    assertEquals(result.releaseOpOutcomes[0]?.package, "pkg-b");
+    assertEquals(result.releaseOpOutcomes[1]?.package, "pkg-a");
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+Deno.test("runRelease throws release-cycle on a circular workspace dependency", async () => {
+  // Given pkg-a and pkg-b that each import the other — a cycle
+  // that's unpublishable (neither can ship before the other).
+  const fixture = await setUpReleaseFixture({});
+  try {
+    const manifestA = JSON.parse(
+      await Deno.readTextFile(fixture.manifestPathA),
+    );
+    manifestA.imports = { "pkg-b": "jsr:pkg-b@^1.0.0" };
+    await Deno.writeTextFile(
+      fixture.manifestPathA,
+      `${JSON.stringify(manifestA, null, 2)}\n`,
+    );
+    const manifestB = JSON.parse(
+      await Deno.readTextFile(fixture.manifestPathB),
+    );
+    manifestB.imports = { "pkg-a": "jsr:pkg-a@^1.0.0" };
+    await Deno.writeTextFile(
+      fixture.manifestPathB,
+      `${JSON.stringify(manifestB, null, 2)}\n`,
+    );
+
+    // When dv release runs against the cyclic workspace
+    // Then it raises release-cycle and names both members.
+    // --allow-dirty for the same reason as the topological test
+    // above: the manifest mutations aren't committed.
+    const caughtError = await assertRejects(
+      () =>
+        runRelease({
+          force: false,
+          yes: true,
+          emitJson: false,
+          colorEnabled: false,
+          allowDirty: true,
+        }),
+      DvError,
+    );
+    assertEquals(caughtError.kind.code, "release-cycle");
+    assertStringIncludes(caughtError.message, "pkg-a");
+    assertStringIncludes(caughtError.message, "pkg-b");
+    // No tags minted — the cycle is detected before the
+    // tag-minting loop even begins
+    const tags = await listTagsInRepo(fixture.repoRootPath);
+    assertEquals(tags, []);
+  } finally {
+    await fixture.cleanup();
+  }
+});

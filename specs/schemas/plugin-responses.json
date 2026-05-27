@@ -106,6 +106,20 @@
         "message": { "type": "string" }
       }
     },
+    "get-dependencies": {
+      "title": "get-dependencies response",
+      "description": "Intra-workspace dependencies of this Package. Optional op (declared via info.supportedOps). dv uses the result to topologically order `dv release`'s work list so dependent packages publish *after* the packages they depend on. The returned `dependencies` array is the subset of the `candidates` provided on stdin that this package depends on in any of its manifest fields (runtime, dev, peer — the plugin's call). External deps from public registries are omitted. Plugins that don't implement this op leave it off supportedOps; dv falls back to alphabetical-by-path ordering.",
+      "type": "object",
+      "required": ["ok", "dependencies"],
+      "properties": {
+        "ok": { "const": true },
+        "dependencies": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Strict subset of the `candidates` passed on stdin."
+        }
+      }
+    },
     "finalize": {
       "title": "finalize response",
       "description": "Result of the post-write cleanup hook. Lets a plugin refresh generated companion files (lockfiles, etc.) so they ship in the same commit as the manifest edits. Fires once per plugin per `dv version` / `dv v1` run, after every write-version + update-dependency call. dv only invokes finalize when the plugin's info.supportedOps includes it.",
@@ -129,6 +143,7 @@
     { "$ref": "#/$defs/write-version" },
     { "$ref": "#/$defs/update-dependency" },
     { "$ref": "#/$defs/release" },
+    { "$ref": "#/$defs/get-dependencies" },
     { "$ref": "#/$defs/finalize" },
     { "$ref": "#/$defs/error" }
   ]

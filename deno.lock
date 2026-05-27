@@ -36,7 +36,8 @@
     "@std/cli@1.0.30": {
       "integrity": "769446536522d0417d7127ebcabcafac1ab0ce6766d0eb3fca1d36326fe98d13",
       "dependencies": [
-        "jsr:@std/fmt"
+        "jsr:@std/fmt",
+        "jsr:@std/internal@^1.0.14"
       ]
     },
     "@std/collections@1.1.3": {

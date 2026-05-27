@@ -5,6 +5,7 @@ import {
   invokeOp,
   parseDiscoverResponse,
   parseFinalizeResponse,
+  parseGetDependenciesResponse,
   parseInfoResponse,
   parseReadVersionResponse,
   parseReleaseResponse,
@@ -36,6 +37,7 @@ export const PLUGIN_OP_NAMES = [
   "read-version",
   "write-version",
   "update-dependency",
+  "get-dependencies",
   "release",
   "finalize",
 ] as const;
@@ -306,16 +308,25 @@ interface ResolveStdinPayloadArgs {
 function resolveStdinPayload(
   args: ResolveStdinPayloadArgs,
 ): string | undefined {
-  // update-dependency is the only Op the contract requires stdin
-  // for; release and the others read env vars only. If the user
-  // passes --json for a no-stdin Op we still honor it (debugging
-  // experimental plugins), but for update-dependency we enforce it.
+  // update-dependency and get-dependencies are the Ops the contract
+  // requires stdin for; release and the others read env vars only.
+  // If the user passes --stdin-json for a no-stdin Op we still
+  // honor it (debugging experimental plugins), but for these two
+  // we enforce it.
   if (args.opName === "update-dependency" && args.stdinJson === undefined) {
     throw new DvError({
       code: "plugin-bad-response",
       message: "update-dependency requires --stdin-json '<payload>'",
       hint: 'supply the stdin JSON payload, e.g. `--stdin-json \'{"package":"cli","package_path":"packages/cli","dependency":"core","new_version":"1.3.0"}\'`',
       context: { pluginPath: "<pre-invocation>", opName: "update-dependency" },
+    });
+  }
+  if (args.opName === "get-dependencies" && args.stdinJson === undefined) {
+    throw new DvError({
+      code: "plugin-bad-response",
+      message: "get-dependencies requires --stdin-json '<payload>'",
+      hint: 'supply the stdin JSON payload, e.g. `--stdin-json \'{"candidates":["@dv-cli/clipc","other"]}\'`',
+      context: { pluginPath: "<pre-invocation>", opName: "get-dependencies" },
     });
   }
   if (args.stdinJson === undefined) return undefined;
@@ -367,6 +378,11 @@ function conformanceCheck(args: ConformanceCheckArgs): unknown {
       });
     case "update-dependency":
       return parseUpdateDependencyResponse({
+        rawStdout: args.rawStdout,
+        pluginPath: args.pluginPath,
+      });
+    case "get-dependencies":
+      return parseGetDependenciesResponse({
         rawStdout: args.rawStdout,
         pluginPath: args.pluginPath,
       });
@@ -457,6 +473,11 @@ function summarizeResponse(opName: PluginOpName, parsed: unknown): string {
       return "(ok=true)";
     case "update-dependency":
       return `(changed=${String(responseRecord.changed)})`;
+    case "get-dependencies": {
+      const deps = responseRecord.dependencies;
+      const count = Array.isArray(deps) ? deps.length : 0;
+      return `(${count} dependenc${count === 1 ? "y" : "ies"})`;
+    }
     case "release": {
       const ok = String(responseRecord.ok);
       const published =

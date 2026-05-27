@@ -84,6 +84,35 @@ export const releaseResponseSchema = z
 
 export type ReleaseResponse = z.infer<typeof releaseResponseSchema>;
 
+// `get-dependencies` is the optional read-only op that lets dv
+// topologically sort `dv release`'s work list. Plugins inspect their
+// package's manifest and return the subset of the provided
+// `candidates` (other discovered Packages) that this package depends
+// on — in whatever ecosystem-specific manifest fields count
+// (runtime, dev, peer, etc.; the plugin decides).
+//
+// The list is the strict subset of `candidates`: external deps from
+// public registries are omitted, since they don't affect intra-
+// workspace publish ordering.
+//
+// Plugins that omit this op from info.supportedOps trigger the
+// alphabetical-by-path fallback in the release runner — the pre-op
+// behavior, suitable for monorepos with no cross-package deps.
+//
+// `{ ok: false, error: "..." }` is a hard failure (manifest missing,
+// parse error). "No dependencies" is `{ok: true, dependencies: []}`,
+// not an error.
+export const getDependenciesResponseSchema = z
+  .object({
+    ok: z.literal(true),
+    dependencies: z.array(z.string().min(1)),
+  })
+  .strict();
+
+export type GetDependenciesResponse = z.infer<
+  typeof getDependenciesResponseSchema
+>;
+
 // `finalize` is the optional post-write cleanup hook. Fires once per
 // plugin per `dv version` / `dv v1` run, after every write-version
 // + update-dependency call has completed but BEFORE staging and
@@ -226,6 +255,22 @@ export function parseReleaseResponse(
     opName: "release",
     responseSchema: releaseResponseSchema,
     acceptStructuredFailure: true,
+  });
+}
+
+// get-dependencies does NOT accept `{ok: false}` as a structured
+// success — a failure here is a genuine plugin error (manifest
+// missing, parse error) and surfaces as plugin-error to the user.
+// Empty deps is `{ok: true, dependencies: []}`, not a failure.
+export function parseGetDependenciesResponse(
+  args: ParseSingleOpResponseArgs,
+): GetDependenciesResponse {
+  return parsePluginResponse({
+    rawStdout: args.rawStdout,
+    pluginPath: args.pluginPath,
+    opName: "get-dependencies",
+    responseSchema: getDependenciesResponseSchema,
+    acceptStructuredFailure: false,
   });
 }
 

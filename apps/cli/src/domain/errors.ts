@@ -145,6 +145,10 @@ export type DvErrorShape =
       code: "release-partial-failure";
       context: { failedCount: number; totalAttempted: number };
     }
+  | {
+      code: "release-cycle";
+      context: { cyclicMembers: string[] };
+    }
 
   // === v1 promotion ==============================================
   | {

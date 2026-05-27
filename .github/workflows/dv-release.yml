@@ -61,11 +61,22 @@ jobs:
         with:
           deno-version: v2.x
 
+      # See dv-validate.yml for the rationale on this launcher
+      # shape (workspace context needs to be live; `deno install
+      # --global` would snapshot the entry file and miss the
+      # imports map).
       - name: install dv from source
         run: |
-          deno install --global --allow-all --name dv \
-            "$GITHUB_WORKSPACE/apps/cli/src/main.ts"
-          echo "$HOME/.deno/bin" >> "$GITHUB_PATH"
+          mkdir -p "$HOME/.local/bin"
+          cat > "$HOME/.local/bin/dv" <<EOF
+          #!/bin/sh
+          exec deno run --allow-all \\
+            --config "$GITHUB_WORKSPACE/apps/cli/deno.json" \\
+            "$GITHUB_WORKSPACE/apps/cli/src/main.ts" \\
+            "\$@"
+          EOF
+          chmod +x "$HOME/.local/bin/dv"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: configure git identity for tags
         run: |
