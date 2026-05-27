@@ -30,9 +30,8 @@ idempotent and safe to run on every push.
 
 ## Installing dv in CI
 
-`dv` is a Deno program. The intended distribution channel is JSR
-(`@dv-cli/dv`), which gives you a one-line install in any CI runner
-with Deno available:
+`dv` is a Deno program published to JSR as `@dv-cli/dv`. Install
+it in any CI runner with Deno available:
 
 ```yaml
 - uses: denoland/setup-deno@v2
@@ -41,20 +40,32 @@ with Deno available:
 - run: deno install --global --allow-all --name dv jsr:@dv-cli/dv
 ```
 
-::: warning Pre-1.0 status
-As of writing, `@dv-cli/dv` is still pre-1.0 (no JSR publish yet).
-Until the first release, install from source:
+::: tip Dogfooding from a feature branch?
+If you're testing `dv` changes on your own fork before they hit
+JSR, install from source by writing a launcher script. **Don't
+use `deno install --global` against a workspace member's `main.ts`**
+— it snapshots the file but loses the workspace's `imports` map,
+so cross-package references won't resolve. The launcher pattern
+below mirrors what `deno task install` writes locally for dev:
 
 ```yaml
+- uses: actions/checkout@v6
 - uses: denoland/setup-deno@v2
   with:
     deno-version: v2.x
-- run: git clone --depth 1 https://github.com/ben-laird/dv /tmp/dv
-- run: deno install --global --allow-all --name dv /tmp/dv/apps/cli/src/main.ts
+- name: install dv from source
+  run: |
+    mkdir -p "$HOME/.local/bin"
+    cat > "$HOME/.local/bin/dv" <<EOF
+    #!/bin/sh
+    exec deno run --allow-all \\
+      --config "$GITHUB_WORKSPACE/apps/cli/deno.json" \\
+      "$GITHUB_WORKSPACE/apps/cli/src/main.ts" \\
+      "\$@"
+    EOF
+    chmod +x "$HOME/.local/bin/dv"
+    echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 ```
-
-Once `dv release` ships `@dv-cli/dv` to JSR, the install shrinks to
-the one-liner above.
 :::
 
 You'll also need any plugins your repo references — same install
@@ -86,10 +97,7 @@ jobs:
         with:
           deno-version: v2.x
 
-      # Install dv (see "Installing dv in CI" above for the JSR
-      # one-liner once @dv-cli/dv is published).
-      - run: git clone --depth 1 https://github.com/ben-laird/dv /tmp/dv
-      - run: deno install --global --allow-all --name dv /tmp/dv/apps/cli/src/main.ts
+      - run: deno install --global --allow-all --name dv jsr:@dv-cli/dv
 
       - run: dv validate --json
 ```
@@ -162,8 +170,7 @@ jobs:
         with:
           deno-version: v2.x
 
-      - run: git clone --depth 1 https://github.com/ben-laird/dv /tmp/dv
-      - run: deno install --global --allow-all --name dv /tmp/dv/apps/cli/src/main.ts
+      - run: deno install --global --allow-all --name dv jsr:@dv-cli/dv
 
       # Cheap early-out: if no Records are pending, there's
       # nothing to release. dv version itself would exit 0 with
@@ -285,8 +292,7 @@ jobs:
         with:
           deno-version: v2.x
 
-      - run: git clone --depth 1 https://github.com/ben-laird/dv /tmp/dv
-      - run: deno install --global --allow-all --name dv /tmp/dv/apps/cli/src/main.ts
+      - run: deno install --global --allow-all --name dv jsr:@dv-cli/dv
 
       # Wire any credentials your release plugin needs. For an npm
       # publish, that's the NPM_TOKEN. For deno publish, it's the
@@ -402,6 +408,100 @@ A few non-obvious bits of context that'll save you debugging time:
   adoption.** Flip it on in `.dv/config.yaml`, and every destructive
   command defaults to preview-only. Once you trust the workflow,
   flip it off (or override per-run with `--no-dry-run`).
+
+## Real-world example: dv itself
+
+The dv repo dogfoods every workflow on this page. The bot loop ran
+end-to-end for the first time in PRs #1 and #2 in
+[ben-laird/dv](https://github.com/ben-laird/dv). What that looked
+like:
+
+| Time | Event |
+|---|---|
+| 17:36:58 | PR #1 squash-merged to `main` |
+| 17:37:00 | `dv-prepare-release.yml` fires (2s after the push) |
+| 17:37:32 | Release PR #2 opened with the bump |
+| ~17:40 | PR #2 squash-merged to `main` |
+| 17:40:38 | `dv-release.yml` fires |
+| 17:40:55 | `@dv-cli/dv@0.7.0` live on JSR |
+
+**56 seconds** from PR merge to package on JSR, no human intervention
+between the two PR merges.
+
+### What worked on the first try
+
+- **OIDC publishing** — no JSR_TOKEN secret. `deno publish` picked up
+  the GitHub Actions OIDC token automatically once trusted
+  publishing was configured for the package on JSR. Setup was a
+  one-time click in JSR's package settings naming `ben-laird/dv` as
+  the trusted source.
+- **The `DV_PAT` chain** — the prepare workflow's push to
+  `dv-release` correctly triggered the validate workflow on the
+  resulting Release PR, and the merge of that PR correctly
+  triggered the release workflow. The default `GITHUB_TOKEN`
+  wouldn't have done either.
+- **The dv-release plugin** — `tools/dv-release/main.ts` is dv's
+  repo-local release plugin (a specialised copy of the example
+  Deno plugin where the `release` op actually runs `deno publish`).
+  Verified by `dv plugin verify` in CI on every PR.
+
+### What broke the first time, surfaced by the dogfood
+
+Two real bugs we wouldn't have caught without running the workflows
+for real:
+
+1. **`deno install --global` lost workspace context.** The original
+   install step in `dv-validate.yml` did
+   `deno install --global --allow-all --name dv $WORKSPACE/apps/cli/src/main.ts`
+   — which loses the workspace's `imports` map, so `@dv-cli/clipc`
+   didn't resolve and validate failed in 15s with
+   `Import "@dv-cli/clipc" not a dependency`. Fix: write a
+   POSIX launcher that runs
+   `deno run --config apps/cli/deno.json apps/cli/src/main.ts "$@"`
+   instead, mirroring what `deno task install` writes locally. The
+   workflow snippets above already reflect this fix.
+
+2. **Publish-order bug**, which is exactly what the merged PR
+   itself fixed. Pre-fix, `dv release` ordered publishes
+   alphabetically by path; in this repo `apps/cli` sorted before
+   `packages/clipc`, so `@dv-cli/dv` would have tried to publish
+   before `@dv-cli/clipc`, and JSR would have rejected it. We had
+   to publish `clipc` by hand the *previous* release. The
+   topological-sort fix landed in the same PR that proved the bot
+   loop works.
+
+### One-time JSR setup
+
+Three steps, ~10 minutes:
+
+1. **Create the JSR scope.** [jsr.io/new](https://jsr.io/new) →
+   Create scope. Scopes are first-come-first-served, so claim the
+   name you want before you advertise the package.
+2. **Configure trusted publishing per package.** On each package's
+   JSR settings page (`https://jsr.io/@scope/pkg/settings`), find
+   "GitHub Actions" and enter `owner/repo`. JSR validates incoming
+   publishes against GitHub's OIDC token from that repo only.
+3. **In the repo**, give the release workflow the `id-token: write`
+   permission. The release workflow above already has this line.
+   No JSR_TOKEN secret is needed.
+
+### Authoring tips for the chained workflows
+
+A few things that became obvious only after we ran them for real:
+
+- **Use the `chore(release):` commit-message guard religiously.**
+  Without it, the prepare workflow re-triggers on its own commit
+  and you have an infinite loop. Even though the loop would
+  no-op (no pending Records → empty PR → no merge), it'd burn CI
+  minutes on every prepare commit.
+- **Always squash-merge the Release PR.** GitHub's rebase-merge
+  rewrites commit hashes, which breaks any tag → commit references
+  in your CHANGELOG/HISTORY files. Squash preserves the bump
+  commit's identity.
+- **The validate workflow finds bugs you'd otherwise ship.** Make
+  it required in your branch protection ruleset so the prepare
+  workflow can't open a Release PR if validate failed on the
+  underlying PR.
 
 ## What's next
 
