@@ -1,0 +1,137 @@
+# Open a Release PR when pending Records exist on main.
+#
+# Fires after a non-bot push lands on main. Skips its own bumps
+# (the `chore(release):` guard) so it doesn't recurse. Runs
+# `dv version` to compute + execute the bump, force-pushes the
+# resulting commit to the stable `dv-release` branch, and opens or
+# updates a PR back into main.
+#
+# Reviewers see the manifest changes, the CHANGELOG additions, the
+# constraint cascades, and the consumed Records — all in one diff.
+# Merging the PR triggers the release workflow (.github/workflows/
+# dv-release.yml).
+#
+# Note: not yet enabled by default — see `if:` below. dv hasn't done
+# its first 1.0 ceremony yet; until that's a deliberate manual
+# action, this workflow stays dormant.
+
+name: prepare release
+
+on:
+  push:
+    branches: [main]
+  # Manual trigger for the first-run case + recovery. The cron
+  # equivalent (e.g. "open the Release PR every Friday morning")
+  # is intentionally absent — releases here are event-driven, not
+  # scheduled.
+  workflow_dispatch:
+
+# Only one prepare run at a time — concurrent runs would race on
+# the dv-release branch and clobber each other's commits.
+concurrency:
+  group: prepare-release
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+
+    # Skip on dv's own release commits to avoid infinite recursion.
+    # The guard matches dv's default `git.commit-message-template`
+    # (`chore(release): ...`). If the template gets customised, the
+    # guard needs to follow.
+    #
+    # The second condition disables this workflow entirely until
+    # someone flips it to `true`. The first 1.0 push is a deliberate
+    # manual call (`dv release` from a maintainer's machine); only
+    # after that does it make sense to auto-open Release PRs.
+    if: |
+      !contains(github.event.head_commit.message, 'chore(release):') &&
+      vars.DV_PREPARE_ENABLED == 'true'
+
+    permissions:
+      contents: write       # commit the version bump
+      pull-requests: write  # open / update the Release PR
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          # Use a PAT or App token, not the default GITHUB_TOKEN —
+          # pushes made with GITHUB_TOKEN don't trigger downstream
+          # workflows, which would break the prepare → release chain
+          # when this PR merges. Configure DV_PAT as a secret with
+          # `contents: write` + `workflows: write` scopes.
+          token: ${{ secrets.DV_PAT }}
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: install dv from source
+        run: |
+          deno install --global --allow-all --name dv \
+            "$GITHUB_WORKSPACE/apps/cli/src/main.ts"
+          echo "$HOME/.deno/bin" >> "$GITHUB_PATH"
+
+      # === early-out: nothing pending ===
+
+      - name: check for pending Records
+        id: check
+        run: |
+          PENDING=$(dv status --json | jq '.pending | length')
+          echo "pending=$PENDING" >> "$GITHUB_OUTPUT"
+          if [ "$PENDING" = "0" ]; then
+            echo "No pending Records. Exiting cleanly."
+          else
+            echo "Found $PENDING pending package(s) to bump."
+          fi
+
+      - name: configure git identity
+        if: steps.check.outputs.pending != '0'
+        run: |
+          git config user.name "dv-release-bot"
+          git config user.email "dv-release-bot@users.noreply.github.com"
+
+      # === do the bump ===
+
+      - name: dv version
+        if: steps.check.outputs.pending != '0'
+        run: dv version --yes
+
+      # Force-push to the stable release branch so reruns update an
+      # existing PR rather than opening duplicates. --force-with-lease
+      # keeps us safe if someone else (unlikely under our concurrency
+      # gate) pushed to the branch.
+      - name: push to dv-release branch
+        if: steps.check.outputs.pending != '0'
+        run: git push --force-with-lease origin HEAD:dv-release
+
+      # Open or update the PR. Body is templated from `dv status`'s
+      # tracked/pending lists so reviewers see the bump summary
+      # without clicking through to the diff.
+      - name: open / update Release PR
+        if: steps.check.outputs.pending != '0'
+        env:
+          GH_TOKEN: ${{ secrets.DV_PAT }}
+        run: |
+          BODY=$(dv status --json | jq -r '
+            "## Pending bumps\n\n" +
+            (.pending | map(
+              "- `" + .package + "` " + .currentVersion + " → " + .projectedVersion + " (" + .bump + ")"
+            ) | join("\n")) +
+            "\n\n## Tracked packages\n\n" +
+            (.tracked | map("- `" + .package + "` " + .currentVersion) | join("\n"))
+          ')
+          if gh pr view dv-release --json number > /dev/null 2>&1; then
+            gh pr edit dv-release --body "$BODY"
+            echo "Updated existing Release PR."
+          else
+            gh pr create \
+              --base main \
+              --head dv-release \
+              --title "chore(release): version bumps" \
+              --body "$BODY"
+            echo "Opened new Release PR."
+          fi

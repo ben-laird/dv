@@ -1,0 +1,89 @@
+# Validate every PR before it can merge to main.
+#
+# This is the gate the CI integration guide
+# (apps/docs/content/guides/ci-integration.md) describes — for *this*
+# repo, since dv dogfoods itself. Three concerns covered:
+#
+#   1. Code stays clean: fmt, lint, type-check, tests all pass.
+#   2. Records stay well-formed: dv validate catches malformed Records
+#      and unresolved references before merge so the eventual Release
+#      PR is computable.
+#   3. The plugin contract holds: dv plugin verify against both the
+#      example deno plugin (the canonical reference) and our own
+#      release plugin (the one we'll publish with).
+#
+# Fast: every step is read-only and cacheable. Failing fast on fmt
+# means contributors get the typo back in <30s.
+
+name: validate
+
+on:
+  pull_request:
+    branches: [main]
+
+# Cancel in-flight runs for the same PR when new commits push — the
+# old run's results would be stale anyway, and burning CI minutes
+# on superseded commits is just waste.
+concurrency:
+  group: validate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      # Install dv from the working tree (it's not on JSR yet — once
+      # it is, this becomes `deno install -A --global jsr:@seshat/dv`).
+      # Custom install matches the project-dogfood-install pattern in
+      # the memory bank: a shim pointing at live source, so edits flow
+      # through immediately on the next dv invocation.
+      - name: install dv from source
+        run: |
+          deno install --global --allow-all --name dv \
+            "$GITHUB_WORKSPACE/apps/cli/src/main.ts"
+          echo "$HOME/.deno/bin" >> "$GITHUB_PATH"
+
+      # === code-quality gates ===
+
+      - name: deno fmt (Biome + deno fmt for non-TS)
+        run: deno task fmt
+
+      - name: deno lint (Biome + deno lint)
+        run: deno task lint
+
+      - name: deno check (type-check entry points)
+        run: |
+          cd apps/cli
+          deno task check
+
+      - name: deno test (full suite, 300+ tests)
+        run: |
+          cd apps/cli
+          deno task test
+
+      # === dv-specific gates ===
+
+      - name: dv validate (Records + config + plugin resolution)
+        run: dv validate --json
+
+      - name: dv plugin verify — example deno plugin
+        run: dv plugin verify "run:deno run -A ./examples/plugins/deno/main.ts"
+
+      - name: dv plugin verify — example npm plugin
+        run: dv plugin verify "run:deno run -A ./examples/plugins/npm/main.ts"
+
+      - name: dv plugin verify — tools/dv-release (our own release plugin)
+        run: dv plugin verify "run:deno run -A ./tools/dv-release/main.ts"
+
+      # The docs site has to build cleanly too — dead links + missing
+      # rewrites are caught here, before they ship.
+      - name: docs site build
+        run: |
+          cd apps/docs
+          deno task build

@@ -6,9 +6,14 @@
 #   apps/docs     — the VitePress docs site (Node, no published name)
 #   packages/*    — shared Deno libs (none yet)
 #
-# The example Deno plugin claims every workspace member with a `name` field
-# in its deno.json. apps/docs is intentionally name-less and is silently
+# The plugin claims every workspace member with a `name` field in its
+# deno.json. apps/docs is intentionally name-less and is silently
 # skipped (specs/config-format.md § Matching rules).
+#
+# We use tools/dv-release/ (a repo-local copy + specialisation of the
+# example Deno plugin) rather than the example itself. The example's
+# `release` op is a stub for teaching; tools/dv-release runs a real
+# `deno publish`. The other ops are identical.
 
 discovery:
   plugins:
@@ -16,7 +21,7 @@ discovery:
         - "apps/*"
         - "packages/*"
       use:
-        run: deno run -A ./examples/plugins/deno/main.ts
+        run: deno run -A ./tools/dv-release/main.ts
 
 # Long-form companion to CHANGELOG.md — `dv version` writes HISTORY.md
 # alongside CHANGELOG.md when enabled. CHANGELOG stays terse (Keep a
