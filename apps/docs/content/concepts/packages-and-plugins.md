@@ -108,7 +108,7 @@ For details, see the [plugin contract reference](/reference/plugin-contract).
 ## Example plugins, not first-party builtins
 
 dv ships **no first-party plugins** in v1. What it ships are
-[copyable example plugins](https://github.com/benlaird0/dv/tree/main/examples/plugins):
+[copyable example plugins](https://github.com/ben-laird/dv/tree/main/examples/plugins):
 
 - **`examples/plugins/deno/`** — a Deno workspace plugin
 - **`examples/plugins/npm/`** — an npm workspace plugin
@@ -126,7 +126,7 @@ keeps two things honest:
    flags. The example doesn't — but it's a working starting point.
 
 Promoting an example to a supported first-party builtin is a deliberate
-future decision (see [v1 scope deferrals](https://github.com/benlaird0/dv/blob/main/specs/v1-scope.md#deferred-to-later)).
+future decision (see [v1 scope deferrals](https://github.com/ben-laird/dv/blob/main/specs/v1-scope.md#deferred-to-later)).
 For now: copy, adapt, ship.
 
 ## How a plugin reference resolves

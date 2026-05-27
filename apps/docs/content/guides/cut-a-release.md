@@ -96,7 +96,7 @@ $ dv version --dry-run --json | jq '.pending[] | {package, projectedVersion, bum
 { "package": "@my/client", "projectedVersion": "0.5.0", "bump": "minor" }
 ```
 
-The `--json` shape is documented in the [Plan schema](https://github.com/benlaird0/dv/blob/main/specs/schemas/plan.json)
+The `--json` shape is documented in the [Plan schema](https://github.com/ben-laird/dv/blob/main/specs/schemas/plan.json)
 and is stable across the three commands (`dv status`, `dv version
 --dry-run`, `dv release --dry-run`).
 

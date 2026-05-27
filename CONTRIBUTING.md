@@ -29,7 +29,7 @@ A few things worth knowing before you dive in:
 - Optionally: **Node.js + npm** if you're working on the example npm plugin
 
 ```sh
-git clone https://github.com/benlaird0/dv && cd dv
+git clone https://github.com/ben-laird/dv && cd dv
 deno task install          # adds an in-tree `dv` to your PATH
 dv status                  # sanity-check the install
 ```

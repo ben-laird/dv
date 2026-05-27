@@ -32,14 +32,15 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
 
-      # Install dv from the working tree (it's not on JSR yet — once
-      # it is, this becomes `deno install -A --global jsr:@seshat/dv`).
+      # Install dv from the working tree. Once @dv-cli/dv is on JSR
+      # in a known-good version, this becomes
+      # `deno install -A --global jsr:@dv-cli/dv` instead.
       # Custom install matches the project-dogfood-install pattern in
       # the memory bank: a shim pointing at live source, so edits flow
       # through immediately on the next dv invocation.

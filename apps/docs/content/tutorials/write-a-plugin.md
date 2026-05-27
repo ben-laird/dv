@@ -23,7 +23,7 @@ shape. The end product will:
 - **Publish** via `npm publish` (or stub it out for now).
 - **Refresh `package-lock.json`** as a finalize step.
 
-A complete reference implementation lives in [`examples/plugins/npm/main.ts`](https://github.com/benlaird0/dv/blob/main/examples/plugins/npm/main.ts).
+A complete reference implementation lives in [`examples/plugins/npm/main.ts`](https://github.com/ben-laird/dv/blob/main/examples/plugins/npm/main.ts).
 This guide builds the same plugin step by step so you understand
 what each piece is for.
 
@@ -556,7 +556,7 @@ A few things to check before declaring a plugin "done":
 
 ## Where to go from here
 
-- **Adapt the reference implementation.** [`examples/plugins/npm/main.ts`](https://github.com/benlaird0/dv/blob/main/examples/plugins/npm/main.ts)
+- **Adapt the reference implementation.** [`examples/plugins/npm/main.ts`](https://github.com/ben-laird/dv/blob/main/examples/plugins/npm/main.ts)
   has the full version with edge cases. Copy it, change what you
   need, own it. It's a starting point, not a maintained dependency.
 - **Read the [plugin contract reference](/reference/plugin-contract).**

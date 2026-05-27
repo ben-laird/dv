@@ -78,7 +78,7 @@ in their preferred language, and none of them have to fight a host-
 language SDK's opinions.
 
 This shows up downstream: `dv` has no first-party plugins in v1. We
-ship [copyable example plugins](https://github.com/benlaird0/dv/tree/main/examples/plugins)
+ship [copyable example plugins](https://github.com/ben-laird/dv/tree/main/examples/plugins)
 (currently `deno` and `npm`) as starting points, but they're not
 maintained dependencies. You fork one, adapt it, and own it. Promoting
 an example to a supported builtin is a deliberate future decision, not

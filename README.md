@@ -1,5 +1,10 @@
 # dv
 
+[![JSR](https://jsr.io/badges/@dv-cli/dv)](https://jsr.io/@dv-cli/dv)
+[![JSR Score](https://jsr.io/badges/@dv-cli/dv/score)](https://jsr.io/@dv-cli/dv)
+[![CI](https://github.com/ben-laird/dv/actions/workflows/dv-validate.yml/badge.svg)](https://github.com/ben-laird/dv/actions/workflows/dv-validate.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 A language-agnostic, git-native changelog CLI for monorepos.
 
 The name `dv` reads as the calculus notation for a tiny change in

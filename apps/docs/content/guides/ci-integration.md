@@ -49,7 +49,7 @@ Until the first release, install from source:
 - uses: denoland/setup-deno@v2
   with:
     deno-version: v2.x
-- run: git clone --depth 1 https://github.com/benlaird0/dv /tmp/dv
+- run: git clone --depth 1 https://github.com/ben-laird/dv /tmp/dv
 - run: deno install --global --allow-all --name dv /tmp/dv/apps/cli/src/main.ts
 ```
 
@@ -81,14 +81,14 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
 
       # Install dv (see "Installing dv in CI" above for the JSR
       # one-liner once @dv-cli/dv is published).
-      - run: git clone --depth 1 https://github.com/benlaird0/dv /tmp/dv
+      - run: git clone --depth 1 https://github.com/ben-laird/dv /tmp/dv
       - run: deno install --global --allow-all --name dv /tmp/dv/apps/cli/src/main.ts
 
       - run: dv validate --json
@@ -147,7 +147,7 @@ jobs:
       pull-requests: write  # open / update the Release PR
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           # We need full history so dv can read existing tags
           # for the awaiting-release computation.
@@ -162,7 +162,7 @@ jobs:
         with:
           deno-version: v2.x
 
-      - run: git clone --depth 1 https://github.com/benlaird0/dv /tmp/dv
+      - run: git clone --depth 1 https://github.com/ben-laird/dv /tmp/dv
       - run: deno install --global --allow-all --name dv /tmp/dv/apps/cli/src/main.ts
 
       # Cheap early-out: if no Records are pending, there's
@@ -274,7 +274,7 @@ jobs:
       contents: write   # push tags
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           # tags need to come too so dv release can see existing
@@ -285,7 +285,7 @@ jobs:
         with:
           deno-version: v2.x
 
-      - run: git clone --depth 1 https://github.com/benlaird0/dv /tmp/dv
+      - run: git clone --depth 1 https://github.com/ben-laird/dv /tmp/dv
       - run: deno install --global --allow-all --name dv /tmp/dv/apps/cli/src/main.ts
 
       # Wire any credentials your release plugin needs. For an npm
