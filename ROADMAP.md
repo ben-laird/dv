@@ -9,6 +9,18 @@ the user-visible product surface and its deferral lists. This file
 catches the rest: internal engineering threads, post-MVP polish, and
 cross-cutting work that doesn't fit a single spec section.
 
+## Start here (next session)
+
+The 0.7.0 release shipped end-to-end via the Release-PR bot on
+2026-05-27. The shortest-runway next moves are in
+[Post-first-release follow-ups](#post-first-release-follow-ups-filed-2026-05-27):
+the prepare-release PR-body templating bug is the loudest user-facing
+wart (every release PR currently ships with a blank "Pending bumps"
+section). The finalize/lockfile bug and the clipc JSR score are both
+small, isolated fixes. After those, the next ceremony candidate is the
+real `dv v1 @dv-cli/dv` promotion — the rehearsal in
+[Pre-1.0 work still to do](#pre-10-work-still-to-do) is the prerequisite.
+
 ## v1 product scope
 
 ### Breaking changes to land *before* the next 1.0 attempt
