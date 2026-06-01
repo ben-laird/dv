@@ -15,3 +15,6 @@ apps/docs/.vitepress/dist/
 # are ignored via the directory-local .changelog/.gitignore that
 # `dv init` writes — kept there so dv owns its own directory and
 # doesn't reach out to the repo root.
+
+# Local planning scratch (per-session todo/lessons), not a project artifact
+/tasks/

@@ -84,6 +84,32 @@ those exist as Records. If a change has no user-visible effect, it
 doesn't get a Record; if it does have user-visible effect, one of
 the four types above fits it.
 
+## Branching and releases
+
+dv uses plain [GitHub Flow](https://docs.github.com/en/get-started/using-github/github-flow):
+
+- **`main` is the only long-lived branch.** Cut a short-lived feature
+  branch, open a PR, get it reviewed, squash-merge to `main`. No
+  `develop`, no `release/*` branches.
+- **`main` is both the nightly branch and the release branch.** Every
+  commit on `main` is a nightly. The git tags dv mints (`pkg@x.y.z`) are
+  the *official* releases — a subset of nightlies, the ones that carried
+  pending Records.
+- **Releases happen on merge.** When a PR with a Record merges, CI runs
+  `dv version` (commits the bump to `main`) then `dv release` (tags +
+  publishes). Your reviewed PR *is* the release review — the bump is
+  derived deterministically from the Records you wrote, so there's no
+  second approval step. A GitHub Release is minted per package tag, with
+  notes from that package's CHANGELOG. See the
+  [CI integration guide](apps/docs/content/guides/ci-integration.md) for
+  the full wiring.
+- **`main` is protected.** Required `validate` check, required review,
+  linear history (so always squash- or rebase-merge), no force-push. The
+  release bot has a bypass so it can commit the version bump directly.
+  Apply the rules with
+  [`.github/scripts/setup-branch-protection.ts`](.github/scripts/setup-branch-protection.ts)
+  (`deno run --allow-env --allow-net … --confirm`).
+
 ## Daily tasks
 
 The full list lives in [.claude/CONVENTIONS.md](.claude/CONVENTIONS.md).

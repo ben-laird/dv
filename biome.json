@@ -5,6 +5,7 @@
       "apps/cli/**/*.ts",
       "apps/cli/**/*.tsx",
       "examples/**/*.ts",
+      ".github/scripts/**/*.ts",
       "biome.json",
       "deno.json",
       "apps/cli/deno.json",

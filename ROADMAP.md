@@ -128,15 +128,15 @@ the first time (PRs #1 and #2, shipped `@dv-cli/dv` 0.7.0 via CI in
 56 seconds). The loop worked; these are real warts the dogfood
 exposed. Each is independently shippable.
 
-- **`dv-prepare-release.yml` PR body templating runs at the wrong
-  time.** The workflow runs `dv version` first (which consumes the
-  pending Records), then runs `dv status --json | jq` to render the
-  PR body. By that point pending Records are empty so the body's
-  "Pending bumps" section is blank, even though the PR diff
-  obviously contains bumps. Fix: either capture the dry-run plan
-  BEFORE `dv version` runs and reuse it, or have `dv version`
-  itself emit a structured summary that the workflow can pipe into
-  the PR body. See [.github/workflows/dv-prepare-release.yml](.github/workflows/dv-prepare-release.yml).
+- **✅ RESOLVED — PR body templating ran at the wrong time.** The old
+  `dv-prepare-release.yml` ran `dv version` (consuming the Records),
+  then `dv status --json | jq` to render the Release PR body — by
+  which point pending Records were empty, leaving the body's "Pending
+  bumps" section blank. Resolved when we moved to the one-trunk
+  release-on-merge model: there's no Release PR to template, and the
+  release script (`.github/scripts/release.ts`) captures the pending
+  Plan *before* `dv version` runs for its log summary. The
+  `dv-prepare-release.yml` workflow was deleted.
 - **`tools/dv-release` finalize didn't stage `deno.lock` on the
   last release.** Observed in @dv-cli/dv 0.6.0's release commit: I
   had to `git add deno.lock` and amend the commit by hand before
@@ -153,6 +153,80 @@ exposed. Each is independently shippable.
   feature. The CLI itself (`@dv-cli/dv`) likely has the same
   opportunity. Cosmetic but visible on the JSR package page;
   raises adoption confidence.
+- **`dv release --json` emits two top-level shapes.** A real run prints
+  the wrapped envelope (`{ plan, mintedTagNames, reusedTagNames,
+  releaseOpOutcomes, pushedTagNames }`); the no-op and `--dry-run` paths
+  print the *bare* Plan instead (no wrapper). That divergence cuts
+  against the "`--json` is a contract" invariant — consumers have to
+  defensively probe for both shapes (the
+  [release script](.github/scripts/release.ts) does). Fix: always emit
+  the wrapped envelope, with empty `mintedTagNames` etc. on the no-op
+  path. Small, but it's a stability-of-contract issue. Surfaced by the
+  one-trunk CI work.
+
+### Full "Release PR" → release-on-merge docs sweep
+
+The CI/CD move to one-trunk release-on-merge (see
+[ci-integration.md](apps/docs/content/guides/ci-integration.md)) updated
+the headline docs (README, docs index, getting-started) and the
+design/concept docs (`specs/design.md` §Two-phase release,
+`concepts/two-phase-release.md`, CONTRIBUTING) to lead with
+release-on-merge and present the Release PR as a *variant*. But "Release
+PR" is still the canonical framing in the deeper docs, and they should be
+swept to match in a dedicated pass:
+
+- `apps/docs/content/guides/cut-a-release.md` — written entirely around
+  landing a Release PR; rewrite release-on-merge-first.
+- `specs/walkthrough.md` — the end-to-end walkthrough still merges a
+  Release PR as the canonical step.
+- `specs/language.md` — the **Release PR** term definition; keep the term
+  (it's still a real concept) but note it's one of two workflows.
+- `specs/cli.md`, `specs/v1-scope.md` — passing references to recheck.
+- Source comments in `apps/cli/src/cli/version.ts`,
+  `apps/cli/src/subtools/git/mod.ts`, and `.../git/commit.ts` call the
+  commit "the Release PR" — fine as-is (it describes the commit), but
+  worth a light reword for consistency.
+
+Deferred deliberately: the headline docs are consistent now, so there's
+no user-facing contradiction at the entry points; this is the long tail.
+
+### Expose release notes in `dv release --json`
+
+Surfaced by the one-trunk CI work: the release workflow mints a GitHub
+Release per minted tag, and wants each release's notes for the body.
+But `dv release --json` reports only *which* tags it minted
+(`mintedTagNames`, plus the `awaitingRelease` Plan entries) — not the
+notes. The workflow currently recovers them by re-parsing the relevant
+section out of each package's `CHANGELOG.md` (the
+[release script](.github/scripts/release.ts) slices `## [version]` …
+next `## [`). That works but is fragile: it couples the consumer to
+the CHANGELOG's exact formatting, and dv *already knows* the notes — it
+just rendered them in `dv version`.
+
+dv should expose release notes directly. dv has several sources it could
+draw from and the right one is a design question, not a foregone
+conclusion:
+
+- **Re-render from the Records** — but `dv release` runs *after*
+  `dv version` consumed them, so they're gone by release time.
+- **Parse `CHANGELOG.md`** — dv owns the format, so a first-party parser
+  is more robust than every consumer rolling their own slice. The
+  changelog subtool (`apps/cli/src/subtools/changelog/`) already renders
+  these sections; a matching extractor would close the loop.
+- **Keep a lockfile / sidecar** — persist the rendered notes at
+  `dv version` time for `dv release` to read back. Adds state, which
+  cuts against "tags are the only release state."
+- **Read from git** (tag annotation, commit body) — possible but
+  indirect.
+
+Likeliest shape: a `releaseNotes` (or `notes`) string per
+`awaitingRelease` entry in the Plan schema (`specs/schemas/plan.json`,
+regenerated from the Zod source — never hand-edited), populated by a
+first-party CHANGELOG extractor. That makes "mint a GitHub Release with
+the right body" a clean consumer of dv's JSON instead of a CHANGELOG
+re-parser, and benefits any other release-notes consumer too. Pairs
+naturally with the multi-channel publishing work below (a GitHub-Release
+channel would want exactly this field).
 
 ### Opt into multi-channel publishing
 

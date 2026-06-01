@@ -1,20 +1,22 @@
-# Tag + publish packages whose current version isn't tagged yet.
+# Release on merge to main — the one-trunk GitHub Flow model.
 #
-# Stateless by design — dv release computes the awaiting-release set
-# from git tags, so this workflow is safe to run on every push to
-# main. On non-release commits, the set is empty and the run is a
-# no-op (~5 seconds). On the merged Release PR commit, every bumped
-# package gets tagged and published.
+# main is both our nightly branch and our release branch: every push to
+# main is a nightly, and the git tags this job mints (pkg@x.y.z) are the
+# official releases. There is no separate Release PR — the feature PR that
+# merged here was the code review AND the release review, since the bump
+# is derived deterministically from the Records it carried.
 #
-# Publishing is wired to tools/dv-release/main.ts (a repo-local
-# specialisation of the example deno plugin) which runs `deno
-# publish` for real. OIDC handles JSR auth automatically when the
-# job has id-token: write — no JSR_TOKEN secret needed once trusted
-# publishing is configured on JSR for this repo.
+# The job is a no-op on commits with no pending Records (~5s): dv release
+# is stateless, computing the awaiting-release set from git tags. All the
+# orchestration logic lives in .github/scripts/release.ts (Deno, so it is
+# cross-platform and can mint GitHub Releases via the official client) —
+# this YAML just wires up the environment and calls it.
 #
-# Like the prepare workflow, this is dormant until DV_RELEASE_ENABLED
-# is flipped to true. The first 1.0 release is a deliberate manual
-# call; only after that does it make sense to publish from CI.
+# Live on every merge to main. There's deliberately no enable/disable repo
+# variable: the model's whole point is that a merge IS the release, and an
+# out-of-band GitHub setting that silently turns that off is exactly the
+# kind of coupling we avoid. The no-op-when-nothing-pending behavior is the
+# safety, not a feature flag.
 
 name: release
 
@@ -38,13 +40,15 @@ jobs:
   release:
     runs-on: ubuntu-latest
 
-    # Same enablement gate as prepare-release. Flip
-    # `DV_RELEASE_ENABLED` to `true` in the repo's variables after
-    # the first manual `dv release` has succeeded.
-    if: vars.DV_RELEASE_ENABLED == 'true'
+    # Skip dv's own bump commits to avoid recursion (the bump pushed to
+    # main in step 4 of release.ts would otherwise re-trigger this job).
+    # The guard matches dv's default `git.commit-message-template`
+    # (`chore(release): ...`). This is intrinsic workflow logic, not a
+    # feature flag — it lives in the file, not in a GitHub repo variable.
+    if: "!contains(github.event.head_commit.message, 'chore(release):')"
 
     permissions:
-      contents: write   # push tags
+      contents: write   # push the bump commit + tags, create GitHub Releases
       id-token: write   # OIDC for `deno publish` auth to JSR
 
     steps:
@@ -52,19 +56,22 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
-          # Use the PAT here too: the tag pushes from `dv release
-          # --push` should trigger downstream workflows (e.g. a
-          # docs deploy listening on tag events).
+          # Use the PAT, not the default GITHUB_TOKEN: the bump commit
+          # pushed to protected main needs the bot's protection bypass,
+          # and PAT-driven pushes correctly trigger downstream workflows
+          # (e.g. a docs deploy listening on tag events). Configure DV_PAT
+          # with `contents: write` + `workflows: write` scopes.
           token: ${{ secrets.DV_PAT }}
 
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
 
-      # See dv-validate.yml for the rationale on this launcher
-      # shape (workspace context needs to be live; `deno install
-      # --global` would snapshot the entry file and miss the
-      # imports map).
+      # Install dv from the working tree. We write our own launcher rather
+      # than `deno install --global`: the latter snapshots the entry file
+      # and loses the workspace `imports` map (so `@dv-cli/clipc` wouldn't
+      # resolve). This is the one piece that stays shell — it's the
+      # documented install shape; rewriting it in Deno would be circular.
       - name: install dv from source
         run: |
           mkdir -p "$HOME/.local/bin"
@@ -78,27 +85,24 @@ jobs:
           chmod +x "$HOME/.local/bin/dv"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
-      - name: configure git identity for tags
+      - name: configure git identity
         run: |
           git config user.name "dv-release-bot"
           git config user.email "dv-release-bot@users.noreply.github.com"
 
-      # Preview the plan — useful in logs even when the run is a
-      # no-op. dv release --dry-run with --json gives the structured
-      # awaiting-release set; we just render it for visibility.
-      - name: preview the release plan
-        run: dv release --dry-run --yes
-
-      # The actual release. --push tells dv to push tags to origin
-      # after publishing succeeds (the default publish-then-push
-      # sequence means a failed publish doesn't leave an
-      # unrecoverable pushed tag). `inputs.force` is empty on
-      # push-triggered runs, set only via workflow_dispatch.
-      - name: dv release
+      # All the orchestration: capture the pending Plan, version, push the
+      # bump to main, release (tag + publish), and mint one GitHub Release
+      # per minted tag. inputs.force is empty on push-triggered runs.
+      - name: release
+        env:
+          DV_PAT: ${{ secrets.DV_PAT }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           FORCE=""
           if [ "${{ inputs.force }}" = "true" ]; then
             FORCE="--force"
             echo "::warning::Running with --force; publish ops will re-run on already-tagged packages."
           fi
-          dv release --yes --push $FORCE
+          deno run \
+            --allow-run --allow-read --allow-env --allow-net \
+            "$GITHUB_WORKSPACE/.github/scripts/release.ts" $FORCE
