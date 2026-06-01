@@ -1,10 +1,18 @@
 # CI integration
 
 This guide shows how to run dv from CI — specifically GitHub Actions —
-in the **Release-PR bot** pattern: dv watches your `main` branch,
-opens a PR when there are pending Records, and tags + publishes once
-that PR merges. It also covers `dv validate` as a per-PR gate so
-malformed Records get caught before they hit `main`.
+in the **release-on-merge** pattern: `main` is your only long-lived
+branch and doubles as both the nightly branch and the release branch.
+Every push to `main` is a nightly; the git tags dv mints (`pkg@x.y.z`)
+are the official releases. It also covers `dv validate` as a per-PR gate
+so malformed Records get caught before they hit `main`.
+
+This is plain [GitHub Flow](https://docs.github.com/en/get-started/using-github/github-flow):
+short-lived feature branches, one trunk, no release branches. dv is
+relaxed about this — the two-phase release model (`dv version` then
+`dv release`) supports other shapes too (see
+[Two-phase release](/concepts/two-phase-release)) — but release-on-merge
+is the simplest setup and the one dv itself uses.
 
 The shape generalises to GitLab CI / CircleCI / your CI of choice;
 the dv side of the contract is platform-agnostic
@@ -13,20 +21,21 @@ GitHub Actions because that's where most teams land.
 
 ## The workflow at a glance
 
-Three jobs do three things:
+Two jobs do two things:
 
 | Job | Trigger | Purpose |
 |---|---|---|
 | **validate** | every PR | `dv validate` — catch bad Records pre-merge |
-| **prepare-release** | push to `main` | `dv version` — open a Release PR if Records are pending |
-| **release** | push to `main` after Release PR merges | `dv release` — tag + publish |
+| **release** | push to `main` | `dv version` + `dv release` — bump, tag, publish; no-op when nothing's pending |
 
-The "prepare-release" and "release" jobs both fire on `push: main`.
-They distinguish themselves at runtime: prepare-release exits early
-if there are no pending Records (which is true once the Release PR
-has merged); release exits early if every current version already
-has a tag (which is true on every non-release commit). Each one is
-idempotent and safe to run on every push.
+There is no separate "Release PR" step. The feature PR that merges to
+`main` is *both* the code review and the release review: the version
+bump is derived deterministically from the Records that PR carried, so
+once it's approved and merged there's nothing further to gate. The
+release job runs `dv version` (which commits the bump straight to
+`main`), then `dv release` (which tags + publishes). Both are
+idempotent and safe on every push — on a commit with no pending Records
+the whole job is a ~5s no-op.
 
 ## Installing dv in CI
 
@@ -82,7 +91,7 @@ Unresolved References — and exits non-zero if any of them fail.
 
 ```yaml
 # .github/workflows/dv-validate.yml
-name: dv validate
+name: validate
 
 on:
   pull_request:
@@ -120,50 +129,74 @@ What this catches:
 - **Plugin resolution failures** — a `path:` reference points at a
   file that's gone, a `command:` reference isn't on PATH, etc.
 
-## Job 2: prepare the Release PR
+Make this a **required status check** in your branch protection so
+no PR can merge to `main` — and therefore trigger a release — until
+validate is green. The [branch-protection setup script](#branch-protection)
+below wires this up.
 
-After the PR with a Record merges to `main`, this job runs and
-opens a **Release PR** — a commit produced by `dv version` that
-contains every manifest bump, every CHANGELOG entry, and every
-constraint rewrite for the accumulated Records.
+## Job 2: release on merge to main
+
+After a PR with a Record merges to `main`, this job runs `dv version`
+then `dv release`. It's the whole release pipeline in one job:
+
+1. **Capture the pending Plan** (`dv status --json`) *before* anything
+   mutates state, so the run log reflects the bumps. (`dv version`
+   consumes the Records, so querying status afterward would show
+   nothing pending.)
+2. **Early-out** if nothing is pending — a nightly with no release.
+3. `dv version --yes` — bump manifests, write CHANGELOGs, cascade
+   constraints, consume Records, and auto-commit on `main`.
+4. **Push the bump commit** back to `main`.
+5. `dv release --yes --push` — mint per-package tags and publish.
+6. **Mint one GitHub Release** per newly-minted tag, body sliced from
+   the package's freshly-written CHANGELOG.md section.
+
+Because that's more logic than belongs in inline YAML, the
+orchestration lives in a small Deno script
+(`.github/scripts/release.ts`) and the workflow just calls it. Deno
+keeps the script cross-platform and lets it use the official GitHub
+client (`@octokit/rest`) to mint the Releases:
 
 ```yaml
-# .github/workflows/dv-prepare-release.yml
-name: dv prepare release
+# .github/workflows/dv-release.yml
+name: release
 
 on:
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Pass --force to re-run publish ops on already-tagged packages (recovery)"
+        type: boolean
+        default: false
 
-# Single in-flight Release PR at a time — concurrent prepare runs
-# would race on the branch and clobber each other's commits.
 concurrency:
-  group: dv-prepare-release
+  group: release
   cancel-in-progress: false
 
 jobs:
-  prepare:
+  release:
     runs-on: ubuntu-latest
-    # Skip on the prepare-release commit itself (the bot's own
-    # commit) so we don't recurse into ourselves. The check is
-    # cheap — `dv version --dry-run` would also exit "nothing to
-    # version" since the Records were consumed.
+
+    # Skip dv's own bump commits (step 4) so the push to main doesn't
+    # re-trigger this job. The string matches dv's default
+    # git.commit-message-template.
     if: "!contains(github.event.head_commit.message, 'chore(release):')"
 
     permissions:
-      contents: write       # commit the bump
-      pull-requests: write  # open / update the Release PR
+      contents: write   # push bump commit + tags, create GitHub Releases
+      id-token: write   # OIDC for `deno publish` auth to JSR
 
     steps:
       - uses: actions/checkout@v6
         with:
-          # We need full history so dv can read existing tags
-          # for the awaiting-release computation.
           fetch-depth: 0
-          # PAT or GITHUB_TOKEN so the push triggers downstream
-          # workflows (a bare GITHUB_TOKEN's push will NOT trigger
-          # other Actions workflows; that's a documented GitHub
-          # safety rule).
+          fetch-tags: true
+          # PAT, not GITHUB_TOKEN: the bump commit pushed to protected
+          # main needs the bot's protection bypass, and PAT-driven
+          # pushes trigger downstream workflows (e.g. a tag-listening
+          # docs deploy). A bare GITHUB_TOKEN does neither.
           token: ${{ secrets.DV_PAT }}
 
       - uses: denoland/setup-deno@v2
@@ -172,197 +205,87 @@ jobs:
 
       - run: deno install --global --allow-all --name dv jsr:@dv-cli/dv
 
-      # Cheap early-out: if no Records are pending, there's
-      # nothing to release. dv version itself would exit 0 with
-      # "nothing to version" — checking explicitly lets the
-      # workflow short-circuit before we touch the branch.
-      - name: check for pending Records
-        id: check
-        run: |
-          PENDING=$(dv status --json | jq '.pending | length')
-          echo "pending=$PENDING" >> "$GITHUB_OUTPUT"
-
       - name: configure git identity
-        if: steps.check.outputs.pending != '0'
         run: |
-          git config user.name "dv-bot"
-          git config user.email "dv-bot@users.noreply.github.com"
+          git config user.name "dv-release-bot"
+          git config user.email "dv-release-bot@users.noreply.github.com"
 
-      # The actual bump. dv version writes manifests + CHANGELOGs,
-      # cascades constraints, deletes consumed Records, and creates
-      # one commit. Non-interactive so we don't hang on a confirm
-      # prompt that never arrives.
-      - name: run dv version
-        if: steps.check.outputs.pending != '0'
-        run: dv version --yes
-
-      # Push to a stable branch name so reruns update an existing
-      # PR rather than spawning new ones. --force-with-lease keeps
-      # us safe if someone pushed to the branch in the meantime
-      # (rare; the concurrency: gate already serializes us).
-      - name: push to dv-release branch
-        if: steps.check.outputs.pending != '0'
-        run: |
-          git push --force-with-lease origin HEAD:dv-release
-
-      # Open the PR (or update the existing one). Title + body
-      # are templated from the bump summary.
-      - name: open / update Release PR
-        if: steps.check.outputs.pending != '0'
+      - name: release
         env:
-          GH_TOKEN: ${{ secrets.DV_PAT }}
-        run: |
-          BODY=$(dv status --json | jq -r '
-            "## Pending bumps\n\n" +
-            (.tracked | map("- `" + .package + "` " + .currentVersion) | join("\n"))
-          ')
-          # If a PR is already open for dv-release, gh pr edit
-          # updates it; otherwise gh pr create makes a new one.
-          if gh pr view dv-release --json number > /dev/null 2>&1; then
-            gh pr edit dv-release --body "$BODY"
-          else
-            gh pr create \
-              --base main \
-              --head dv-release \
-              --title "chore(release): version bumps" \
-              --body "$BODY"
-          fi
-```
-
-Things to know:
-
-- **The `if: !contains(...)` guard is essential.** Without it, the
-  workflow recurses: the prepare commit itself triggers another
-  prepare run, which exits "nothing to version" but still wastes a
-  CI minute. The string `chore(release):` matches dv's default
-  `git.commit-message-template`; if you've customised it, update
-  the guard.
-- **`concurrency:` serializes prepare runs.** Two pushes landing
-  close together would otherwise race — both would compute the same
-  bump, push the same branch, and the second `git push
-  --force-with-lease` would either fail or silently clobber the
-  first. The concurrency group prevents it.
-- **`fetch-depth: 0`** is required because `dv release`'s
-  awaiting-release computation reads existing tags via `git`. A
-  shallow clone hides them. (`dv version` itself doesn't strictly
-  need full history, but the next job does, and consistent clone
-  shape avoids surprises.)
-- **`secrets.DV_PAT` instead of `GITHUB_TOKEN`** is a GitHub-Actions
-  quirk: pushes made with the default `GITHUB_TOKEN` don't trigger
-  downstream Actions workflows. If you want the merged Release PR
-  to fire the `release` job below, the push needs to come from a
-  PAT (or a GitHub App token). See
-  [GitHub's docs](https://docs.github.com/en/actions/security-guides/automatic-token-authentication#using-the-github_token-in-a-workflow).
-
-## Job 3: tag and publish on merge
-
-This job also fires on `push: main`. It runs `dv release`, which is
-**stateless** — it computes the awaiting-release set from git tags
-and is a no-op on any commit where every current version is already
-tagged. So it's safe to run on every push.
-
-```yaml
-# .github/workflows/dv-release.yml
-name: dv release
-
-on:
-  push:
-    branches: [main]
-
-concurrency:
-  group: dv-release
-  cancel-in-progress: false
-
-jobs:
-  release:
-    runs-on: ubuntu-latest
-
-    permissions:
-      contents: write   # push tags
-
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          # tags need to come too so dv release can see existing
-          # ones for the stateless awaiting-release check.
-          fetch-tags: true
-
-      - uses: denoland/setup-deno@v2
-        with:
-          deno-version: v2.x
-
-      - run: deno install --global --allow-all --name dv jsr:@dv-cli/dv
-
-      # Wire any credentials your release plugin needs. For an npm
-      # publish, that's the NPM_TOKEN. For deno publish, it's the
-      # OIDC token GitHub Actions provides automatically (assuming
-      # you've set up trusted publishing on JSR).
-      - name: configure git identity for tags
-        run: |
-          git config user.name "dv-bot"
-          git config user.email "dv-bot@users.noreply.github.com"
-
-      # The release. --yes is required (no TTY in CI); --push tells
-      # dv to push tags to origin once publishing succeeds. The
-      # default publish-then-push sequence means a failed publish
-      # doesn't leave an unrecoverable pushed tag.
-      - name: run dv release
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: dv release --yes --push
-```
-
-A few patterns worth knowing:
-
-- **Idempotence is your friend.** Re-running this workflow on a
-  commit where everything's tagged exits 0 with "nothing to
-  release" and does nothing. You can wire this to scheduled triggers
-  too if you want belt-and-braces.
-- **Plugin credentials live in env vars.** dv passes the full env
-  through to each plugin's `release` op. Set whatever secrets your
-  plugin needs (`NPM_TOKEN`, `CARGO_REGISTRIES_*_TOKEN`, etc.) at
-  the step level.
-- **Partial failures don't roll back.** If three packages need
-  releasing and one publish fails, the other two ship and the tags
-  for all three exist. The workflow exits non-zero, you fix the
-  cause, and `dv release --force` (manual or via a `workflow_dispatch`
-  trigger you add) re-runs the publish ops.
-
-## Optional: a manual recovery trigger
-
-For the partial-failure case (or any reason you'd want to manually
-re-run release), add a `workflow_dispatch` trigger to the release
-workflow:
-
-```yaml
-on:
-  push:
-    branches: [main]
-  workflow_dispatch:
-    inputs:
-      force:
-        description: "Pass --force to re-run release ops on already-tagged packages"
-        type: boolean
-        default: false
-
-# ... rest of the workflow ...
-
-      - name: run dv release
-        env:
+          DV_PAT: ${{ secrets.DV_PAT }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           FORCE=""
           if [ "${{ inputs.force }}" = "true" ]; then
             FORCE="--force"
           fi
-          dv release --yes --push $FORCE
+          deno run \
+            --allow-run --allow-read --allow-env --allow-net \
+            "$GITHUB_WORKSPACE/.github/scripts/release.ts" $FORCE
 ```
 
-Now you can fire a release run manually from the Actions tab, with
-or without `--force`, when something needs retrying. See [Cut a
-release § Handling a partial-failure](/guides/cut-a-release#handling-a-partial-failure)
-for the recovery flow.
+Things to know:
+
+- **The `if: !contains(...)` guard is essential.** The bump commit
+  this job pushes to `main` would otherwise re-trigger the job. The
+  string `chore(release):` matches dv's default
+  `git.commit-message-template`; if you've customised it, update the
+  guard.
+- **`concurrency:` serializes release runs.** Two pushes landing close
+  together would otherwise race on the bump commit and the tags.
+- **`fetch-depth: 0` + `fetch-tags: true`** are required: `dv release`
+  computes its awaiting-release set by reading existing tags via git. A
+  shallow clone hides them.
+- **`secrets.DV_PAT` instead of `GITHUB_TOKEN`** for two reasons: the
+  bump commit pushes straight to protected `main` (the bot needs a
+  protection bypass — see [branch protection](#branch-protection)), and
+  PAT-driven pushes trigger downstream Actions workflows where a bare
+  `GITHUB_TOKEN` wouldn't.
+- **Partial failures don't roll back.** If three packages need
+  releasing and one publish fails, the other two ship and the tags for
+  all three exist. The job exits non-zero; re-run with `--force` from
+  the Actions tab (the `workflow_dispatch` input above) to retry the
+  publish ops on already-tagged packages.
+
+### Where do the GitHub Release notes come from?
+
+`dv release --json` reports *which* tags it minted, but not their
+release notes. The script recovers the notes by slicing the relevant
+section out of each package's `CHANGELOG.md` (Keep a Changelog format:
+the block from `## [version]` to the next `## [`). A native
+dv-emitted release-notes field is on the [roadmap](https://github.com/ben-laird/dv/blob/main/ROADMAP.md);
+until then, the CHANGELOG is the source of truth and the slice is the
+pragmatic bridge.
+
+## Branch protection
+
+Release-on-merge means a merge to `main` ships a release, so the
+guardrails on `main` *are* your release safety. Apply them with the
+setup script (Deno, idempotent, guarded behind `--confirm`):
+
+```sh
+GITHUB_TOKEN=<repo-admin-token> \
+  deno run --allow-env --allow-net \
+  .github/scripts/setup-branch-protection.ts --confirm
+```
+
+It sets, on `main`:
+
+- **required status check: `validate`** — no merge until the PR is
+  green.
+- **required PR review** (≥1 approval, configurable via `--reviews`) —
+  the merge is the release review.
+- **linear history** — squash/rebase merges only.
+- **no force-push, no deletion.**
+- **a bypass for the release bot** so its bump commit (step 4 above)
+  can push straight to protected `main`.
+
+That last carve-out is the one place release-on-merge bends a rule: the
+bot commits the bump without its own PR. That's intentional — the bump
+is deterministic from the already-approved Records, so re-reviewing it
+would be ceremony. If you'd rather gate the bump too, you want the
+Release-PR variant instead (see [Two-phase release](/concepts/two-phase-release)).
 
 ## Optional: validate plugin contracts in CI
 
@@ -411,22 +334,8 @@ A few non-obvious bits of context that'll save you debugging time:
 
 ## Real-world example: dv itself
 
-The dv repo dogfoods every workflow on this page. The bot loop ran
-end-to-end for the first time in PRs #1 and #2 in
-[ben-laird/dv](https://github.com/ben-laird/dv). What that looked
-like:
-
-| Time | Event |
-|---|---|
-| 17:36:58 | PR #1 squash-merged to `main` |
-| 17:37:00 | `dv-prepare-release.yml` fires (2s after the push) |
-| 17:37:32 | Release PR #2 opened with the bump |
-| ~17:40 | PR #2 squash-merged to `main` |
-| 17:40:38 | `dv-release.yml` fires |
-| 17:40:55 | `@dv-cli/dv@0.7.0` live on JSR |
-
-**56 seconds** from PR merge to package on JSR, no human intervention
-between the two PR merges.
+The dv repo dogfoods this workflow. dv first shipped `@dv-cli/dv@0.7.0`
+to JSR through CI on 2026-05-27.
 
 ### What worked on the first try
 
@@ -435,23 +344,21 @@ between the two PR merges.
   publishing was configured for the package on JSR. Setup was a
   one-time click in JSR's package settings naming `ben-laird/dv` as
   the trusted source.
-- **The `DV_PAT` chain** — the prepare workflow's push to
-  `dv-release` correctly triggered the validate workflow on the
-  resulting Release PR, and the merge of that PR correctly
-  triggered the release workflow. The default `GITHUB_TOKEN`
-  wouldn't have done either.
+- **The `DV_PAT` chain** — the default `GITHUB_TOKEN` would neither
+  push through branch protection nor trigger downstream workflows; the
+  PAT does both.
 - **The dv-release plugin** — `tools/dv-release/main.ts` is dv's
   repo-local release plugin (a specialised copy of the example
   Deno plugin where the `release` op actually runs `deno publish`).
   Verified by `dv plugin verify` in CI on every PR.
 
-### What broke the first time, surfaced by the dogfood
+### Bugs the dogfood surfaced
 
-Two real bugs we wouldn't have caught without running the workflows
-for real:
+Real bugs we wouldn't have caught without running the workflows for
+real:
 
 1. **`deno install --global` lost workspace context.** The original
-   install step in `dv-validate.yml` did
+   install step did
    `deno install --global --allow-all --name dv $WORKSPACE/apps/cli/src/main.ts`
    — which loses the workspace's `imports` map, so `@dv-cli/clipc`
    didn't resolve and validate failed in 15s with
@@ -461,14 +368,11 @@ for real:
    instead, mirroring what `deno task install` writes locally. The
    workflow snippets above already reflect this fix.
 
-2. **Publish-order bug**, which is exactly what the merged PR
-   itself fixed. Pre-fix, `dv release` ordered publishes
+2. **Publish-order bug.** Pre-fix, `dv release` ordered publishes
    alphabetically by path; in this repo `apps/cli` sorted before
    `packages/clipc`, so `@dv-cli/dv` would have tried to publish
-   before `@dv-cli/clipc`, and JSR would have rejected it. We had
-   to publish `clipc` by hand the *previous* release. The
-   topological-sort fix landed in the same PR that proved the bot
-   loop works.
+   before `@dv-cli/clipc`, and JSR would have rejected it. The
+   topological-sort fix landed in the same release.
 
 ### One-time JSR setup
 
@@ -485,23 +389,20 @@ Three steps, ~10 minutes:
    permission. The release workflow above already has this line.
    No JSR_TOKEN secret is needed.
 
-### Authoring tips for the chained workflows
+### Authoring tips
 
-A few things that became obvious only after we ran them for real:
+A few things that became obvious only after running it for real:
 
 - **Use the `chore(release):` commit-message guard religiously.**
-  Without it, the prepare workflow re-triggers on its own commit
-  and you have an infinite loop. Even though the loop would
-  no-op (no pending Records → empty PR → no merge), it'd burn CI
-  minutes on every prepare commit.
-- **Always squash-merge the Release PR.** GitHub's rebase-merge
-  rewrites commit hashes, which breaks any tag → commit references
-  in your CHANGELOG/HISTORY files. Squash preserves the bump
-  commit's identity.
-- **The validate workflow finds bugs you'd otherwise ship.** Make
-  it required in your branch protection ruleset so the prepare
-  workflow can't open a Release PR if validate failed on the
-  underlying PR.
+  Without it, the release job re-triggers on its own bump commit and
+  you have an infinite loop.
+- **Always squash-merge feature PRs.** GitHub's rebase-merge rewrites
+  commit hashes, which breaks any tag → commit references in your
+  CHANGELOG/HISTORY files. Squash preserves identity. (Required linear
+  history in branch protection enforces this.)
+- **Make validate a required check.** The
+  [branch-protection script](#branch-protection) does this, so a PR
+  can't merge — and therefore can't release — if validate failed.
 
 ## What's next
 

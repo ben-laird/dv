@@ -57,7 +57,7 @@ That's the whole loop. [Walk through it in detail →](/getting-started)
 
 - **Per-package CHANGELOG.md and per-package git tags** (`pkg-name@1.2.3`)
 - **Constraint cascading** — when one package bumps, dependents' manifests update automatically
-- **Two-phase release** — `dv version` lands a reviewable Release PR; `dv release` tags + publishes after merge
+- **Two-phase release** — `dv version` lands a reviewable bump commit; `dv release` tags + publishes. Wire it up as release-on-merge (the default) or behind a Release PR
 - **The 1.0 commitment is explicit** — `dv v1 @org/api` is the only way to cross from `0.x` to `1.0.0`, and it's celebrated
 
 ## Built for the way teams actually work

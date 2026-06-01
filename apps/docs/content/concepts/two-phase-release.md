@@ -18,18 +18,27 @@ $ dv version
 $ dv release
 ```
 
-In a typical flow:
+In the default **release-on-merge** flow (plain GitHub Flow — one trunk,
+short-lived feature branches):
 
-1. Developers author Records as they make changes.
-2. Someone (or CI) runs `dv version` to assemble the **Release PR** —
-   one commit containing every manifest bump, every CHANGELOG entry,
-   every dependency-constraint rewrite.
-3. The Release PR is reviewed and merged.
-4. CI (or someone) runs `dv release` on the merged commit, which tags
-   each released package and dispatches the publish hooks.
+1. Developers author Records on a feature branch as they make changes.
+2. The feature PR is reviewed and merged to `main`. That review covers
+   the Records, and therefore the intended bump.
+3. On merge, CI runs `dv version` — assembling one commit containing
+   every manifest bump, every CHANGELOG entry, every dependency-constraint
+   rewrite — and commits it to `main`.
+4. CI then runs `dv release` on that commit, tagging each released
+   package and dispatching the publish hooks.
 
-The whole flow is git-native. The Release PR is just a commit. The
-release state is just tags. Nothing else.
+The whole flow is git-native. The bump is just a commit. The release
+state is just tags. Nothing else.
+
+dv is relaxed about *which* workflow drives the split. If you'd rather a
+human approve the version bumps before they publish, route the
+`dv version` commit through a bot-maintained **Release PR** and run
+`dv release` only after it merges. Both shapes use the same two commands;
+see the [CI integration guide](/guides/ci-integration) for the
+release-on-merge wiring dv itself uses.
 
 ## Why split
 
@@ -112,10 +121,12 @@ What `dv version` does, in order:
    commit.
 10. **Stages everything** and creates one commit.
 
-The result: a Release PR commit. Its diff contains every manifest
-change, every CHANGELOG entry, every constraint rewrite, every
-refreshed lockfile — and the deletion of the Records that authorised
-the whole thing. Review it; merge it; you're done with phase 1.
+The result: one commit. Its diff contains every manifest change, every
+CHANGELOG entry, every constraint rewrite, every refreshed lockfile —
+and the deletion of the Records that authorised the whole thing. Under
+release-on-merge it lands directly on `main`; under the Release-PR
+variant it's the commit you review and merge. Either way, phase 1 is
+done.
 
 ## Phase 2: `dv release`
 

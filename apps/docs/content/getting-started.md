@@ -173,8 +173,8 @@ What `dv` did, in order:
 5. **Updated dependents** — `@my/client`'s `^0.1.0` constraint was
    rewritten to `^0.2.0`.
 6. **Deleted the consumed Record** (`.dv/records/sunset-cliff-roam.md`).
-7. **Staged everything into one commit** — the "Release PR" you'd
-   review and merge.
+7. **Staged everything into one commit** — under release-on-merge this
+   lands on `main`; if you prefer, review it first as a "Release PR".
 
 Look at what changed:
 

@@ -56,8 +56,13 @@ $ dv version    # bumps versions, updates CHANGELOGs, commits the result
 $ dv release    # mints per-package git tags, fires release plugins
 ```
 
-The two-phase flow is intentional — `version` produces an ordinary commit that
-can be reviewed in a "Release PR" before tags get cut and publishes fire.
+The two-phase flow is intentional — `version` produces an ordinary commit,
+distinct from the tag-and-publish step. The default workflow is
+**release-on-merge** (plain GitHub Flow): merging a feature PR to `main`
+runs both phases automatically, since the bump is derived from the Records
+that PR carried. Teams that want a human to approve the bump first can route
+the `version` commit through a "Release PR" instead. Either way it's the same
+two commands — see the [CI integration guide](apps/docs/content/guides/ci-integration.md).
 
 ## Status
 

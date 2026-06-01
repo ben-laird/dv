@@ -508,10 +508,25 @@ The release lifecycle is split into two commands:
     - mints per-package git tags
     - fires the release plugin for each bumped package
 
-The split exists so the `version` commit can go through normal PR review
-before any tags or publishes happen. The "Release PR" pattern (a long-lived
-PR that gets recreated/updated by automation, merged when humans approve) is
-the intended workflow on shared codebases.
+The split exists so the `version` commit is a distinct, reviewable artifact
+that can be tagged + published independently of when it was computed. `dv`
+is deliberately laissez-faire about *which* workflow drives the split — the
+same way it's relaxed about how plugins and projects are structured. Two
+shapes both work:
+
+- **Release-on-merge (the default this repo uses).** One trunk, GitHub Flow.
+  The feature PR carries the Records; merging it to `main` is the release
+  trigger. CI runs `dv version` (committing the bump straight to `main`) then
+  `dv release`. The feature PR is *both* the code review and the release
+  review, since the bump is derived deterministically from the approved
+  Records. No second branch, no second PR.
+- **Release PR.** A bot-maintained PR carrying the `dv version` commit, merged
+  when humans approve the bumps + CHANGELOG before any tag or publish. The
+  extra gate buys a human eye on the version numbers; the cost is a second PR.
+
+Pick whichever fits the team. `dv` itself uses release-on-merge (see
+`apps/docs/content/guides/ci-integration.md`); the `dv version` / `dv release`
+split supports both without favoring either.
 
 #### Git interaction: commits and pushes
 
