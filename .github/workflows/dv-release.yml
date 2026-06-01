@@ -42,10 +42,15 @@ jobs:
 
     # Skip dv's own bump commits to avoid recursion (the bump pushed to
     # main in step 4 of release.ts would otherwise re-trigger this job).
-    # The guard matches dv's default `git.commit-message-template`
-    # (`chore(release): ...`). This is intrinsic workflow logic, not a
-    # feature flag — it lives in the file, not in a GitHub repo variable.
-    if: "!contains(github.event.head_commit.message, 'chore(release):')"
+    # dv's default git.commit-message-template makes `chore(release):` the
+    # commit *subject*, so we anchor with startsWith — NOT contains. A
+    # squash-merge concatenates every squashed commit body into the head
+    # commit message, and an unrelated commit can legitimately mention the
+    # string `chore(release):` in prose; `contains` would then skip a real
+    # release. startsWith only matches when it's the actual subject line.
+    # This is intrinsic workflow logic, not a feature flag — it lives in
+    # the file, not in a GitHub repo variable.
+    if: "!startsWith(github.event.head_commit.message, 'chore(release):')"
 
     permissions:
       contents: write   # push the bump commit + tags, create GitHub Releases
