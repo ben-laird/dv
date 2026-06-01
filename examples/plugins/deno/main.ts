@@ -261,6 +261,16 @@ async function runUpdateDependency(): Promise<void> {
 // unchanged on total parse failure is intentional: the cascade
 // reports changed:false rather than failing the run, so the user
 // can hand-fix odd manifest shapes without the plugin guessing.
+//
+// Alternative: Deno 2.8+ ships `deno bump-version --import-map`,
+// which rewrites jsr: constraints across the whole workspace import
+// map in one pass (see deno.com/blog/v2.8). dv already handles this
+// per-dependency here, so it isn't needed — but if you'd rather lean
+// on Deno's native rewriter, that's the hook. Use ONLY its
+// --import-map syncing: its increment (`patch`/`minor`/`major`) and
+// commit-derived modes compute bumps from git history, which is the
+// one thing dv owns and must not delegate (Records, not commits, are
+// authoritative — specs/design.md § Records over commit messages).
 function rewriteSpecifierVersion(
   originalSpecifier: string,
   nextVersion: string,
