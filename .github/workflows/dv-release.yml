@@ -12,9 +12,11 @@
 # cross-platform and can mint GitHub Releases via the official client) —
 # this YAML just wires up the environment and calls it.
 #
-# Dormant until DV_RELEASE_ENABLED is flipped to true. The first 1.0
-# release is a deliberate manual call; only after that does it make sense
-# to publish from CI.
+# Live on every merge to main. There's deliberately no enable/disable repo
+# variable: the model's whole point is that a merge IS the release, and an
+# out-of-band GitHub setting that silently turns that off is exactly the
+# kind of coupling we avoid. The no-op-when-nothing-pending behavior is the
+# safety, not a feature flag.
 
 name: release
 
@@ -41,11 +43,9 @@ jobs:
     # Skip dv's own bump commits to avoid recursion (the bump pushed to
     # main in step 4 of release.ts would otherwise re-trigger this job).
     # The guard matches dv's default `git.commit-message-template`
-    # (`chore(release): ...`). The second condition keeps the workflow
-    # dormant until someone flips DV_RELEASE_ENABLED to true.
-    if: |
-      !contains(github.event.head_commit.message, 'chore(release):') &&
-      vars.DV_RELEASE_ENABLED == 'true'
+    # (`chore(release): ...`). This is intrinsic workflow logic, not a
+    # feature flag — it lives in the file, not in a GitHub repo variable.
+    if: "!contains(github.event.head_commit.message, 'chore(release):')"
 
     permissions:
       contents: write   # push the bump commit + tags, create GitHub Releases
