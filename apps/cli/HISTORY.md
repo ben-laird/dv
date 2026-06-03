@@ -5,6 +5,12 @@ one h3 subsection per Record consumed during that release, with the
 Record's body prose verbatim. For terse one-line bullets, see
 CHANGELOG.md.
 
+## [0.7.1] - 2026-06-03
+
+### Stage refreshed lockfiles into the version commit even when they drifted before finalize ran
+
+### Only list real dependents in version/status constraint cascade, not every other package
+
 ## [0.7.0] - 2026-05-27
 
 ### feat(release): add get-dependencies plugin op + topological publish order
