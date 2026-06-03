@@ -292,6 +292,19 @@ Paths are relative to repo root. dv stages every entry in
 them in the version commit. The list may be empty when no companion
 files needed touching (e.g. a lockfile that's already in sync).
 
+`additionalChangedFiles` must list every companion file the plugin owns
+that is **out of sync with HEAD** after the refresh — not merely the
+files this particular invocation changed. A companion file can drift via
+other tooling that ran earlier in the same session (a warm-cache build or
+test, or even the host CLI's own startup), and a before/after diff scoped
+to the plugin's own refresh would miss that drift. The reference plugins
+detect this with `git status --porcelain -- <file>` rather than a
+self-delta. dv can only stage what the plugin reports, so an unreported
+companion file would silently ship an incomplete commit. As a backstop,
+dv checks for tracked-but-unstaged changes after staging: it errors
+(`unstaged-finalize-drift`) when the run requires a clean tree, and warns
+under `--allow-dirty`.
+
 Plugins that don't implement finalize should respond with:
 
 ```json

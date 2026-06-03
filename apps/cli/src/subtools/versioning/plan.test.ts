@@ -183,8 +183,9 @@ Deno.test("buildVersionPlan produces JSON that validates against rawPlanSchema",
   rawPlanSchema.parse(roundTripped);
 });
 
-Deno.test("buildVersionPlan lists every other discovered Package as a candidate constraint update", () => {
-  // Given two packages where one is bumped
+Deno.test("buildVersionPlan lists every other discovered Package as a candidate constraint update when dependency edges are unknown", () => {
+  // Given two packages where one is bumped and NO dependency graph is
+  // supplied (the plugin doesn't implement get-dependencies)
   const discoveredPackages = [
     buildPackage("core", "packages/core"),
     buildPackage("cli", "packages/cli"),
@@ -195,7 +196,7 @@ Deno.test("buildVersionPlan lists every other discovered Package as a candidate 
     packageVersion("cli", "0.8.0"),
   ];
 
-  // When the plan is built
+  // When the plan is built without dependencyEdges
   const plan = buildVersionPlan({
     command: "status",
     discoveredPackages,
@@ -205,12 +206,73 @@ Deno.test("buildVersionPlan lists every other discovered Package as a candidate 
   });
 
   // Then the bumped package's pending entry lists the other discovered
-  // package with the projected version; cli is NOT in pending (Algebra §9)
+  // package as a candidate (conservative fallback); cli is NOT in pending
   assertEquals(plan.pending.length, 1);
   assertEquals(plan.pending[0]?.package, "core");
   assertEquals(plan.pending[0]?.constraintUpdates, [
     { dependent: "cli", newConstraint: "1.5.0" },
   ]);
+});
+
+Deno.test("buildVersionPlan lists a dependent in constraintUpdates when the dependency graph confirms the edge", () => {
+  // Given cli genuinely depends on core, per the resolved edges
+  const discoveredPackages = [
+    buildPackage("core", "packages/core"),
+    buildPackage("cli", "packages/cli"),
+  ];
+  const parsedRecords: DvRecord[] = [buildRecord("a.md", "feat", ["core"])];
+  const packageCurrentVersions = [
+    packageVersion("core", "1.4.2"),
+    packageVersion("cli", "0.8.0"),
+  ];
+  const dependencyEdges = new Map([["cli", new Set(["core"])]]);
+
+  // When the plan is built with the edges
+  const plan = buildVersionPlan({
+    command: "status",
+    discoveredPackages,
+    parsedRecords,
+    renameLedger: [],
+    packageCurrentVersions,
+    dependencyEdges,
+  });
+
+  // Then cli is listed — it really does depend on core
+  assertEquals(plan.pending[0]?.constraintUpdates, [
+    { dependent: "cli", newConstraint: "1.5.0" },
+  ]);
+});
+
+Deno.test("buildVersionPlan omits a non-dependent from constraintUpdates when the dependency graph proves no edge", () => {
+  // Given the @dv-cli/dv → @dv-cli/clipc shape: dv bumps, but clipc does
+  // NOT depend on dv (clipc's resolved edges are empty)
+  const discoveredPackages = [
+    buildPackage("@dv-cli/dv", "apps/cli"),
+    buildPackage("@dv-cli/clipc", "packages/clipc"),
+  ];
+  const parsedRecords: DvRecord[] = [
+    buildRecord("a.md", "fix", ["@dv-cli/dv"]),
+  ];
+  const packageCurrentVersions = [
+    packageVersion("@dv-cli/dv", "0.7.0"),
+    packageVersion("@dv-cli/clipc", "0.3.0"),
+  ];
+  const dependencyEdges = new Map([["@dv-cli/clipc", new Set<string>()]]);
+
+  // When the plan is built with the edges
+  const plan = buildVersionPlan({
+    command: "status",
+    discoveredPackages,
+    parsedRecords,
+    renameLedger: [],
+    packageCurrentVersions,
+    dependencyEdges,
+  });
+
+  // Then clipc is NOT listed — it carries no dependency on dv, so the
+  // misleading "would update dependents: clipc" line is gone
+  assertEquals(plan.pending[0]?.package, "@dv-cli/dv");
+  assertEquals(plan.pending[0]?.constraintUpdates, []);
 });
 
 Deno.test("buildVersionPlan sorts constraintUpdates by dependent for byte-stable output", () => {

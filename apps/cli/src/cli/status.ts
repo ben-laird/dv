@@ -18,6 +18,10 @@ import {
   type ResolvedPlugin,
   resolvePlugin,
 } from "../subtools/discovery/resolve.ts";
+import {
+  loadInfoForAllPlugins,
+  resolveAllPlugins,
+} from "../subtools/discovery/resolve-all.ts";
 import { requireRepoRoot } from "../subtools/git/repo-root.ts";
 import type { TracingHooks } from "../subtools/plugin/mod.ts";
 import { listRecords, type RecordsListing } from "../subtools/records/mod.ts";
@@ -25,6 +29,8 @@ import { loadRenameLedger, renamesPath } from "../subtools/renames/mod.ts";
 import { computeAwaitingRelease } from "../subtools/tagging/mod.ts";
 import {
   buildVersionPlan,
+  computeDependencyEdges,
+  type DependencyEdges,
   invokeReadVersion,
   type PackageCurrentVersionEntry,
   type Plan,
@@ -125,6 +131,20 @@ export async function runStatus(
     }),
   });
 
+  // Resolve the dependency graph so the previewed constraintUpdates name
+  // only real dependents — keeping `dv status` aligned with
+  // `dv version --dry-run`, which does the same (Algebra §7). Fail-soft:
+  // status is a read-only preview, so a plugin that can't answer `info`
+  // or `get-dependencies` must not abort it. On any plugin error we fall
+  // back to undefined edges, and buildVersionPlan reverts to the
+  // conservative cross product — the same shape status produced before.
+  const dependencyEdges = await computeDependencyEdgesLeniently({
+    discoveredPackages,
+    pluginAssignments: loadedConfig.discovery.plugins,
+    repoRootPath,
+    tracingHooks,
+  });
+
   const plan = buildVersionPlan({
     command: "status",
     discoveredPackages,
@@ -132,6 +152,7 @@ export async function runStatus(
     renameLedger,
     packageCurrentVersions,
     awaitingReleaseLookup,
+    dependencyEdges,
   });
 
   if (options.emitJson) {
@@ -157,6 +178,44 @@ function isConfigNotFound(caughtError: unknown): boolean {
     return true;
   }
   return false;
+}
+
+interface ComputeDependencyEdgesLenientlyArgs {
+  discoveredPackages: Package[];
+  pluginAssignments: PluginAssignment[];
+  repoRootPath: string;
+  tracingHooks?: TracingHooks;
+}
+
+// Resolves the intra-workspace dependency graph for the status preview,
+// swallowing any plugin error. Returns `undefined` on failure so
+// buildVersionPlan falls back to the conservative cross product. Write
+// commands (version, v1) deliberately do NOT swallow these errors — a
+// broken plugin should halt a real bump; status only previews.
+async function computeDependencyEdgesLeniently(
+  args: ComputeDependencyEdgesLenientlyArgs,
+): Promise<DependencyEdges | undefined> {
+  try {
+    const resolvedPluginsByUseString = await resolveAllPlugins({
+      pluginAssignments: args.pluginAssignments,
+      repoRootPath: args.repoRootPath,
+    });
+    const pluginInfoCache = await loadInfoForAllPlugins({
+      resolvedPluginsByKey: resolvedPluginsByUseString,
+      timeoutMs: DEFAULT_FAST_OP_TIMEOUT_MS,
+      tracingHooks: args.tracingHooks,
+    });
+    return await computeDependencyEdges({
+      discoveredPackages: args.discoveredPackages,
+      resolvedPluginsByUseString,
+      pluginInfoCache,
+      repoRootPath: args.repoRootPath,
+      timeoutMs: DEFAULT_FAST_OP_TIMEOUT_MS,
+      tracingHooks: args.tracingHooks,
+    });
+  } catch {
+    return undefined;
+  }
 }
 
 interface ReadCurrentVersionsArgs {

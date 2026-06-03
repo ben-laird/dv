@@ -122,6 +122,10 @@ export type DvErrorShape =
   | { code: "dirty-tree" }
   | { code: "git-status-failed" }
   | { code: "git-stage-failed" }
+  | {
+      code: "unstaged-finalize-drift";
+      context: { unstagedPaths: string[] };
+    }
   | { code: "git-commit-failed" }
   | { code: "git-rev-parse-failed" }
   | { code: "git-tag-failed"; context: { tag: string } }

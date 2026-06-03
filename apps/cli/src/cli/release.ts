@@ -1,15 +1,15 @@
-import { type PluginAssignment, pluginReferenceKey } from "../domain/config.ts";
 import { DvError } from "../domain/errors.ts";
 import type { Package } from "../domain/package.ts";
 import { parseVersion } from "../domain/version.ts";
 import { configPath, loadConfig } from "../subtools/config/mod.ts";
 import { discoverPackages } from "../subtools/discovery/mod.ts";
+import type { ResolvedPlugin } from "../subtools/discovery/resolve.ts";
 import {
-  type ResolvedPlugin,
-  resolvePlugin,
-} from "../subtools/discovery/resolve.ts";
+  loadInfoForAllPlugins,
+  resolveAllPlugins,
+} from "../subtools/discovery/resolve-all.ts";
 import { assertCleanTree, requireRepoRoot } from "../subtools/git/mod.ts";
-import { PluginInfoCache, type TracingHooks } from "../subtools/plugin/mod.ts";
+import type { PluginInfoCache, TracingHooks } from "../subtools/plugin/mod.ts";
 import {
   invokeGetDependencies,
   invokeRelease,
@@ -539,27 +539,6 @@ async function runReleasePhase(
   return outcomes;
 }
 
-interface ResolveAllPluginsArgs {
-  pluginAssignments: PluginAssignment[];
-  repoRootPath: string;
-}
-
-async function resolveAllPlugins(
-  args: ResolveAllPluginsArgs,
-): Promise<Map<string, ResolvedPlugin>> {
-  const resolvedPluginsByKey = new Map<string, ResolvedPlugin>();
-  for (const pluginAssignment of args.pluginAssignments) {
-    const assignmentKey = pluginReferenceKey(pluginAssignment.use);
-    if (resolvedPluginsByKey.has(assignmentKey)) continue;
-    const resolvedPlugin = await resolvePlugin({
-      pluginReference: pluginAssignment.use,
-      repoRootPath: args.repoRootPath,
-    });
-    resolvedPluginsByKey.set(assignmentKey, resolvedPlugin);
-  }
-  return resolvedPluginsByKey;
-}
-
 interface ReadAllCurrentVersionsArgs {
   discoveredPackages: Package[];
   resolvedPluginsByUseString: Map<string, ResolvedPlugin>;
@@ -589,27 +568,6 @@ async function readAllCurrentVersions(
     });
   }
   return entries;
-}
-
-// Mirror of version.ts / v1.ts's info loader. Surfaces plugin
-// contract-version mismatches before any per-package op runs, and
-// populates the cache so the work-list sort below can ask whether
-// a plugin declares the optional `get-dependencies` op.
-async function loadInfoForAllPlugins(args: {
-  resolvedPluginsByKey: Map<string, ResolvedPlugin>;
-  timeoutMs: number;
-  tracingHooks?: TracingHooks;
-}): Promise<PluginInfoCache> {
-  const cache = new PluginInfoCache();
-  for (const [pluginKey, resolvedPlugin] of args.resolvedPluginsByKey) {
-    await cache.getOrLoad({
-      pluginKey,
-      resolvedPlugin,
-      timeoutMs: args.timeoutMs,
-      tracingHooks: args.tracingHooks,
-    });
-  }
-  return cache;
 }
 
 interface SortWorkListByDependencyOrderArgs {
