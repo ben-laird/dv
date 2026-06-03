@@ -16,6 +16,7 @@ import {
 } from "../subtools/discovery/resolve.ts";
 import {
   assertCleanTree,
+  assertNoUnstagedFinalizeDrift,
   commitChanges,
   requireRepoRoot,
   stageFiles,
@@ -525,6 +526,26 @@ export async function runVersion(
   await stageFiles({ repoRootPath, paths: touchedPaths });
 
   const shouldCommit = loadedConfig.git.autoCommit && !options.noCommit;
+
+  // Backstop: a finalize plugin may have refreshed a companion file
+  // (deno.lock, package-lock.json, …) without reporting it, so it
+  // never got staged. Only matters when we're about to commit — in
+  // staged-only mode leaving drift for the user to inspect is fine.
+  if (shouldCommit) {
+    const styler = makeStyler(options.colorEnabled);
+    await assertNoUnstagedFinalizeDrift({
+      repoRootPath,
+      requireCleanTree: effectiveRequireCleanTree,
+      warn: (unstagedPaths) => {
+        console.error(
+          `${styler.yellow(styler.bold("warning"))}: ${unstagedPaths.length} ` +
+            `file(s) changed by finalize were not staged (a plugin did not ` +
+            `report them): ${unstagedPaths.join(", ")}`,
+        );
+      },
+    });
+  }
+
   let commitSha: string | null = null;
   if (shouldCommit) {
     const commitStep = progressReporter.start({

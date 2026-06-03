@@ -9,6 +9,10 @@ export {
   type CommitChangesResult,
   commitChanges,
 } from "./commit.ts";
+export {
+  type AssertNoUnstagedFinalizeDriftArgs,
+  assertNoUnstagedFinalizeDrift,
+} from "./finalize-drift.ts";
 export { type PushTagsArgs, pushTags } from "./push.ts";
 export { findRepoRoot, requireRepoRoot } from "./repo-root.ts";
 export { type StageFilesArgs, stageFiles } from "./stage.ts";
