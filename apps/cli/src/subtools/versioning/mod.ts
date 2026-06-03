@@ -16,6 +16,11 @@ export { joinBumps } from "./bump-join.ts";
 export { classify } from "./classify.ts";
 export { renderCommitMessage } from "./commit-message.ts";
 export {
+  type ComputeDependencyEdgesArgs,
+  computeDependencyEdges,
+  type DependencyEdges,
+} from "./dependency-edges.ts";
+export {
   type InvokeFinalizeArgs,
   type InvokeFinalizeResult,
   invokeFinalize,

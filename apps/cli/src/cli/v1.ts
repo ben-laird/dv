@@ -1,5 +1,4 @@
 import { join, relative } from "@std/path";
-import { type PluginAssignment, pluginReferenceKey } from "../domain/config.ts";
 import { DvError } from "../domain/errors.ts";
 import type { Package } from "../domain/package.ts";
 import type { Record as DvRecord } from "../domain/record.ts";
@@ -10,10 +9,11 @@ import {
 } from "../subtools/changelog/mod.ts";
 import { configPath, loadConfig, recordsPath } from "../subtools/config/mod.ts";
 import { discoverPackages } from "../subtools/discovery/mod.ts";
+import type { ResolvedPlugin } from "../subtools/discovery/resolve.ts";
 import {
-  type ResolvedPlugin,
-  resolvePlugin,
-} from "../subtools/discovery/resolve.ts";
+  loadInfoForAllPlugins,
+  resolveAllPlugins,
+} from "../subtools/discovery/resolve-all.ts";
 import {
   assertCleanTree,
   assertNoUnstagedFinalizeDrift,
@@ -25,12 +25,13 @@ import {
   renderHistorySection,
   upsertHistorySection,
 } from "../subtools/history/mod.ts";
-import { PluginInfoCache, type TracingHooks } from "../subtools/plugin/mod.ts";
+import type { TracingHooks } from "../subtools/plugin/mod.ts";
 import { listRecords } from "../subtools/records/mod.ts";
 import { loadRenameLedger, renamesPath } from "../subtools/renames/mod.ts";
 import { buildRenameResolver } from "../subtools/renames/resolve.ts";
 import { computeAwaitingRelease } from "../subtools/tagging/mod.ts";
 import {
+  computeDependencyEdges,
   invokeFinalize,
   invokeReadVersion,
   invokeUpdateDependency,
@@ -277,8 +278,27 @@ export async function runV1(options: RunV1Options): Promise<RunV1Result> {
   // discovered package (the plugin filters at execute time).
   const changeCounts = computeChangeCounts(consumedRecords);
   const currentVersionText = `${currentVersion.major}.${currentVersion.minor}.${currentVersion.patch}`;
+  // Resolve the real dependency graph so the cascade names only packages
+  // that actually depend on the promoted target — not the full cross
+  // product. A package whose plugin lacks `get-dependencies` has unknown
+  // edges and stays a candidate (the plugin filters at execute time).
+  const dependencyEdges = await computeDependencyEdges({
+    discoveredPackages,
+    resolvedPluginsByUseString,
+    pluginInfoCache,
+    repoRootPath,
+    timeoutMs: DEFAULT_FAST_OP_TIMEOUT_MS,
+    tracingHooks,
+  });
   const constraintUpdates = discoveredPackages
     .filter((pkg) => pkg.name !== targetPackage.name)
+    .filter((pkg) => {
+      const knownDependencies = dependencyEdges.get(pkg.name);
+      return (
+        knownDependencies === undefined ||
+        knownDependencies.has(targetPackage.name)
+      );
+    })
     .map((pkg) => ({
       dependent: pkg.name,
       newConstraint: "^1.0.0",
@@ -660,50 +680,6 @@ async function runCascadePass(
     }
   }
   return cascadedUpdates;
-}
-
-interface ResolveAllPluginsArgs {
-  pluginAssignments: PluginAssignment[];
-  repoRootPath: string;
-}
-
-async function resolveAllPlugins(
-  args: ResolveAllPluginsArgs,
-): Promise<Map<string, ResolvedPlugin>> {
-  const resolvedPluginsByKey = new Map<string, ResolvedPlugin>();
-  for (const pluginAssignment of args.pluginAssignments) {
-    const assignmentKey = pluginReferenceKey(pluginAssignment.use);
-    if (resolvedPluginsByKey.has(assignmentKey)) continue;
-    const resolvedPlugin = await resolvePlugin({
-      pluginReference: pluginAssignment.use,
-      repoRootPath: args.repoRootPath,
-    });
-    resolvedPluginsByKey.set(assignmentKey, resolvedPlugin);
-  }
-  return resolvedPluginsByKey;
-}
-
-// Mirror of version.ts's loader. dv v1 only ever exercises one
-// plugin (the target package's), so in theory we could just call
-// invokeInfo once — but driving the whole resolved-plugins map
-// through the same cache the rest of the pipeline expects keeps
-// the API consistent (and surfaces any unrelated plugin's
-// contract-version mismatch before we touch anything).
-async function loadInfoForAllPlugins(args: {
-  resolvedPluginsByKey: Map<string, ResolvedPlugin>;
-  timeoutMs: number;
-  tracingHooks?: TracingHooks;
-}): Promise<PluginInfoCache> {
-  const cache = new PluginInfoCache();
-  for (const [pluginKey, resolvedPlugin] of args.resolvedPluginsByKey) {
-    await cache.getOrLoad({
-      pluginKey,
-      resolvedPlugin,
-      timeoutMs: args.timeoutMs,
-      tracingHooks: args.tracingHooks,
-    });
-  }
-  return cache;
 }
 
 interface ReadAllCurrentVersionsArgs {

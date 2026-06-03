@@ -43,6 +43,15 @@ export interface BuildVersionPlanArgs {
   renameLedger: Rename[];
   packageCurrentVersions: PackageCurrentVersionEntry[];
   awaitingReleaseLookup?: ReadonlyArray<AwaitingReleaseLookupEntry>;
+  // Intra-workspace dependency graph: packageName → set of OTHER
+  // discovered package names it depends on (from the plugin's optional
+  // `get-dependencies` Op, gathered at the IO edge). When provided, a
+  // bumped package's `constraintUpdates` lists only packages that
+  // actually depend on it. A package ABSENT from the map (its plugin
+  // doesn't support the Op) keeps the conservative full cross product,
+  // so the dependent isn't silently dropped. Omitting the whole arg
+  // reproduces the pre-filter behavior for every package.
+  dependencyEdges?: ReadonlyMap<string, ReadonlySet<string>>;
 }
 
 export function buildVersionPlan(args: BuildVersionPlanArgs): Plan {
@@ -89,14 +98,17 @@ export function buildVersionPlan(args: BuildVersionPlanArgs): Plan {
       // Constraint cascading is *purely additive on existing pending
       // entries* (language.md Algebra §9). This builder never pushes
       // new entries onto pendingEntries on behalf of dependents — it
-      // only annotates already-bumped packages with the cross product
-      // of `dependent → projectedVersion`. The plugin filters at
-      // execute time; the plan reports the full cross product so
-      // status and dry-run agree (Algebra §7).
+      // only annotates already-bumped packages with their dependents
+      // and the new `projectedVersion` constraint. When dependencyEdges
+      // are supplied we list only real dependents; absent that graph we
+      // fall back to the full cross product (the plugin still filters at
+      // execute time). status and dry-run share this builder, so they
+      // agree by construction (Algebra §7).
       constraintUpdates: buildConstraintUpdatesFor({
         bumpedPackageName: packageName,
         bumpedProjectedVersion: formatVersion(projectedVersion),
         discoveredPackages: args.discoveredPackages,
+        dependencyEdges: args.dependencyEdges,
       }),
     });
   }
@@ -185,6 +197,7 @@ interface BuildConstraintUpdatesForArgs {
   bumpedPackageName: string;
   bumpedProjectedVersion: string;
   discoveredPackages: Package[];
+  dependencyEdges?: ReadonlyMap<string, ReadonlySet<string>>;
 }
 
 interface ConstraintUpdate {
@@ -192,17 +205,29 @@ interface ConstraintUpdate {
   newConstraint: string;
 }
 
-// Quadratic cross product: for each bumped Package, list every *other*
-// discovered Package as a dependent whose constraint *would* be
-// rewritten if it carried this dependency. The plugin filters at
-// execute time via `changed: false`. Pre-sorted by `dependent` for
-// byte-stable JSON.
+// For each bumped Package, list the *other* discovered Packages whose
+// constraint on it would be rewritten. When the candidate's dependency
+// edges are known (its plugin answered `get-dependencies`), include it
+// only if it actually depends on the bumped Package. When they're
+// unknown (no entry in the map — plugin lacks the Op), keep it as a
+// candidate and let the plugin filter at execute time via
+// `changed: false`. Pre-sorted by `dependent` for byte-stable JSON.
 function buildConstraintUpdatesFor(
   args: BuildConstraintUpdatesForArgs,
 ): ConstraintUpdate[] {
   const updates: ConstraintUpdate[] = [];
   for (const candidateDependent of args.discoveredPackages) {
     if (candidateDependent.name === args.bumpedPackageName) continue;
+    const knownDependencies = args.dependencyEdges?.get(
+      candidateDependent.name,
+    );
+    if (
+      knownDependencies !== undefined &&
+      !knownDependencies.has(args.bumpedPackageName)
+    ) {
+      // Edges known and this package does NOT depend on the bumped one.
+      continue;
+    }
     updates.push({
       dependent: candidateDependent.name,
       newConstraint: args.bumpedProjectedVersion,

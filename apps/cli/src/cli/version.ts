@@ -1,5 +1,4 @@
 import { join, relative } from "@std/path";
-import { type PluginAssignment, pluginReferenceKey } from "../domain/config.ts";
 import { DvError } from "../domain/errors.ts";
 import type { Package } from "../domain/package.ts";
 import type { Record as DvRecord } from "../domain/record.ts";
@@ -10,10 +9,11 @@ import {
 } from "../subtools/changelog/mod.ts";
 import { configPath, loadConfig, recordsPath } from "../subtools/config/mod.ts";
 import { discoverPackages } from "../subtools/discovery/mod.ts";
+import type { ResolvedPlugin } from "../subtools/discovery/resolve.ts";
 import {
-  type ResolvedPlugin,
-  resolvePlugin,
-} from "../subtools/discovery/resolve.ts";
+  loadInfoForAllPlugins,
+  resolveAllPlugins,
+} from "../subtools/discovery/resolve-all.ts";
 import {
   assertCleanTree,
   assertNoUnstagedFinalizeDrift,
@@ -25,12 +25,13 @@ import {
   renderHistorySection,
   upsertHistorySection,
 } from "../subtools/history/mod.ts";
-import { PluginInfoCache, type TracingHooks } from "../subtools/plugin/mod.ts";
+import type { TracingHooks } from "../subtools/plugin/mod.ts";
 import { listRecords } from "../subtools/records/mod.ts";
 import { loadRenameLedger, renamesPath } from "../subtools/renames/mod.ts";
 import { computeAwaitingRelease } from "../subtools/tagging/mod.ts";
 import {
   buildVersionPlan,
+  computeDependencyEdges,
   invokeFinalize,
   invokeReadVersion,
   invokeUpdateDependency,
@@ -208,6 +209,18 @@ export async function runVersion(
     }),
   });
 
+  // Resolve the real dependency graph so the Plan's constraintUpdates
+  // (and the dry-run "would update dependents" line) name only packages
+  // that actually depend on a bumped one — not the full cross product.
+  const dependencyEdges = await computeDependencyEdges({
+    discoveredPackages,
+    resolvedPluginsByUseString,
+    pluginInfoCache,
+    repoRootPath,
+    timeoutMs: DEFAULT_FAST_OP_TIMEOUT_MS,
+    tracingHooks,
+  });
+
   const plan = buildVersionPlan({
     command: "version",
     discoveredPackages,
@@ -215,6 +228,7 @@ export async function runVersion(
     renameLedger,
     packageCurrentVersions,
     awaitingReleaseLookup,
+    dependencyEdges,
   });
 
   if (plan.unresolvedReferences.length > 0 && !options.prune) {
@@ -635,50 +649,6 @@ async function runCascadePass(
     }
   }
   return actualUpdates;
-}
-
-interface ResolveAllPluginsArgs {
-  pluginAssignments: PluginAssignment[];
-  repoRootPath: string;
-}
-
-async function resolveAllPlugins(
-  args: ResolveAllPluginsArgs,
-): Promise<Map<string, ResolvedPlugin>> {
-  const resolvedPluginsByKey = new Map<string, ResolvedPlugin>();
-  for (const pluginAssignment of args.pluginAssignments) {
-    const assignmentKey = pluginReferenceKey(pluginAssignment.use);
-    if (resolvedPluginsByKey.has(assignmentKey)) continue;
-    const resolvedPlugin = await resolvePlugin({
-      pluginReference: pluginAssignment.use,
-      repoRootPath: args.repoRootPath,
-    });
-    resolvedPluginsByKey.set(assignmentKey, resolvedPlugin);
-  }
-  return resolvedPluginsByKey;
-}
-
-// Eagerly loads info for every plugin in the resolved map. dv
-// version / dv v1 call this right after resolveAllPlugins so any
-// contract-version mismatch surfaces before we start invoking
-// per-package ops. Returns the populated cache; callers consult
-// it via `.get(pluginKey)?.supportedOps` to decide whether to
-// invoke optional ops like finalize.
-async function loadInfoForAllPlugins(args: {
-  resolvedPluginsByKey: Map<string, ResolvedPlugin>;
-  timeoutMs: number;
-  tracingHooks?: TracingHooks;
-}): Promise<PluginInfoCache> {
-  const cache = new PluginInfoCache();
-  for (const [pluginKey, resolvedPlugin] of args.resolvedPluginsByKey) {
-    await cache.getOrLoad({
-      pluginKey,
-      resolvedPlugin,
-      timeoutMs: args.timeoutMs,
-      tracingHooks: args.tracingHooks,
-    });
-  }
-  return cache;
 }
 
 interface ReadAllCurrentVersionsArgs {
