@@ -44,7 +44,7 @@ const planConstraintUpdateSchema = z
   .meta({
     title: "Constraint update",
     description:
-      "A dependent Package whose constraint on the bumped Package may be rewritten. dv reports the cross product of bumped × every-other-discovered package; the plugin filters at execute time via `changed: false` for dependents that do not carry the dependency.",
+      "A dependent Package whose constraint on the bumped Package will be rewritten. When dv can resolve the dependency graph (the plugin implements `get-dependencies`) this lists only real dependents; for packages whose plugin lacks that op, dv falls back to listing them as candidates and the plugin filters at execute time via `changed: false`.",
   });
 
 const planPendingEntrySchema = z
