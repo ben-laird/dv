@@ -452,11 +452,9 @@ async function runFinalize(): Promise<void> {
     Deno.exit(1);
   }
 
-  // Snapshot deno.lock's content (or absence) before we touch it
-  // so we can report it as additionally-changed iff the install
-  // actually moved bytes. Reporting it unconditionally would
-  // create empty-diff churn for runs where the lockfile didn't
-  // need refreshing.
+  // Snapshot deno.lock's content before the refresh purely to phrase
+  // the human message ("refreshed" vs "already up to date"). It is NOT
+  // the staging signal — see below.
   const lockfilePath = join(repoRoot, "deno.lock");
   const lockfileBefore = await readFileOrUndefined(lockfilePath);
 
@@ -481,16 +479,30 @@ async function runFinalize(): Promise<void> {
   }
 
   const lockfileAfter = await readFileOrUndefined(lockfilePath);
-  const additionalChangedFiles =
-    lockfileBefore !== lockfileAfter ? ["deno.lock"] : [];
+  const installMovedLockfile = lockfileBefore !== lockfileAfter;
+
+  // Report deno.lock if it differs from its committed (HEAD) state —
+  // NOT merely if *this* install moved bytes. The lockfile can drift
+  // out of sync via deno tooling that ran earlier in the same session
+  // (a warm-cache `deno check`/`test`, or even dv's own `deno run`
+  // startup); that drift is invisible to a before/after-install diff
+  // but still must ship in the version commit. Reporting against HEAD
+  // closes that blind spot while staying churn-free for an in-sync lock.
+  const additionalChangedFiles = (await differsFromHead({
+    repoRoot,
+    relativePath: "deno.lock",
+  }))
+    ? ["deno.lock"]
+    : [];
   console.log(
     JSON.stringify({
       ok: true,
       additionalChangedFiles,
-      message:
-        additionalChangedFiles.length > 0
+      message: additionalChangedFiles.length > 0
+        ? installMovedLockfile
           ? "refreshed deno.lock"
-          : "deno.lock already up to date",
+          : "deno.lock was out of sync with HEAD"
+        : "deno.lock already up to date",
     }),
   );
 }
@@ -502,4 +514,21 @@ async function readFileOrUndefined(path: string): Promise<string | undefined> {
     if (caughtError instanceof Deno.errors.NotFound) return undefined;
     throw caughtError;
   }
+}
+
+// True if `relativePath` differs from its committed (HEAD) content.
+// Uses `git status --porcelain` (not `git diff HEAD`) so untracked,
+// modified, AND staged all count — a first-release lockfile that has
+// never been committed is untracked, which `git diff HEAD` would miss.
+// Any non-empty porcelain line for the path means it must ship.
+async function differsFromHead(
+  args: { repoRoot: string; relativePath: string },
+): Promise<boolean> {
+  const statusResult = await new Deno.Command("git", {
+    args: ["-C", args.repoRoot, "status", "--porcelain", "--", args.relativePath],
+    stdout: "piped",
+    stderr: "piped",
+  }).output();
+  if (!statusResult.success) return true; // fail safe toward staging
+  return new TextDecoder().decode(statusResult.stdout).trim().length > 0;
 }
