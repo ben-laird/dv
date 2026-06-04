@@ -88,6 +88,25 @@ jobs:
           cd apps/cli
           deno task test
 
+      # Publishability gate. `deno publish --dry-run` runs the same
+      # slow-types check the real JSR publish does — the check that's
+      # NOT part of fmt/lint/check/test. Without it, a public-API change
+      # that trips `missing-explicit-type` sails through a green PR and
+      # only fails at release time, after the tag is already minted
+      # (the 0.8.0 partial-failure that motivated this step). Covers
+      # both workspace members (@dv-cli/dv + @dv-cli/clipc).
+      - name: deno publish --dry-run (slow-types gate, both packages)
+        run: deno task publish:check
+
+      # Doc-lint surfaces missing JSDoc on the public surface. Soft for
+      # now (continue-on-error): the library surface has a large JSDoc
+      # backlog (issue #29) and we don't want to block merges on it —
+      # but the count should stay visible and trend down. Flip to a hard
+      # gate once #29 lands.
+      - name: deno doc --lint (non-blocking)
+        continue-on-error: true
+        run: deno task doc:lint
+
       # === dv-specific gates ===
 
       - name: dv validate (Records + config + plugin resolution)
