@@ -88,9 +88,7 @@ Deno.test("rawCliErrorEnvelopeSchema recurses through subErrors arbitrarily deep
   };
 
   // When parsed
-  const parseResult = rawCliErrorEnvelopeSchema.safeParse(
-    deeplyNestedEnvelope,
-  );
+  const parseResult = rawCliErrorEnvelopeSchema.safeParse(deeplyNestedEnvelope);
 
   // Then the recursion works at every level — the schema's z.lazy
   // self-reference holds across the tree
