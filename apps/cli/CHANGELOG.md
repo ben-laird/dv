@@ -4,6 +4,12 @@ All notable changes to this Package are documented in this file. The
 format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this Package adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.7.2] - 2026-06-04
+
+### Fixed
+
+- Always emit the wrapped envelope from dv release --json, including on no-op and dry-run paths
+
 ## [0.7.1] - 2026-06-03
 
 ### Fixed

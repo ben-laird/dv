@@ -5,6 +5,10 @@ one h3 subsection per Record consumed during that release, with the
 Record's body prose verbatim. For terse one-line bullets, see
 CHANGELOG.md.
 
+## [0.7.2] - 2026-06-04
+
+### Always emit the wrapped envelope from dv release --json, including on no-op and dry-run paths
+
 ## [0.7.1] - 2026-06-03
 
 ### Stage refreshed lockfiles into the version commit even when they drifted before finalize ran
