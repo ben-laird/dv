@@ -11,14 +11,15 @@ cross-cutting work that doesn't fit a single spec section.
 
 ## Start here (next session)
 
-The 0.7.0 release shipped end-to-end via the Release-PR bot on
-2026-05-27. The shortest-runway next moves are in
-[Post-first-release follow-ups](#post-first-release-follow-ups-filed-2026-05-27):
-the prepare-release PR-body templating bug is the loudest user-facing
-wart (every release PR currently ships with a blank "Pending bumps"
-section). The finalize/lockfile bug and the clipc JSR score are both
-small, isolated fixes. After those, the next ceremony candidate is the
-real `dv v1 @dv-cli/dv` promotion — the rehearsal in
+As of **0.7.1** (shipped 2026-06-03 via the one-trunk release-on-merge
+flow), the loudest [post-first-release
+follow-ups](#post-first-release-follow-ups-filed-2026-05-27) are closed:
+the PR-body templating bug went away with the one-trunk move, and the
+finalize/`deno.lock` staging bug is fixed (PR #9). The remaining
+shortest-runway moves there are the **`dv release --json` two-shape
+contract bug** (small, stability-of-contract) and the **`@dv-cli/clipc`
+JSR score** (cosmetic JSDoc/README wins). After those, the next ceremony
+candidate is the real `dv v1 @dv-cli/dv` 1.0 promotion — the rehearsal in
 [Pre-1.0 work still to do](#pre-10-work-still-to-do) is the prerequisite.
 
 ## v1 product scope
@@ -137,16 +138,21 @@ exposed. Each is independently shippable.
   release script (`.github/scripts/release.ts`) captures the pending
   Plan *before* `dv version` runs for its log summary. The
   `dv-prepare-release.yml` workflow was deleted.
-- **`tools/dv-release` finalize didn't stage `deno.lock` on the
-  last release.** Observed in @dv-cli/dv 0.6.0's release commit: I
-  had to `git add deno.lock` and amend the commit by hand before
-  publishing. The finalize op runs `deno install --quiet` which
-  should refresh the lockfile, and we expect dv to stage any
-  changed files the plugin reports — but the lockfile change
-  wasn't in the commit. Either the install isn't actually
-  refreshing, or the plugin isn't reporting the file, or dv's
-  staging path isn't picking it up. Worth a small investigation
-  + a targeted test.
+- **✅ RESOLVED (0.7.1) — `tools/dv-release` finalize didn't stage
+  `deno.lock` on the last release.** Observed in @dv-cli/dv 0.6.0's
+  release commit: I had to `git add deno.lock` and amend by hand
+  before publishing. Root cause was the finalize op's *self-delta*
+  check: it reported `deno.lock` only when its own `deno install`
+  moved bytes, so lockfile drift introduced by earlier tooling (a
+  warm-cache `deno check`/`test`, or even dv's own `deno run`
+  startup) was invisible and never staged. Fixed in 0.7.1: the deno
+  example + repo-local release plugins now report `deno.lock` when it
+  differs from HEAD (`git status --porcelain`), not just on
+  self-delta; and dv gained a post-stage backstop
+  (`unstaged-finalize-drift`) that errors on a clean-tree run, or
+  warns under `--allow-dirty`, when a finalize plugin leaves tracked
+  files unstaged. The 0.7.1 release itself exercised the fixed path
+  end-to-end. (PR #9.)
 - **`@dv-cli/clipc` JSR score is 52%.** Easy wins: more JSDoc on
   public exports (router, command builders), a longer package
   README, maybe enable provenance once that's a stable JSR
