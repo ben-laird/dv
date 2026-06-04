@@ -52,6 +52,29 @@ function isDebugEnabled(argv: string[]): boolean {
   return argv.includes("--debug");
 }
 
+/**
+ * Runs the `dv` CLI against a raw argv array and resolves to the process
+ * exit code. This is the binary boundary: it pre-scans argv for the
+ * tool-wide `--debug` and output-mode signals (`--json`, `--color`,
+ * `--no-color`, `$NO_COLOR`), builds the {@link DvCtx} context, and hands
+ * the whole router tree to the clipc framework for dispatch. It does not
+ * itself perform subcommand routing — that lives in the router tree.
+ *
+ * Exported so the CLI can be driven programmatically (e.g. tests, or an
+ * embedding process) without spawning a subprocess; the module's
+ * `import.meta.main` guard calls it with `Deno.args` when run as a binary.
+ *
+ * @param argv - The raw argument vector, excluding the executable name
+ *   (i.e. `Deno.args`-shaped).
+ * @returns The process exit code: `0` on success, non-zero on failure
+ *   (clipc maps unknown subcommands/flags to `2`).
+ * @example
+ * ```ts
+ * import { main } from "@dv-cli/dv";
+ * const code = await main(["status", "--json"]);
+ * Deno.exit(code);
+ * ```
+ */
 export function main(argv: string[]): Promise<number> {
   const debugEnabled = isDebugEnabled(argv);
   const cli = defineCli<DvCtx>({

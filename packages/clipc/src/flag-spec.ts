@@ -10,14 +10,28 @@
 // Aliases are short letter forms (`alias: "p"` → `-p`). `description`
 // feeds the auto-generated help renderer.
 
+/**
+ * The spec for a single flag on a leaf command. The `kind` selects the runtime
+ * type the runner sees: `"boolean"` (present-or-absent toggle →
+ * `boolean | undefined`), `"string"` (value-carrying scalar →
+ * `string | undefined`), or `"collect"` (repeatable scalar like
+ * `--pkg a --pkg b` → `string[] | undefined`). An optional `alias` is the short
+ * letter form (`alias: "p"` → `-p`); `description` feeds the auto-generated
+ * help renderer.
+ */
 export type FlagSpec =
   | { kind: "boolean"; alias?: string; description?: string }
   | { kind: "string"; alias?: string; description?: string }
   | { kind: "collect"; alias?: string; description?: string };
 
-// Maps a per-flag spec to the runner's typed flag object. The
-// runtime values come from `parseArgs`, which returns `undefined`
-// for flags the user omitted regardless of kind.
+/**
+ * Maps a flag-name → {@link FlagSpec} map to the runner's typed flag object,
+ * resolving each flag's `kind` to its runtime value type. Every property is
+ * `| undefined` because `parseArgs` returns `undefined` for omitted flags
+ * regardless of kind.
+ *
+ * @typeParam TFlagMap - The command's flag map keyed by flag name.
+ */
 export type FlagsOf<TFlagMap extends Record<string, FlagSpec>> = {
   [Key in keyof TFlagMap]: TFlagMap[Key]["kind"] extends "boolean"
     ? boolean | undefined
@@ -26,18 +40,41 @@ export type FlagsOf<TFlagMap extends Record<string, FlagSpec>> = {
       : string[] | undefined;
 };
 
-// Lowers a per-flag FlagSpec map to the string-array shape parseArgs
-// wants. Each flag's kind contributes to exactly one of the four
-// arrays (string / boolean / collect / negatable); aliases go into the
-// flat `alias` map.
-
+/**
+ * The lowered, `parseArgs`-shaped form of a flag map: parallel name arrays by
+ * kind (`string` / `boolean` / `collect`) plus a flat short-letter `alias` map.
+ * Produced by {@link lowerFlagSpec}.
+ */
 export interface LoweredFlagSpec {
+  /** Names of value-carrying flags (includes `collect` flags). */
   string: string[];
+  /** Names of present-or-absent boolean flags. */
   boolean: string[];
+  /** Names of repeatable flags collected into arrays. */
   collect: string[];
+  /** Short-letter alias → flag-name map. */
   alias: Record<string, string>;
 }
 
+/**
+ * Lowers a flag-name → {@link FlagSpec} map to the {@link LoweredFlagSpec} shape
+ * `parseArgs` wants. Each flag's name is sorted into the array for its kind
+ * (`collect` flags go into both `string` and `collect`, since `collect` alone
+ * makes `parseArgs` treat the flag as boolean), and any `alias` is recorded in
+ * the flat `alias` map.
+ *
+ * @param flagSpecMap - The command's flag map keyed by flag name.
+ * @returns The lowered spec ready to pass to `parseArgs`.
+ *
+ * @example
+ * ```ts
+ * lowerFlagSpec({
+ *   json: { kind: "boolean" },
+ *   pkg: { kind: "collect", alias: "p" },
+ * });
+ * // → { string: ["pkg"], boolean: ["json"], collect: ["pkg"], alias: { p: "pkg" } }
+ * ```
+ */
 export function lowerFlagSpec(
   flagSpecMap: Record<string, FlagSpec>,
 ): LoweredFlagSpec {

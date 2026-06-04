@@ -124,7 +124,10 @@ Deno.test("renderCliError JSON mode emits a `{ schema, error }` envelope matchin
   assertEquals(parsed.schema, "urn:dv:schema:v1:cli-error");
   assertEquals(parsed.error.code, "release-partial-failure");
   assertEquals(parsed.error.message, "1 package failed to publish");
-  assertEquals(parsed.error.hint, "rerun dv release --force after fixing the cause");
+  assertEquals(
+    parsed.error.hint,
+    "rerun dv release --force after fixing the cause",
+  );
   assertEquals(parsed.error.context, { totalAttempted: 3 });
   assertEquals(parsed.error.subErrors?.length, 1);
   assertEquals(parsed.error.subErrors[0]?.code, "publish-failed");

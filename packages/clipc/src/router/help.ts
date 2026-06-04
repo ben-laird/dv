@@ -35,12 +35,30 @@ function dim(text: string, colorEnabled: boolean): string {
   return `${ANSI_DIM_OPEN}${text}${ANSI_DIM_CLOSE}`;
 }
 
+/**
+ * Arguments to {@link formatRouterHelp}: the breadcrumb `path`, the
+ * router's `children` map to list, and an optional `colorEnabled`
+ * flag (defaults to `false`).
+ */
 export interface FormatRouterHelpArgs<Ctx> {
+  /** Breadcrumb path to this router, joined into the `Usage:` line. */
   path: string[];
+  /** The router's child nodes to list as subcommands. */
   children: Record<string, RouterChild<Ctx>>;
+  /** Whether to bold names and dim descriptions with ANSI color (default `false`). */
   colorEnabled?: boolean;
 }
 
+/**
+ * Renders a router's help text: a `Usage:` line plus an
+ * alphabetically sorted subcommand list with descriptions. Sub-router
+ * children also get a continuation line previewing their
+ * grandchildren. When `colorEnabled` is set, names are bolded and
+ * descriptions dimmed.
+ *
+ * @param args - The {@link FormatRouterHelpArgs}.
+ * @returns The formatted, multi-line help string.
+ */
 export function formatRouterHelp<Ctx>(args: FormatRouterHelpArgs<Ctx>): string {
   const breadcrumb = args.path.join(" ");
   const colorEnabled = args.colorEnabled ?? false;
@@ -96,7 +114,9 @@ export function formatRouterHelp<Ctx>(args: FormatRouterHelpArgs<Ctx>): string {
     }
   }
   lines.push("");
-  lines.push(`Run \`${breadcrumb} <subcommand> --help\` for per-command flags.`);
+  lines.push(
+    `Run \`${breadcrumb} <subcommand> --help\` for per-command flags.`,
+  );
   return lines.join("\n");
 }
 
@@ -108,13 +128,34 @@ function describeChild<Ctx>(child: RouterChild<Ctx>): string {
 // Command help is rendered by the framework when a leaf is invoked
 // with `--help` / `-h`. The leaf's handler intercepts those tokens
 // before parseSubcommandArgv would; this helper produces the text.
+/**
+ * Arguments to {@link formatCommandHelp}: the breadcrumb `path`, an
+ * optional `description`, the leaf's `flags` map (each entry's `kind`,
+ * `description`, and `alias` feed the flag listing), and an optional
+ * `colorEnabled` flag (defaults to `false`).
+ */
 export interface FormatCommandHelpArgs {
+  /** Breadcrumb path to this command, joined into the `Usage:` line. */
   path: string[];
+  /** Optional command description shown beneath the usage line. */
   description?: string;
+  /** The leaf's flags; each entry's `kind`, `description`, and `alias` feed the listing. */
   flags: Record<string, { kind: string; description?: string; alias?: string }>;
+  /** Whether to bold labels and dim descriptions with ANSI color (default `false`). */
   colorEnabled?: boolean;
 }
 
+/**
+ * Renders a leaf command's help text: a `Usage:` line, the optional
+ * description, and an alphabetically sorted flag list (showing each
+ * flag's kind marker and `-x` alias). Non-boolean flags display a
+ * `<kind>` value marker; a command with no flags shows
+ * `(no flags declared)`. When `colorEnabled` is set, labels are
+ * bolded and descriptions dimmed.
+ *
+ * @param args - The {@link FormatCommandHelpArgs}.
+ * @returns The formatted, multi-line help string.
+ */
 export function formatCommandHelp(args: FormatCommandHelpArgs): string {
   const breadcrumb = args.path.join(" ");
   const colorEnabled = args.colorEnabled ?? false;
@@ -147,7 +188,10 @@ export function formatCommandHelp(args: FormatCommandHelpArgs): string {
     const labelText = `--${flagName}${kindMarker}`;
     const paddedLabel = labelText.padEnd(labelWidth + 4);
     lines.push(
-      `  ${bold(paddedLabel, colorEnabled)}${dim(flagSpec.description ?? "", colorEnabled)}${dim(aliasSuffix, colorEnabled)}`,
+      `  ${bold(paddedLabel, colorEnabled)}${dim(
+        flagSpec.description ?? "",
+        colorEnabled,
+      )}${dim(aliasSuffix, colorEnabled)}`,
     );
   }
   return lines.join("\n");

@@ -1,6 +1,13 @@
-// Public surface of the @dv-cli/clipc router-based API. Re-exported
-// from the package's top-level mod.ts; consumers shouldn't import
-// from `./router/*.ts` directly (those paths aren't stable).
+/**
+ * Public surface of the `@dv-cli/clipc` router-based API: the builders
+ * (`command`, `router`, `defineCli`, `forCtx`, `inheritedFlags`), the
+ * trampoline step constructors (`done`, `next`), the help renderers, and
+ * the types that describe the router/command/leaf model. Re-exported from
+ * the package's top-level `mod.ts`; consumers shouldn't import from
+ * `./router/*.ts` directly (those paths aren't stable).
+ *
+ * @module
+ */
 
 export {
   type CommandNode,
@@ -11,23 +18,25 @@ export {
 export {
   type Cli,
   type DefineCliConfig,
+  defineCli,
   type OutputMode,
   type OutputModeContext,
   type ResolveOutputMode,
-  defineCli,
 } from "./define-cli.ts";
 export {
+  type FormatCommandHelpArgs,
+  type FormatRouterHelpArgs,
   formatCommandHelp,
   formatRouterHelp,
 } from "./help.ts";
 export {
   type CtxBoundBuilders,
   type DefaultDispatch,
+  forCtx,
+  inheritedFlags,
   type RouterChild,
   type RouterNode,
   type RouterSpec,
-  forCtx,
-  inheritedFlags,
   router,
 } from "./router.ts";
 export {
@@ -35,8 +44,9 @@ export {
   type CliRequest,
   type CliResponse,
   type DoneStep,
-  type NextStep,
-  type Step,
   done,
+  type NextOptions,
+  type NextStep,
   next,
+  type Step,
 } from "./types.ts";

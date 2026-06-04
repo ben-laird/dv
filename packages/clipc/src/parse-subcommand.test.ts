@@ -1,9 +1,6 @@
 import { assertEquals, assertThrows } from "@std/assert";
 import type { FlagSpec } from "./flag-spec.ts";
-import {
-  parseSubcommandArgv,
-  UnknownFlagError,
-} from "./parse-subcommand.ts";
+import { parseSubcommandArgv, UnknownFlagError } from "./parse-subcommand.ts";
 
 Deno.test("parseSubcommandArgv routes declared flags into the typed flags object", () => {
   // Given a flag map with one string, one boolean, and one collect flag

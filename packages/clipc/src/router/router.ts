@@ -1,5 +1,5 @@
-import type { FlagSpec, FlagsOf } from "../flag-spec.ts";
 import { CliError } from "../errors.ts";
+import type { FlagSpec, FlagsOf } from "../flag-spec.ts";
 import { type CommandNode, command as makeCommand } from "./command.ts";
 import { formatRouterHelp } from "./help.ts";
 import {
@@ -27,45 +27,77 @@ import {
 // The default behavior (no `run` declared) is plain dispatch: look
 // up argv[0] in `commands`, slice it off, hand off via next().
 
+/**
+ * A child registered in a router's `commands` map: either a nested
+ * {@link RouterNode} (sub-router) or a {@link CommandNode} (leaf).
+ * Both implement the same `CliHandler` protocol so dispatch is
+ * uniform.
+ */
 export type RouterChild<Ctx> = RouterNode<Ctx> | CommandNode<Ctx>;
 
+/**
+ * A built router node in the tree (the value {@link router} returns).
+ * Exposes its `children` for help generation and external tree
+ * walkers, the declared `inheritedFlags` map for help rendering, and
+ * the {@link CliHandler} the framework dispatches to. The
+ * `kind: "router"` discriminator distinguishes it from a
+ * `CommandNode`.
+ */
 export interface RouterNode<Ctx = unknown> {
+  /** Discriminator marking this child as a sub-router (vs a `CommandNode`). */
   kind: "router";
+  /** Optional description surfaced in help text. */
   description?: string;
-  // Public surface: the children. Help generation and external tree
-  // walkers read this directly; the framework's own dispatch reads
-  // it via `handler` (which closes over `children`).
+  /**
+   * The children, keyed by subcommand name. Help generation and external
+   * tree walkers read this directly; dispatch reads it via `handler`.
+   */
   children: Record<string, RouterChild<Ctx>>;
-  // Optional declared flags + inherited flags. Surfaced so help
-  // rendering can show them; the router's own `run` (if any) parses
-  // them via the same `parseSubcommandArgv` path commands use.
+  /**
+   * Cross-cutting flags this router declares as inherited, surfaced for
+   * help rendering. Not auto-merged into children — see {@link inheritedFlags}.
+   */
   inheritedFlags: Record<string, FlagSpec>;
-  // The CliHandler the framework dispatches to. Wraps the user's
-  // dispatch logic (or the default one if no `run` was declared)
-  // and surfaces the auto-generated help on `--help` / no-sub.
+  /**
+   * The handler the framework dispatches to. Wraps the user's dispatch
+   * logic (or the default one) and serves auto-generated help on
+   * `--help` / no-subcommand.
+   */
   handler: CliHandler<Ctx>;
 }
 
+/**
+ * The author-facing definition of a router, passed to {@link router}.
+ * `commands` maps subcommand names to children (sub-routers or
+ * leaves); `inheritedFlags` declares cross-cutting flags descendants
+ * may opt into (it does not auto-merge — see {@link inheritedFlags});
+ * and the optional `run` hook lets a parent do pre-work before
+ * delegating. Without `run`, the router uses built-in dispatch on the
+ * first positional token.
+ */
 export interface RouterSpec<Ctx = unknown> {
+  /** Optional one-line description shown in help text. */
   description?: string;
-  // Cross-cutting flags this router declares as inherited by its
-  // descendants. The framework does NOT auto-merge these into
-  // child flag maps — instead, the `inheritedFlags()` helper
-  // returns the same typed map for the user to explicitly spread
-  // into each leaf's flags. This keeps scoping honest: a leaf only
-  // accepts the flags it declares, period.
+  /**
+   * Cross-cutting flags declared as inherited by descendants. Not
+   * auto-merged into child flag maps; callers explicitly spread them via
+   * the {@link inheritedFlags} helper so each leaf only accepts what it
+   * declares.
+   */
   inheritedFlags?: Record<string, FlagSpec>;
+  /** Subcommand names mapped to children (sub-routers or leaves). */
   commands: Record<string, RouterChild<Ctx>>;
-  // Optional parent-with-logic hook. Receives the unconsumed argv
-  // (so a parent can peek at flags before the child runs), and
-  // MUST return a Step. To delegate normally, return
-  // `defaultDispatch(req, this)`. To short-circuit (e.g.
-  // intercepting an aggregate `--list` flag), return `done(...)`.
-  // To do pre-work and then delegate, return `next(...)` with the
-  // matched child and an enriched ctx.
-  //
-  // If undefined, the router uses the built-in dispatch behavior.
-  run?: (req: CliRequest<Ctx>, dispatch: DefaultDispatch<Ctx>) => Step<Ctx> | Promise<Step<Ctx>>;
+  /**
+   * Optional parent-with-logic hook. Receives the unconsumed argv and the
+   * {@link DefaultDispatch} delegate, and must return a `Step`: call the
+   * delegate to dispatch normally, return `done(...)` to short-circuit, or
+   * return `next(...)` to do pre-work then delegate. Undefined uses the
+   * built-in dispatch.
+   */
+  run?: (
+    req: CliRequest<Ctx>,
+    dispatch: DefaultDispatch<Ctx>,
+  ) => Step<Ctx> | Promise<Step<Ctx>>;
 }
 
 // Helper passed to a parent's `run` so it can delegate to default
@@ -73,11 +105,44 @@ export interface RouterSpec<Ctx = unknown> {
 // argv-slice + ctx-passthrough so the parent doesn't reimplement
 // it. The `ctxOverride` arg is the place to enrich ctx before the
 // child sees it.
+/**
+ * The delegate handed to a router's `run` hook so it can fall back to
+ * the built-in dispatch (child lookup + argv slice + ctx passthrough)
+ * after doing its pre-work. Pass `ctxOverride` to enrich the ctx the
+ * matched child receives.
+ */
 export type DefaultDispatch<Ctx> = (
   req: CliRequest<Ctx>,
   options?: { ctxOverride?: Ctx },
 ) => Step<Ctx>;
 
+/**
+ * Builds a router node that dispatches to one of its children by the
+ * first positional argv token. Returns a {@link RouterNode}. Default
+ * dispatch finds the subcommand name (skipping leading flags, which
+ * ride along to the child), and either renders router help (`--help`
+ * before the subcommand, or no subcommand at all), trampolines into
+ * the matched child with the subcommand token stripped, or returns a
+ * typed `unknown-subcommand` error (exit 2). If `spec.run` is
+ * declared, it is invoked instead and may short-circuit with
+ * `done(...)` or delegate via the supplied {@link DefaultDispatch}.
+ * Throws if any child in `commands` is `undefined` (usually a bad
+ * import).
+ *
+ * @param spec - The router definition: `commands`, optional
+ *   `description`, optional `inheritedFlags`, and optional `run` hook.
+ * @returns A {@link RouterNode} usable as a root or as another
+ *   router's child.
+ *
+ * @example
+ * ```ts
+ * const pluginRouter = router<MyCtx>({
+ *   description: "manage plugins",
+ *   commands: { list: listCommand, install: installCommand },
+ * });
+ * const root = router<MyCtx>({ commands: { plugin: pluginRouter } });
+ * ```
+ */
 export function router<Ctx = unknown>(spec: RouterSpec<Ctx>): RouterNode<Ctx> {
   const inheritedFlags = spec.inheritedFlags ?? {};
 
@@ -156,7 +221,9 @@ export function router<Ctx = unknown>(spec: RouterSpec<Ctx>): RouterNode<Ctx> {
         error: new CliError({
           code: "unknown-subcommand",
           message: `unknown subcommand '${subcommandName}'`,
-          hint: `run '${req.path.join(" ")} --help' to see available subcommands`,
+          hint: `run '${req.path.join(
+            " ",
+          )} --help' to see available subcommands`,
           exitCode: 2,
         }),
       });
@@ -205,6 +272,26 @@ export function router<Ctx = unknown>(spec: RouterSpec<Ctx>): RouterNode<Ctx> {
 // "string", "collect"). Without it TS widens to the union of all
 // FlagSpec arms, which breaks FlagsOf narrowing at every leaf that
 // spreads the result.
+/**
+ * Identity helper for declaring a reusable map of cross-cutting flags
+ * (e.g. `--json`, `--color`). The `const` type parameter captures
+ * each flag's literal `kind`, so spreading the result into a leaf's
+ * `flags` preserves per-flag narrowing. There is no magic
+ * inheritance: callers explicitly spread the returned map into every
+ * leaf that should accept those flags.
+ *
+ * @param flags - The literal flag-spec map to capture.
+ * @returns The same map, with its literal type preserved.
+ *
+ * @example
+ * ```ts
+ * const shared = inheritedFlags({ json: { kind: "boolean" } });
+ * const leaf = command<MyCtx>({
+ *   flags: { ...shared, name: { kind: "string" } },
+ *   run: ({ flags }) => done({ kind: "ok" }),
+ * });
+ * ```
+ */
 export function inheritedFlags<const TFlags extends Record<string, FlagSpec>>(
   flags: TFlags,
 ): TFlags {
@@ -227,22 +314,51 @@ export function inheritedFlags<const TFlags extends Record<string, FlagSpec>>(
 //   });
 //   const myRouter = router({ commands: { leaf } });
 
+/**
+ * The pair of Ctx-bound builders returned by {@link forCtx}: a
+ * `command` and a `router` that have `Ctx` pre-applied so each
+ * downstream call still infers its flag types from the literal
+ * `flags` object.
+ */
 export interface CtxBoundBuilders<Ctx> {
-  command: <const TFlags extends Record<string, FlagSpec>>(
-    spec: {
-      description?: string;
-      flags: TFlags;
-      run: (req: {
-        flags: FlagsOf<TFlags>;
-        argv: string[];
-        ctx: Ctx;
-        path: string[];
-      }) => Step<Ctx> | Promise<Step<Ctx>>;
-    },
-  ) => CommandNode<Ctx>;
+  /**
+   * Ctx-bound leaf builder. Infers `TFlags` from the literal `flags`
+   * object while typing `req.ctx` as `Ctx`. Returns a {@link CommandNode}.
+   */
+  command: <const TFlags extends Record<string, FlagSpec>>(spec: {
+    description?: string;
+    flags: TFlags;
+    run: (req: {
+      flags: FlagsOf<TFlags>;
+      argv: string[];
+      ctx: Ctx;
+      path: string[];
+    }) => Step<Ctx> | Promise<Step<Ctx>>;
+  }) => CommandNode<Ctx>;
+  /** Ctx-bound router builder. Returns a {@link RouterNode}. */
   router: (spec: RouterSpec<Ctx>) => RouterNode<Ctx>;
 }
 
+/**
+ * Returns a Ctx-bound pair of `command` and `router` builders.
+ * Because TypeScript can't partially infer type parameters, naming
+ * `Ctx` on every `command`/`router` call would force the flag map off
+ * its literal type. Capturing `Ctx` in this closure lets each call
+ * infer `TFlags` freely while still typing `req.ctx` as `Ctx`.
+ *
+ * @returns A {@link CtxBoundBuilders} object with `command` and
+ *   `router` builders bound to `Ctx`.
+ *
+ * @example
+ * ```ts
+ * const { command, router } = forCtx<MyCtx>();
+ * const leaf = command({
+ *   flags: { json: { kind: "boolean" } },
+ *   run: ({ flags, ctx }) => done({ kind: "ok" }),
+ * });
+ * const root = router({ commands: { leaf } });
+ * ```
+ */
 export function forCtx<Ctx>(): CtxBoundBuilders<Ctx> {
   return {
     command: (spec) =>

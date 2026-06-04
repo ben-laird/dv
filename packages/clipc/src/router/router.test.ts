@@ -3,7 +3,7 @@ import { CliError } from "../errors.ts";
 import { command } from "./command.ts";
 import { defineCli, type OutputMode } from "./define-cli.ts";
 import { router } from "./router.ts";
-import { done, next, type CliResponse } from "./types.ts";
+import { type CliResponse, done, next } from "./types.ts";
 
 // Framework tests for the router + trampoline pipeline. Built
 // around synthetic command trees so the contract is exercised
@@ -47,7 +47,7 @@ async function runWithCapture<Ctx>(args: {
       name: "test-cli",
       version: "0.0.1",
       rootRouter: args.rootRouter,
-      makeContext: () => (args.ctx ?? ({} as Ctx)),
+      makeContext: () => args.ctx ?? ({} as Ctx),
       resolveOutputMode: () =>
         args.outputMode ?? { emitJson: false, colorEnabled: false },
     });
@@ -443,7 +443,9 @@ Deno.test("trampoline aborts with kind:error if a parent next()s back to itself 
   // Given a buggy parent that always trampolines into itself. The
   // driver should detect the runaway and surface it as an error
   // rather than spinning forever.
-  type SelfRef = { self: { handler: typeof selfHandler } } | Record<string, never>;
+  type SelfRef =
+    | { self: { handler: typeof selfHandler } }
+    | Record<string, never>;
   const selfHandler: import("./types.ts").CliHandler<SelfRef> = (req) =>
     next({
       handler: selfHandler,
