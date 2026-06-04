@@ -5,6 +5,30 @@ one h3 subsection per Record consumed during that release, with the
 Record's body prose verbatim. For terse one-line bullets, see
 CHANGELOG.md.
 
+## [0.8.0] - 2026-06-04
+
+### Add a public programmatic API for driving dv in-process
+
+`@dv-cli/dv` now exposes a typed library surface alongside the CLI binary.
+Import the command runners directly to drive `dv` without spawning a
+subprocess — each returns the same typed data the `--json` contract
+serializes (e.g. `runStatus` and `runVersion` return a `Plan`, `runRelease`
+returns the release envelope):
+
+```ts
+import { runStatus, type Plan } from "@dv-cli/dv";
+
+const { plan } = await runStatus({ emitJson: false, colorEnabled: false });
+```
+
+The binary entry point `main(argv)` is still exported (now re-exported from
+the new library barrel), so existing programmatic callers are unaffected.
+
+> [!NOTE]
+> The runners write their human or `--json` render to stdout as a side
+> effect; the typed return value is in addition to that output. A
+> side-effect-free capturing entry point is a candidate for a later release.
+
 ## [0.7.3] - 2026-06-04
 
 ### Document the dv programmatic entrypoint with JSDoc for JSR

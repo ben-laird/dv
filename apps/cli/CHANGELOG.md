@@ -4,6 +4,12 @@ All notable changes to this Package are documented in this file. The
 format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this Package adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.8.0] - 2026-06-04
+
+### Added
+
+- Add a public programmatic API for driving dv in-process
+
 ## [0.7.3] - 2026-06-04
 
 ### Fixed
