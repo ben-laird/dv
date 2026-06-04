@@ -12,8 +12,9 @@
 #      example deno plugin (the canonical reference) and our own
 #      release plugin (the one we'll publish with).
 #
-# Fast: every step is read-only and cacheable. Failing fast on fmt
-# means contributors get the typo back in <30s.
+# Fast: every step is read-only, and DENO_DIR is cached between runs (see
+# setup-deno's `cache: true` below). Failing fast on fmt means contributors
+# get the typo back in <30s.
 
 name: validate
 
@@ -37,6 +38,13 @@ jobs:
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
+          # Cache DENO_DIR (jsr + npm modules, keyed on deno.lock) between
+          # runs so we skip the network fetch + re-resolution every PR.
+          # node_modules is Deno-managed (nodeModulesDir: auto) and rehydrates
+          # from this cache, so the npm tree (Biome, rollup, vitepress) is
+          # covered too. Default key is hashFiles('**/deno.lock') — this repo
+          # has a single root lockfile, so the key is stable across the job.
+          cache: true
 
       # Install dv from the working tree. We write our own launcher
       # script rather than `deno install --global`: the latter would
