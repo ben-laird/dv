@@ -1,4 +1,4 @@
-import { CliError } from "./errors.ts";
+import type { CliError } from "./errors.ts";
 
 // Renders a CliError tree to a string for either human stderr or
 // the --json error envelope. Pure: caller `console.error`s the
@@ -21,12 +21,39 @@ import { CliError } from "./errors.ts";
 
 const SUB_ERROR_DEPTH_CAP = 5;
 
+/**
+ * Arguments for {@link renderCliError}: the error to render, the output `mode`,
+ * and whether color escapes are enabled (the caller resolves `NO_COLOR`,
+ * `--no-color`, and TTY detection — the framework does not).
+ */
 export interface RenderCliErrorArgs {
+  /** The error tree to render. */
   err: CliError;
+  /** Output target: human stderr text or the `--json` error envelope. */
   mode: "human" | "json";
+  /** Whether ANSI color escapes are emitted in human mode. */
   colorEnabled: boolean;
 }
 
+/**
+ * Renders a {@link CliError} tree to a string for either human stderr or the
+ * `--json` error envelope. Pure — the caller `console.error`s the result.
+ *
+ * In human mode the output leads with `error[<code>]: <message>`, indents an
+ * optional `hint:` line, and lists sub-errors with a `✗` marker (recursing one
+ * level per nesting, capped at depth 5). In JSON mode it wraps `err.toJSON()`
+ * in a `{ schema, error }` envelope matching the v1 automation-surface
+ * contract. Color in human mode is gated on `colorEnabled`.
+ *
+ * @param args - The error, output mode, and color toggle. See {@link RenderCliErrorArgs}.
+ * @returns The rendered string (multi-line human text, or pretty-printed JSON).
+ *
+ * @example
+ * ```ts
+ * const text = renderCliError({ err, mode: "human", colorEnabled: false });
+ * console.error(`dv ${text}`);
+ * ```
+ */
 export function renderCliError(args: RenderCliErrorArgs): string {
   if (args.mode === "json") {
     return renderJsonEnvelope(args.err);
@@ -87,18 +114,17 @@ function appendErrorLines(args: AppendErrorLinesArgs): void {
   } else {
     // Sub-errors lead with a ✗ marker so the eye finds them quickly
     // when scanning a partial-failure report.
-    const contextSuffix = contextSummary.length > 0
-      ? ` ${args.styler.dim(`(${contextSummary})`)}`
-      : "";
+    const contextSuffix =
+      contextSummary.length > 0
+        ? ` ${args.styler.dim(`(${contextSummary})`)}`
+        : "";
     args.lines.push(
       `${indent}${args.styler.dim("✗")} ${args.err.message}${contextSuffix}`,
     );
   }
 
   if (args.err.hint !== undefined) {
-    args.lines.push(
-      `${indent}  ${args.styler.dim("hint:")} ${args.err.hint}`,
-    );
+    args.lines.push(`${indent}  ${args.styler.dim("hint:")} ${args.err.hint}`);
   }
 
   if (args.indentDepth >= SUB_ERROR_DEPTH_CAP) return;

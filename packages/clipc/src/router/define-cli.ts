@@ -23,42 +23,115 @@ import type { CliRequest, CliResponse } from "./types.ts";
 //               `--json` flag is authoritative for a given run).
 //   - `help`  → print `text` to stdout. Exit 0.
 
+/**
+ * Input to a {@link ResolveOutputMode} resolver: the raw, untouched
+ * argv, so the resolver can pre-scan for `--json` / `--no-color` at
+ * the binary boundary.
+ */
 export interface OutputModeContext {
-  // The argv as received (untouched). Lets the resolver pre-scan
-  // for `--json` / `--no-color` at the binary boundary the same
-  // way dv's main.ts does today.
+  /**
+   * The argv as received (untouched), so the resolver can pre-scan for
+   * `--json` / `--no-color` at the binary boundary.
+   */
   argv: string[];
 }
 
+/**
+ * The resolved output decision for a run: whether to emit JSON and
+ * whether color is enabled. Drives how `ok` and `error` responses are
+ * rendered.
+ */
 export interface OutputMode {
+  /** Whether to serialize `ok`/`error` responses as JSON. */
   emitJson: boolean;
+  /** Whether color is enabled for rendered output. */
   colorEnabled: boolean;
 }
 
+/**
+ * Consumer-supplied hook that decides the {@link OutputMode} for a run
+ * from the raw argv. Supplied by the consumer because the framework
+ * can't know which leaf's `--json` flag is authoritative.
+ */
 export type ResolveOutputMode = (ctx: OutputModeContext) => OutputMode;
 
+/**
+ * Configuration for {@link defineCli}. `name` is the root breadcrumb
+ * and `version` backs the top-level `--version`/`-V`. `rootRouter` is
+ * the tree entry point, `makeContext` produces the per-run ctx,
+ * `resolveOutputMode` decides JSON/color, and the optional
+ * `humanErrorPrefix` prepends a label (e.g. `dv`) to human-mode error
+ * output (ignored in JSON mode).
+ */
 export interface DefineCliConfig<Ctx> {
+  /** Root breadcrumb name, the first element of every request's path. */
   name: string;
+  /** Version string backing the top-level `--version` / `-V`. */
   version: string;
+  /** The tree entry point the framework dispatches into. */
   rootRouter: RouterNode<Ctx>;
-  // Per-run context. Frameworks consume the request by handing this
-  // through; a parent router with its own logic can enrich it via
-  // next(...) before the child sees it.
+  /**
+   * Per-run context factory. Invoked once per `run(argv)`; a parent router
+   * can enrich the produced ctx via `next(...)` before children see it.
+   */
   makeContext: () => Ctx;
-  // How to decide if we're in json mode + whether colors are on for
-  // error rendering. Consumer-supplied because the framework can't
-  // know which leaf's `--json` flag matters.
+  /**
+   * Consumer-supplied hook deciding JSON mode and color for error
+   * rendering, since the framework can't know which leaf's `--json` flag
+   * is authoritative.
+   */
   resolveOutputMode: ResolveOutputMode;
-  // Optional prefix prepended to human-mode error output. dv uses
-  // this to get `dv error[code]: ...` instead of bare `error[code]:`.
-  // No effect in JSON mode (the prefix would corrupt the envelope).
+  /**
+   * Optional prefix prepended to human-mode error output (e.g. `dv` yields
+   * `dv error[code]: ...`). No effect in JSON mode, where it would corrupt
+   * the envelope.
+   */
   humanErrorPrefix?: string;
 }
 
+/**
+ * A runnable CLI produced by {@link defineCli}. Call `run(argv)` with
+ * the process argv (sans `node`/`deno` and script path) to execute
+ * the tree; it resolves to the process exit code.
+ */
 export interface Cli {
+  /**
+   * Executes the tree against `argv` (sans `node`/`deno` and script path)
+   * and resolves to the process exit code.
+   */
   run(argv: string[]): Promise<number>;
 }
 
+/**
+ * The framework entry point. Wires a root router, per-run ctx
+ * factory, and output-mode resolver into a runnable {@link Cli}.
+ * `run(argv)` handles the top-level `--version`/`-V` token directly,
+ * then builds the initial request, drives the trampoline until a
+ * terminal response, renders it to stdout/stderr, and returns the
+ * exit code (0 for `ok`/`help`; for `error`, the response override,
+ * else the error's own code, else 1).
+ *
+ * @param config - The {@link DefineCliConfig}: `name`, `version`,
+ *   `rootRouter`, `makeContext`, `resolveOutputMode`, and optional
+ *   `humanErrorPrefix`.
+ * @returns A {@link Cli} whose `run(argv)` returns an exit code.
+ *
+ * @example
+ * ```ts
+ * const cli = defineCli<MyCtx>({
+ *   name: "dv",
+ *   version: "1.0.0",
+ *   rootRouter: root,
+ *   makeContext: () => ({ cwd: Deno.cwd() }),
+ *   resolveOutputMode: ({ argv }) => ({
+ *     emitJson: argv.includes("--json"),
+ *     colorEnabled: !argv.includes("--no-color"),
+ *   }),
+ *   humanErrorPrefix: "dv",
+ * });
+ * Deno.exit(await cli.run(Deno.args));
+ * ```
+ */
 export function defineCli<Ctx>(config: DefineCliConfig<Ctx>): Cli {
   return {
     async run(argv: string[]): Promise<number> {

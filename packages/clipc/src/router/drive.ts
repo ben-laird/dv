@@ -24,6 +24,11 @@ import type { CliHandler, CliRequest, CliResponse } from "./types.ts";
 //      hop is observable — easy to add tracing, depth limits, or
 //      middleware later without touching each handler.
 
+/**
+ * Arguments to {@link drive}: the `initialHandler` to call first
+ * (typically the root router's handler) and the `initialRequest`
+ * carrying the argv, ctx, path breadcrumb, and color flag.
+ */
 export interface DriveArgs<Ctx> {
   initialHandler: CliHandler<Ctx>;
   initialRequest: CliRequest<Ctx>;
@@ -35,6 +40,21 @@ export interface DriveArgs<Ctx> {
 // a user-actionable mistake.
 const MAX_TRAMPOLINE_HOPS = 64;
 
+/**
+ * The trampoline driver. Calls the initial handler; on a `done` step
+ * it returns the terminal {@link CliResponse}, on a `next` step it
+ * loops with the new handler, sliced argv, (possibly enriched) ctx,
+ * and an extended path breadcrumb — `colorEnabled` is inherited
+ * unchanged across hops. A handler that throws is degraded into a
+ * `kind: "error"` response (wrapped as `code: "unknown"` unless it's
+ * already a `CliError`). Exceeding the internal hop limit returns a
+ * `trampoline-runaway` error to guard against a router that cycles
+ * back to itself.
+ *
+ * @param args - The {@link DriveArgs} with the initial handler and
+ *   request.
+ * @returns The terminal {@link CliResponse} for the run.
+ */
 export async function drive<Ctx>(args: DriveArgs<Ctx>): Promise<CliResponse> {
   let currentHandler = args.initialHandler;
   let currentRequest = args.initialRequest;

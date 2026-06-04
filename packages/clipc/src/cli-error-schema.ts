@@ -13,17 +13,33 @@ import { z } from "zod";
 
 const cliErrorSeveritySchema = z.enum(["error", "warning"]);
 
-// Recursive payload type — needs an explicit annotation so TS can close
-// the loop on `z.lazy(...)`. Mirrors `CliErrorPayload` from errors.ts.
+/**
+ * One node in the JSON error tree emitted under `--json` mode. Mirrors
+ * `CliErrorPayload` from `errors.ts` and the structure validated by
+ * {@link rawCliErrorPayloadSchema}; recursive via `subErrors`. Declared
+ * as an interface (rather than `z.infer`) so the schema below can carry
+ * an explicit `z.ZodType<...>` annotation that closes the `z.lazy` loop.
+ */
 export interface RawCliErrorPayload {
+  /** Stable error code (e.g. `"dirty-tree"`) that consumers branch on. */
   code: string;
+  /** Human-readable summary of the failure. */
   message: string;
+  /** Actionable next-step suggestion, when one applies. */
   hint?: string;
+  /** Severity; omitted on the default (`"error"`), present only for warnings. */
   severity?: "error" | "warning";
+  /** Per-code structured context whose shape varies by `code`. */
   context?: Record<string, unknown>;
+  /** Child errors aggregated under this one (recursive). */
   subErrors?: RawCliErrorPayload[];
 }
 
+/**
+ * Zod schema validating a single {@link RawCliErrorPayload} node. Carries
+ * no `.transform()` calls so `z.toJSONSchema()` can emit it faithfully,
+ * and uses `z.lazy` for the recursive `subErrors` array.
+ */
 export const rawCliErrorPayloadSchema: z.ZodType<RawCliErrorPayload> = z
   .object({
     code: z.string().describe("Stable error code (e.g. 'dirty-tree')."),
@@ -57,17 +73,26 @@ export const rawCliErrorPayloadSchema: z.ZodType<RawCliErrorPayload> = z
       "One node in the error tree. Recursive via `subErrors`. Wire shape is flat (code/context/etc. at the top level) — the `kind` nesting in the in-process class is a TS-narrowing convenience, not a wire concern.",
   });
 
-// Matches the wire shape of `rawCliErrorEnvelopeSchema`. Spelled out
-// as an interface so the schema below can carry an explicit
-// `z.ZodType<...>` annotation — JSR rejects slow types in public
-// exports, and Zod's inferred output type is opaque enough that the
-// type-checker can't compute it without help. Same trick as
-// `RawCliErrorPayload` above.
+/**
+ * The top-level JSON envelope a `@dv-cli/clipc`-based CLI emits on stderr
+ * under `--json` mode: a `schema` URN plus the root `error` tree. Matches
+ * the wire shape of {@link rawCliErrorEnvelopeSchema}; declared as an
+ * interface so that schema can carry an explicit `z.ZodType<...>`
+ * annotation for JSR's fast-types check (Zod's inferred output type is
+ * too opaque to use directly).
+ */
 export interface RawCliErrorEnvelope {
+  /** Schema URN identifying the envelope version, for consumer version-gating. */
   schema: string;
+  /** The root error tree carried by the envelope. */
   error: RawCliErrorPayload;
 }
 
+/**
+ * Zod schema validating a {@link RawCliErrorEnvelope}. The top-level
+ * `schema` URN lets downstream tools (shell scripts, agent fleets)
+ * version-gate before parsing the recursive `error` tree.
+ */
 export const rawCliErrorEnvelopeSchema: z.ZodType<RawCliErrorEnvelope> = z
   .object({
     schema: z
