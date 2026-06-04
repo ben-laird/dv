@@ -1,6 +1,6 @@
 {
   "name": "@dv-cli/clipc",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "exports": "./src/mod.ts",
   "license": "MIT",
   "description": "CLIPC (Command Line Interface Procedure Call): a typed CLI framework. Routers, leaves, flag specs, and structured error responses. The substrate dv is built on.",

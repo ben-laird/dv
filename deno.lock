@@ -1397,7 +1397,7 @@
     "members": {
       "apps/cli": {
         "dependencies": [
-          "jsr:@dv-cli/clipc@0.3"
+          "jsr:@dv-cli/clipc@~0.3.1"
         ]
       },
       "apps/docs": {

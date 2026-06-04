@@ -5,6 +5,10 @@ one h3 subsection per Record consumed during that release, with the
 Record's body prose verbatim. For terse one-line bullets, see
 CHANGELOG.md.
 
+## [0.3.1] - 2026-06-04
+
+### Document the full public API surface with JSDoc for JSR
+
 ## [0.3.0] - 2026-05-27
 
 ### Rename packages from @seshat/* to @dv-cli/*

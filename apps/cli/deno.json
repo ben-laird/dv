@@ -1,6 +1,6 @@
 {
   "name": "@dv-cli/dv",
-  "version": "0.7.2",
+  "version": "0.7.3",
   "exports": "./src/main.ts",
   "license": "MIT",
   "description": "A language-agnostic, git-native changelog CLI for monorepos. Records, not commit messages.",
@@ -11,6 +11,6 @@
     "compile": "deno compile -A -o ../../dist/dv src/main.ts"
   },
   "imports": {
-    "@dv-cli/clipc": "jsr:@dv-cli/clipc@^0.3.0"
+    "@dv-cli/clipc": "jsr:@dv-cli/clipc@^0.3.1"
   }
 }
