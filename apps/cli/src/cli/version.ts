@@ -110,7 +110,7 @@ export interface FinalizedFile {
 // plugin reported changed:true). The dependentPath is relative to
 // repoRootPath and gets pushed into touchedPaths so the rewrite lands
 // in the version commit.
-interface CascadedUpdate {
+export interface CascadedUpdate {
   bumpedPackage: string;
   dependent: string;
   dependentPath: string;
