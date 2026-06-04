@@ -3,6 +3,13 @@
 What's deliberately parked. Living document — items move out as they
 either land or get re-litigated.
 
+> **Open items are now tracked as [GitHub Issues](https://github.com/ben-laird/dv/issues).**
+> Each actionable thread below has a matching issue (linked inline) — that's
+> the place to comment, re-prioritize, and close. This file remains the
+> *narrative* home: the prose context and the "why deferred" for each item
+> live here; the issues carry the live status. Issue numbers are noted on
+> each item.
+
 For the **user-facing scope question** ("is feature X in v1?") see
 [specs/v1-scope.md](specs/v1-scope.md). That file is authoritative for
 the user-visible product surface and its deferral lists. This file
@@ -19,8 +26,24 @@ finalize/`deno.lock` staging bug is fixed (PR #9). The remaining
 shortest-runway moves there are the **`dv release --json` two-shape
 contract bug** (small, stability-of-contract) and the **`@dv-cli/clipc`
 JSR score** (cosmetic JSDoc/README wins). After those, the next ceremony
-candidate is the real `dv v1 @dv-cli/dv` 1.0 promotion — the rehearsal in
-[Pre-1.0 work still to do](#pre-10-work-still-to-do) is the prerequisite.
+candidate is the real `dv v1 @dv-cli/dv` 1.0 promotion ([#14]) — the
+rehearsal in [Pre-1.0 work still to do](#pre-10-work-still-to-do) is the
+prerequisite.
+
+[#14]: https://github.com/ben-laird/dv/issues/14
+[#15]: https://github.com/ben-laird/dv/issues/15
+[#16]: https://github.com/ben-laird/dv/issues/16
+[#17]: https://github.com/ben-laird/dv/issues/17
+[#18]: https://github.com/ben-laird/dv/issues/18
+[#19]: https://github.com/ben-laird/dv/issues/19
+[#20]: https://github.com/ben-laird/dv/issues/20
+[#21]: https://github.com/ben-laird/dv/issues/21
+[#22]: https://github.com/ben-laird/dv/issues/22
+[#23]: https://github.com/ben-laird/dv/issues/23
+[#24]: https://github.com/ben-laird/dv/issues/24
+[#25]: https://github.com/ben-laird/dv/issues/25
+[#26]: https://github.com/ben-laird/dv/issues/26
+[#27]: https://github.com/ben-laird/dv/issues/27
 
 ## v1 product scope
 
@@ -71,7 +94,7 @@ authoritative for behavior.
   non-functional. Bookkeeping only: never touches the actual
   package.
 - **`dv v1 <package>`** — commit `06cc1de`. Not yet exercised
-  against `@dv-cli/dv` itself, pending another audit pass.
+  against `@dv-cli/dv` itself, pending another audit pass. ([#14])
 - **Discriminated `discovery.plugins[].use` key** — commits
   `40ab432` (path/builtin/command arms) and a follow-up adding the
   fourth `run:` arm for interpreter-style invocations like
@@ -97,7 +120,7 @@ From the v1 audit (2026-05-25). Each is independently shippable.
   documented in [specs/plugin-contract.md § Contract version](specs/plugin-contract.md#contract-version);
   `info` and `finalize` folded into
   [specs/v1-scope.md § Plugin contract](specs/v1-scope.md#plugin-contract).
-- **1.0 ceremony rehearsal** — rehearsed against this repo on
+- **1.0 ceremony rehearsal** ([#14]) — rehearsed against this repo on
   2026-05-25. `dv migrate config --dry-run` reports already-current
   shape; `dv version --dry-run` projects 0.5.0 → 0.6.0 (the two
   pending Records for finalize-summary and info-op); `dv v1
@@ -106,7 +129,7 @@ From the v1 audit (2026-05-25). Each is independently shippable.
   the deno example reports 4 pass, 0 fail. The real `dv v1`
   promotion is left as a deliberate next step rather than an
   autonomous one — 1.0 is one-way.
-- **npm example plugin** (`examples/plugins/npm/main.ts`).
+- **npm example plugin** ([#15]) (`examples/plugins/npm/main.ts`).
   Reference material for the most common non-Deno ecosystem. Copy
   `examples/plugins/deno/main.ts` and retarget at `package.json`
   (npm-style semver imports). Should implement the full op set
@@ -153,24 +176,28 @@ exposed. Each is independently shippable.
   warns under `--allow-dirty`, when a finalize plugin leaves tracked
   files unstaged. The 0.7.1 release itself exercised the fixed path
   end-to-end. (PR #9.)
-- **`@dv-cli/clipc` JSR score is 52%.** Easy wins: more JSDoc on
+- **`@dv-cli/clipc` JSR score is 52%.** ([#16]) Easy wins: more JSDoc on
   public exports (router, command builders), a longer package
   README, maybe enable provenance once that's a stable JSR
   feature. The CLI itself (`@dv-cli/dv`) likely has the same
   opportunity. Cosmetic but visible on the JSR package page;
   raises adoption confidence.
-- **`dv release --json` emits two top-level shapes.** A real run prints
-  the wrapped envelope (`{ plan, mintedTagNames, reusedTagNames,
-  releaseOpOutcomes, pushedTagNames }`); the no-op and `--dry-run` paths
-  print the *bare* Plan instead (no wrapper). That divergence cuts
-  against the "`--json` is a contract" invariant — consumers have to
-  defensively probe for both shapes (the
-  [release script](.github/scripts/release.ts) does). Fix: always emit
-  the wrapped envelope, with empty `mintedTagNames` etc. on the no-op
-  path. Small, but it's a stability-of-contract issue. Surfaced by the
-  one-trunk CI work.
+- **✅ RESOLVED (0.7.2, PR #12) — `dv release --json` emitted two
+  top-level shapes.** A real run printed the wrapped envelope (`{ plan,
+  mintedTagNames, reusedTagNames, releaseOpOutcomes, pushedTagNames }`);
+  the no-op and `--dry-run` paths printed the *bare* Plan instead (no
+  wrapper), forcing consumers to defensively probe for both — a
+  violation of the "`--json` is a contract" invariant. Fixed by
+  serializing the wrapped `RunReleaseResult` on all three paths (empty
+  action arrays on no-op/dry-run); `release.ts` already built that shape
+  as its return value. The `.github/scripts/release.ts` bare-shape
+  fallback was dropped and `specs/cli.md` documents the single-envelope
+  contract. Note: this closed the one concrete `--json` shape bug, but
+  the broader contract isn't *frozen* yet — a version stamp / freeze on
+  the `--json` payloads is the planned next milestone (the precondition
+  the SDK work below waits on). ([#19])
 
-### Full "Release PR" → release-on-merge docs sweep
+### Full "Release PR" → release-on-merge docs sweep ([#17])
 
 The CI/CD move to one-trunk release-on-merge (see
 [ci-integration.md](apps/docs/content/guides/ci-integration.md)) updated
@@ -196,7 +223,7 @@ swept to match in a dedicated pass:
 Deferred deliberately: the headline docs are consistent now, so there's
 no user-facing contradiction at the entry points; this is the long tail.
 
-### Expose release notes in `dv release --json`
+### Expose release notes in `dv release --json` ([#18])
 
 Surfaced by the one-trunk CI work: the release workflow mints a GitHub
 Release per minted tag, and wants each release's notes for the body.
@@ -234,7 +261,7 @@ re-parser, and benefits any other release-notes consumer too. Pairs
 naturally with the multi-channel publishing work below (a GitHub-Release
 channel would want exactly this field).
 
-### Opt into multi-channel publishing
+### Opt into multi-channel publishing ([#20])
 
 A real product question, not just a bug. Today dv's release model
 is **one plugin owns one package** — the package's plugin owns
@@ -284,15 +311,27 @@ later](specs/v1-scope.md#deferred-to-later). Highlights:
 
 ## Beyond v1
 
-- **Roadmap entries as a first-class concept** — same Record/aggregator
+- **Roadmap entries as a first-class concept** ([#26]) — same Record/aggregator
   paradigm extended to planned work; the release boundary becomes the
   temporal seam. Full rationale in [specs/design.md § Deferred to v2:
   roadmaps](specs/design.md#deferred-to-v2-roadmaps). When this lands
   the underlying abstraction may earn a name like "ledger" with
   changelog and roadmap as concrete instances; don't introduce that
   abstraction preemptively.
-- **TypeScript SDK** over the JSON contract — sugar layer once the
+- **TypeScript SDK** ([#27]) over the JSON contract — sugar layer once the
   contract is proven stable.
+
+  *Precursor shipped (0.8).* `@dv-cli/dv` now exposes a public **library
+  surface** (`apps/cli/src/lib.ts`, the package `exports` entry): the
+  in-process command runners (`runStatus`, `runVersion`, `runRelease`, …)
+  plus their Options/Result types and the `Plan` contract types, all
+  re-exported with module-level JSDoc. Embedders can drive `dv` in-process
+  and consume the typed results directly (each runner returns the same data
+  the `--json` contract serializes). This is deliberately *not* the full
+  SDK — the runners still print to stdout as a side effect, and there's no
+  separate typed/captured `@dv-cli/sdk` package or multi-language binding.
+  Those still wait on the contract freeze (the version-stamp milestone noted
+  under the resolved `release --json` item above).
 
 ## Internal engineering threads
 
@@ -305,7 +344,7 @@ user-visible — the user-facing scope docs are the wrong home.
   runners and rendered by the framework; thrown errors are bugs we
   degrade gracefully on (caught at the trampoline boundary, wrapped
   into `code: "unknown"`). See `packages/cli/src/router/`.
-- **Lift `requireRepoRoot` into a root-router pre-handler.** Today
+- **Lift `requireRepoRoot` into a root-router pre-handler.** ([#21]) Today
   every dv leaf calls `requireRepoRoot()` independently. The router's
   parent-with-logic feature (a router's own `run` that can enrich
   ctx before delegating via `next(child, ...)`) lets us do the
@@ -314,7 +353,7 @@ user-visible — the user-facing scope docs are the wrong home.
   `loadConfig(configPath(...))` for the commands that all need it.
   Trigger: the per-leaf calls are repetitive and slow the dv-side
   refactor cost of every new command.
-- **Move printing out of runners into `CliResponse`.** Today's
+- **Move printing out of runners into `CliResponse`.** ([#22]) Today's
   `runX()` functions print directly to stdout and leaves return
   `done({ kind: "ok" })`. The cleaner end state is for runners to
   return `{ stdout?, json? }` and let the framework's renderer
@@ -324,14 +363,14 @@ user-visible — the user-facing scope docs are the wrong home.
   current output before/after. Worth doing when we add a second
   consumer that wants to capture dv's output programmatically
   (e.g. a TUI shell that drives `dv status` and renders inline).
-- **Surface router/leaf descriptions in parent listings.** Sub-router
+- **Surface router/leaf descriptions in parent listings.** ([#23]) Sub-router
   rows in `dv --help` show the sub-router's own description but not
   its children's; today you have to descend one level to see what's
   inside. A two-line listing (`plugin    Plugin authoring + audit /
   list, invoke, verify`) or an inline child preview would make the
   top-level help self-explanatory. Implementation lives in
   `packages/cli/src/router/help.ts`.
-- **Real prompt subtool.** `dv release`'s confirmation uses the
+- **Real prompt subtool.** ([#24]) `dv release`'s confirmation uses the
   built-in `Deno.prompt`. Replace with a proper prompt subtool when
   any second command needs one (and probably worth doing alongside
   the [SolidJS TUI question](#solidjs-tui) if that gets revisited).
@@ -343,7 +382,7 @@ user-visible — the user-facing scope docs are the wrong home.
   (cold-start cost is felt, distribution friction matters, the API is
   stable enough to warrant the polish). Not a roadmap item — a
   watchlist condition.
-- <span id="solidjs-tui">**SolidJS-based TUI rendering.**</span>
+- <span id="solidjs-tui">**SolidJS-based TUI rendering.**</span> ([#25])
   Considered as a reactive substrate for `dv`'s interactive surfaces
   (prompts, progress, the `dv add` flow). Deferred — `dv` is a
   composable Unix primitive; most invocations exit immediately and

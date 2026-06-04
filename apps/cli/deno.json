@@ -1,13 +1,13 @@
 {
   "name": "@dv-cli/dv",
   "version": "0.7.3",
-  "exports": "./src/main.ts",
+  "exports": "./src/lib.ts",
   "license": "MIT",
   "description": "A language-agnostic, git-native changelog CLI for monorepos. Records, not commit messages.",
   "tasks": {
     "dv": "deno run -A src/main.ts",
     "test": "deno test -A",
-    "check": "deno check src/main.ts src/scripts/generate-schemas.ts src/scripts/install-dev-shim.ts src/scripts/gate.ts",
+    "check": "deno check src/lib.ts src/main.ts src/scripts/generate-schemas.ts src/scripts/install-dev-shim.ts src/scripts/gate.ts",
     "compile": "deno compile -A -o ../../dist/dv src/main.ts"
   },
   "imports": {

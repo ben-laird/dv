@@ -95,7 +95,7 @@ export interface RunV1Result {
   finalizedFiles: FinalizedFile[];
 }
 
-interface CascadedUpdate {
+export interface CascadedUpdate {
   bumpedPackage: string;
   dependent: string;
   dependentPath: string;
