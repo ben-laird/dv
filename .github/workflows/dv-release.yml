@@ -71,6 +71,10 @@ jobs:
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
+          # Cache DENO_DIR keyed on deno.lock. Shares the cache namespace
+          # with the validate job, so a release run often warm-hits the
+          # cache the PR's validate run already populated for the same lock.
+          cache: true
 
       # Install dv from the working tree. We write our own launcher rather
       # than `deno install --global`: the latter snapshots the entry file
