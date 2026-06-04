@@ -161,27 +161,32 @@ export async function runRelease(
   // no-op. With --force, every tracked package becomes a candidate
   // (re-publish already-tagged packages too).
   if (plan.awaitingRelease.length === 0 && !options.force) {
-    if (options.emitJson) console.log(JSON.stringify(plan, null, 2));
-    else console.log("dv: nothing to release");
-    return {
+    // `--json` always emits the wrapped envelope (never the bare Plan),
+    // so consumers parse one shape across no-op / dry-run / real runs.
+    // The action arrays are empty here — nothing was minted or pushed.
+    const noopResult: RunReleaseResult = {
       plan,
       mintedTagNames: [],
       reusedTagNames: [],
       releaseOpOutcomes: [],
       pushedTagNames: [],
     };
+    if (options.emitJson) console.log(JSON.stringify(noopResult, null, 2));
+    else console.log("dv: nothing to release");
+    return noopResult;
   }
 
   if (effectiveDryRun) {
-    if (options.emitJson) console.log(JSON.stringify(plan, null, 2));
-    else renderHumanPlan({ plan, colorEnabled: options.colorEnabled });
-    return {
+    const dryRunResult: RunReleaseResult = {
       plan,
       mintedTagNames: [],
       reusedTagNames: [],
       releaseOpOutcomes: [],
       pushedTagNames: [],
     };
+    if (options.emitJson) console.log(JSON.stringify(dryRunResult, null, 2));
+    else renderHumanPlan({ plan, colorEnabled: options.colorEnabled });
+    return dryRunResult;
   }
 
   assertConfirmedOrYes({

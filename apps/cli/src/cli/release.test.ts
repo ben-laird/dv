@@ -308,6 +308,112 @@ Deno.test("runRelease on a fully-released set is a no-op (Algebra §5 idempotenc
   }
 });
 
+// The `--json` envelope is a stable contract: every path emits the SAME
+// wrapped shape ({ plan, mintedTagNames, reusedTagNames, releaseOpOutcomes,
+// pushedTagNames }) so consumers parse one shape. Earlier the no-op and
+// dry-run paths emitted the bare Plan instead, forcing consumers to probe
+// for both. These three tests lock the single-shape contract.
+
+const RELEASE_ENVELOPE_KEYS = [
+  "plan",
+  "mintedTagNames",
+  "reusedTagNames",
+  "releaseOpOutcomes",
+  "pushedTagNames",
+] as const;
+
+function assertIsWrappedEnvelope(parsed: Record<string, unknown>): void {
+  for (const key of RELEASE_ENVELOPE_KEYS) {
+    assertEquals(
+      Object.hasOwn(parsed, key),
+      true,
+      `--json output is missing envelope key '${key}'`,
+    );
+  }
+  // The bare Plan has `pending`/`awaitingRelease` at the top level; the
+  // envelope nests the Plan under `.plan`. Guard against regressing to bare.
+  assertEquals(
+    Object.hasOwn(parsed, "awaitingRelease"),
+    false,
+    "--json emitted the bare Plan (awaitingRelease at top level) instead of the wrapped envelope",
+  );
+}
+
+Deno.test("runRelease --json emits the wrapped envelope on the no-op path (not the bare Plan)", async () => {
+  // Given every package is already tagged — the idempotent no-op path
+  const fixture = await setUpReleaseFixture({
+    preExistingTags: ["pkg-a@1.0.0", "pkg-b@1.0.0"],
+  });
+
+  try {
+    // When dv release --json runs with nothing to release
+    const { capturedStdout } = await captureStdout(() =>
+      runRelease({
+        force: false,
+        yes: true,
+        emitJson: true,
+        colorEnabled: false,
+      }),
+    );
+
+    // Then stdout is the wrapped envelope with empty action arrays
+    const parsed = JSON.parse(capturedStdout) as Record<string, unknown>;
+    assertIsWrappedEnvelope(parsed);
+    assertEquals(parsed.mintedTagNames, []);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+Deno.test("runRelease --json emits the wrapped envelope on the dry-run path (not the bare Plan)", async () => {
+  // Given two untagged packages and --dry-run
+  const fixture = await setUpReleaseFixture({});
+
+  try {
+    // When dv release --dry-run --json runs
+    const { capturedStdout } = await captureStdout(() =>
+      runRelease({
+        dryRun: true,
+        force: false,
+        yes: true,
+        emitJson: true,
+        colorEnabled: false,
+      }),
+    );
+
+    // Then stdout is the wrapped envelope, not the bare Plan
+    const parsed = JSON.parse(capturedStdout) as Record<string, unknown>;
+    assertIsWrappedEnvelope(parsed);
+    assertEquals(parsed.mintedTagNames, []);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+Deno.test("runRelease --json emits the wrapped envelope on a real run", async () => {
+  // Given a package that will actually be released
+  const fixture = await setUpReleaseFixture({});
+
+  try {
+    // When dv release --json runs for real
+    const { capturedStdout } = await captureStdout(() =>
+      runRelease({
+        force: false,
+        yes: true,
+        emitJson: true,
+        colorEnabled: false,
+      }),
+    );
+
+    // Then stdout is the same wrapped envelope, now with minted tags
+    const parsed = JSON.parse(capturedStdout) as Record<string, unknown>;
+    assertIsWrappedEnvelope(parsed);
+    assertEquals((parsed.mintedTagNames as string[]).length > 0, true);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
 Deno.test("runRelease --force re-runs the release op for already-tagged packages without re-minting", async () => {
   // Given every package is already tagged
   const fixture = await setUpReleaseFixture({
