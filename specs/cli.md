@@ -200,6 +200,14 @@ pushed Tag. The first `1.0.0` Tag is detected and celebrated here.
 | `--force`     | Re-run publish for already-tagged Packages (failed-publish recovery). |
 | `--push` / `--no-push` | Override `git.auto-push` for this invocation.             |
 | `--yes`       | Confirm non-interactively (required in non-TTY).                   |
+| `--json`      | Emit the release envelope on stdout. Suppresses the human summary. |
+
+`--json` always emits the **same wrapped envelope** —
+`{ plan, mintedTagNames, reusedTagNames, releaseOpOutcomes, pushedTagNames }` —
+on every path. The no-op (nothing to release) and `--dry-run` paths emit it
+with empty action arrays rather than a bare Plan, so a consumer parses one
+shape regardless of outcome (git's default-vs-`--porcelain` discipline:
+`--json` is a contract).
 
 ```
 $ dv release --dry-run

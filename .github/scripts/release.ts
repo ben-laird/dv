@@ -28,17 +28,16 @@ import { Octokit } from "npm:@octokit/rest@^21";
 /**
  * Subset of the `dv release --json` envelope this script consumes.
  *
- * `dv release --json` emits one of two shapes: the wrapped envelope
- * (`{ plan, mintedTagNames, … }`) on a real run, or the bare Plan on the
- * no-op / dry-run paths (`awaitingRelease` empty, no wrapper). We model
- * both as optional so a no-op run can't throw on a missing field.
+ * `dv release --json` emits a single shape across no-op, dry-run, and
+ * real runs: the wrapped envelope (`{ plan, mintedTagNames, … }`), with
+ * empty action arrays on the no-op / dry-run paths. (Earlier versions
+ * emitted the bare Plan on those paths; that divergence was fixed.)
  */
 interface ReleaseJson {
-  plan?: {
+  plan: {
     awaitingRelease: Array<{ package: string; version: string; tag: string }>;
   };
-  awaitingRelease?: Array<{ package: string; version: string; tag: string }>;
-  mintedTagNames?: string[];
+  mintedTagNames: string[];
 }
 
 /** Subset of the `dv status --json` Plan this script consumes. */
@@ -103,16 +102,13 @@ async function mintGitHubReleases(args: {
   releaseResult: ReleaseJson;
 }): Promise<void> {
   const { environment, releaseResult } = args;
-  const newlyMinted = new Set(releaseResult.mintedTagNames ?? []);
+  const newlyMinted = new Set(releaseResult.mintedTagNames);
   if (newlyMinted.size === 0) {
     console.log("No new tags minted — no GitHub Releases to create.");
     return;
   }
 
-  // The tag set lives under `.plan` on a real run; fall back to the bare
-  // Plan shape defensively.
-  const awaitingRelease =
-    releaseResult.plan?.awaitingRelease ?? releaseResult.awaitingRelease ?? [];
+  const awaitingRelease = releaseResult.plan.awaitingRelease;
 
   const octokit = new Octokit({ auth: environment.githubToken });
 
