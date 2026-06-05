@@ -5,6 +5,10 @@ one h3 subsection per Record consumed during that release, with the
 Record's body prose verbatim. For terse one-line bullets, see
 CHANGELOG.md.
 
+## [0.8.1] - 2026-06-05
+
+### Annotate the public Plan schema symbols with explicit types so deno publish passes the JSR slow-types check. The 0.8.0 release minted its tag but failed to publish because lib.ts exposed plan-schema.ts inferred Zod consts as public API.
+
 ## [0.8.0] - 2026-06-04
 
 ### Add a public programmatic API for driving dv in-process

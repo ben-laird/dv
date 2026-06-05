@@ -4,6 +4,12 @@ All notable changes to this Package are documented in this file. The
 format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this Package adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.8.1] - 2026-06-05
+
+### Fixed
+
+- Annotate the public Plan schema symbols with explicit types so deno publish passes the JSR slow-types check. The 0.8.0 release minted its tag but failed to publish because lib.ts exposed plan-schema.ts inferred Zod consts as public API.
+
 ## [0.8.0] - 2026-06-04
 
 ### Added

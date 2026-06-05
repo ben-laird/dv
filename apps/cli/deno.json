@@ -1,6 +1,6 @@
 {
   "name": "@dv-cli/dv",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "exports": "./src/lib.ts",
   "license": "MIT",
   "description": "A language-agnostic, git-native changelog CLI for monorepos. Records, not commit messages.",
