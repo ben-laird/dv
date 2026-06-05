@@ -14,15 +14,26 @@ import { z } from "zod";
 const SEMVER_PATTERN =
   /^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$/;
 
-const semverStringSchema = z
+const semverStringSchema: z.ZodString = z
   .string()
   .regex(SEMVER_PATTERN, "must be SemVer (e.g. '1.4.2')");
 
-const planBumpSchema = z.enum(["patch", "minor", "major"]);
+const planBumpSchema: z.ZodEnum<{
+  patch: "patch";
+  minor: "minor";
+  major: "major";
+}> = z.enum(["patch", "minor", "major"]);
 
-const planStabilitySchema = z.enum(["Unstable", "Stable"]);
+const planStabilitySchema: z.ZodEnum<{
+  Unstable: "Unstable";
+  Stable: "Stable";
+}> = z.enum(["Unstable", "Stable"]);
 
-const planChangeCountsSchema = z
+const planChangeCountsSchema: z.ZodType<{
+  feat: number;
+  fix: number;
+  breaking: number;
+}> = z
   .object({
     feat: z.int().nonnegative(),
     fix: z.int().nonnegative(),
@@ -35,7 +46,10 @@ const planChangeCountsSchema = z
       "Per-Package tally of the Records feeding the bump. `breaking` counts feat! and fix! together (independent of the Unstable cap).",
   });
 
-const planConstraintUpdateSchema = z
+const planConstraintUpdateSchema: z.ZodType<{
+  dependent: string;
+  newConstraint: string;
+}> = z
   .object({
     dependent: z.string(),
     newConstraint: z.string(),
@@ -47,7 +61,16 @@ const planConstraintUpdateSchema = z
       "A dependent Package whose constraint on the bumped Package will be rewritten. When dv can resolve the dependency graph (the plugin implements `get-dependencies`) this lists only real dependents; for packages whose plugin lacks that op, dv falls back to listing them as candidates and the plugin filters at execute time via `changed: false`.",
   });
 
-const planPendingEntrySchema = z
+const planPendingEntrySchema: z.ZodType<{
+  package: string;
+  currentVersion: string;
+  projectedVersion: string;
+  bump: "patch" | "minor" | "major";
+  stability: "Unstable" | "Stable";
+  changeCounts: { feat: number; fix: number; breaking: number };
+  records: string[];
+  constraintUpdates: { dependent: string; newConstraint: string }[];
+}> = z
   .object({
     package: z.string(),
     currentVersion: semverStringSchema,
@@ -73,7 +96,12 @@ const planPendingEntrySchema = z
       "What `dv version` would do for one Package: the aggregated Bump, projected Version, change counts, and the Records feeding it.",
   });
 
-const planAwaitingReleaseSchema = z
+const planAwaitingReleaseSchema: z.ZodType<{
+  package: string;
+  version: string;
+  tag: string;
+  firstStable: boolean;
+}> = z
   .object({
     package: z.string(),
     version: semverStringSchema,
@@ -91,7 +119,10 @@ const planAwaitingReleaseSchema = z
       "A Package whose current Version has no Tag — what `dv release` would tag. Always empty in M3 — tag-state queries are M5.",
   });
 
-const planUnresolvedReferenceSchema = z
+const planUnresolvedReferenceSchema: z.ZodType<{
+  record: string;
+  reference: string;
+}> = z
   .object({
     record: z
       .string()
@@ -107,7 +138,11 @@ const planUnresolvedReferenceSchema = z
       "A Record references a Package that no discovery plugin claims and no rename ledger edge maps to. Halts `dv version` unless --prune.",
   });
 
-const planTrackedPackageSchema = z
+const planTrackedPackageSchema: z.ZodType<{
+  package: string;
+  currentVersion: string;
+  path: string;
+}> = z
   .object({
     package: z.string(),
     currentVersion: semverStringSchema,
@@ -120,7 +155,14 @@ const planTrackedPackageSchema = z
       "A Package discovery resolved and whose current Version the read-version Op returned. Lists every Package dv is aware of, regardless of whether any Records are pending against it.",
   });
 
-export const rawPlanSchema = z
+export const rawPlanSchema: z.ZodType<{
+  schema: "urn:dv:schema:v1:plan";
+  command: "status" | "version" | "release";
+  pending: z.infer<typeof planPendingEntrySchema>[];
+  awaitingRelease: z.infer<typeof planAwaitingReleaseSchema>[];
+  unresolvedReferences: z.infer<typeof planUnresolvedReferenceSchema>[];
+  tracked: z.infer<typeof planTrackedPackageSchema>[];
+}> = z
   .object({
     schema: z.literal("urn:dv:schema:v1:plan").describe("Schema id."),
     command: z
