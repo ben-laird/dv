@@ -1,6 +1,6 @@
 {
   "name": "@dv-cli/clipc",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "exports": {
     ".": "./src/mod.ts",
     "./internal/error-schema": "./src/cli-error-schema.ts"

@@ -4,6 +4,12 @@ All notable changes to this Package are documented in this file. The
 format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this Package adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] - 2026-06-06
+
+### Changed
+
+- **BREAKING** Stop exporting the raw Zod error schemas; validate via Zod-free parser functions instead
+
 ## [0.3.1] - 2026-06-04
 
 ### Fixed
