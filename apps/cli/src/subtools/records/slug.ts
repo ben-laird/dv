@@ -356,13 +356,17 @@ const VERBS = [
   "yawn",
 ];
 
-// Test seam: callers can inject a deterministic RNG to make slug generation
-// repeatable in tests. Default uses Math.random; the spec says nothing about
-// cryptographic randomness here.
+/**
+ * Test seam: callers can inject a deterministic RNG to make slug generation
+ * repeatable in tests. Default uses `Math.random`; the spec says nothing
+ * about cryptographic randomness here.
+ */
 export interface SlugRandomSource {
+  /** Returns a float in `[0, 1)`, like `Math.random`. */
   next(): number;
 }
 
+/** The default {@link SlugRandomSource}, backed by `Math.random`. */
 export const defaultRandomSource: SlugRandomSource = {
   next: () => Math.random(),
 };

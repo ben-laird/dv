@@ -9,7 +9,11 @@
 // Output is hand-deterministic: 2-space indentation, trailing newline,
 // keys ordered as Zod emits them.
 
-import { rawCliErrorEnvelopeSchema } from "@dv-cli/clipc";
+// Zod schema imported from clipc's internal subpath (not the public `.`
+// surface — Zod is an implementation detail there). This build script is
+// the one sanctioned consumer of the raw schema, feeding it to
+// `z.toJSONSchema()` to emit the committed JSON Schema artifact.
+import { rawCliErrorEnvelopeSchema } from "@dv-cli/clipc/internal/error-schema";
 import { resolve } from "@std/path";
 import { z } from "zod";
 import { rawConfigLayerSchema } from "../subtools/config/schema.ts";

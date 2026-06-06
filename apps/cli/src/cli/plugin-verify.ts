@@ -35,32 +35,57 @@ const DEFAULT_VERIFY_TIMEOUT_MS = 60_000;
 const DEFAULT_VERIFY_GLOB = "*";
 const BOGUS_OP_NAME = "__dv_plugin_verify_bogus__";
 
+/** Inputs to {@link runPluginVerify}, mirroring `dv plugin verify`'s flags. */
 export interface RunPluginVerifyOptions {
+  /** Plugin positional: a name to resolve, or a path to the executable. */
   pluginPositional: string;
+  /** Repo root the plugin resolves against; defaults to `Deno.cwd()`. */
   repoRoot?: string;
+  /** Glob passed to the `discover` Op; defaults to `*`. */
   discoverGlob?: string;
+  /** Per-Op timeout in milliseconds; defaults to 60s. */
   timeoutMs?: number;
+  /** Emit machine-readable JSON instead of the human summary. */
   emitJson: boolean;
+  /** Whether ANSI color is enabled for human output and trace lines. */
   colorEnabled: boolean;
+  /** Trace each plugin invocation to stderr. */
   debug?: boolean;
 }
 
+/** Result of conformance-checking one Op against its schema. */
 export type CheckOutcome = "pass" | "fail" | "skipped";
 
+/** One Op's conformance check in the verify run. */
 export interface CheckReport {
+  /** Op name (or synthetic check, e.g. `info`, the bogus-op probe). */
   name: string;
+  /** Whether the Op conformed, failed, or was skipped as side-effectful. */
   outcome: CheckOutcome;
+  /** Human-readable explanation of the {@link outcome}. */
   detail: string;
 }
 
+/** Aggregate outcome of a `dv plugin verify` run. */
 export interface RunPluginVerifyResult {
+  /** Absolute path of the resolved plugin executable. */
   resolvedPluginPath: string;
+  /** Per-Op {@link CheckReport} entries, in execution order. */
   checks: CheckReport[];
+  /** Count of checks with a `pass` {@link CheckOutcome}. */
   passedCount: number;
+  /** Count of checks with a `fail` {@link CheckOutcome}. */
   failedCount: number;
+  /** Count of checks with a `skipped` {@link CheckOutcome}. */
   skippedCount: number;
 }
 
+/**
+ * Conformance-check a plugin against the versioned per-Op schemas in
+ * `specs/schemas/plugin-responses.json`. Backs `dv plugin verify`: invokes
+ * `info`, exercises safe Ops end-to-end, skips side-effectful Ops, and
+ * asserts a bogus Op name fails loudly. See {@link RunPluginVerifyOptions}.
+ */
 export async function runPluginVerify(
   options: RunPluginVerifyOptions,
 ): Promise<RunPluginVerifyResult> {

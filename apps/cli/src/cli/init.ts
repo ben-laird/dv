@@ -31,13 +31,23 @@ const STARTER_CHANGELOG_GITIGNORE = `# In-progress record edit files. Normally c
 .dv-record-edit-*
 `;
 
+/** Result of a {@link runInit} run, reporting which scaffold files were created. */
 export interface InitResult {
+  /** Absolute path to the git repo root that was scaffolded. */
   repoRoot: string;
+  /** Whether `.dv/config.yaml` was newly written (false if it already existed). */
   configCreated: boolean;
+  /** Whether the Records directory was newly created. */
   recordsDirCreated: boolean;
+  /** Whether `.dv/.gitignore` was newly written. */
   gitignoreCreated: boolean;
 }
 
+/**
+ * `dv init`: scaffolds the `.dv/` directory — a starter `config.yaml`, the
+ * Records directory, and a `.gitignore` — at the git repo root. Existing
+ * files are left untouched.
+ */
 export async function runInit(): Promise<InitResult> {
   const repoRoot = await requireRepoRoot();
   const cfgPath = configPath(repoRoot);

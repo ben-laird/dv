@@ -62,6 +62,7 @@ export {
   runMigrateConfig,
 } from "./cli/migrate.ts";
 export {
+  PLUGIN_OP_NAMES,
   type PluginOpName,
   type RunPluginInvokeOptions,
   type RunPluginInvokeResult,
@@ -130,13 +131,28 @@ export {
   type RunVersionResult,
   runVersion,
 } from "./cli/version.ts";
+// --- Domain types referenced by the runner options/results -----------------
+// Reachable through the public option/result shapes above (e.g.
+// `RunAddOptions.changeType` is a {@link ChangeType}), so they're part of the
+// surface a consumer types against. Re-exported here so they can be imported
+// by name rather than reached through an indexed access type.
+export { CHANGE_TYPES, type ChangeType } from "./domain/change-type.ts";
+export type { PluginAssignment, PluginReference } from "./domain/config.ts";
+export type { Package } from "./domain/package.ts";
 // --- Binary boundary -------------------------------------------------------
 export { main } from "./main.ts";
+export type {
+  ConfigMigrationStepResult,
+  MigrationChange,
+} from "./subtools/config-migrations/mod.ts";
+export type { ResolvedPlugin } from "./subtools/discovery/resolve.ts";
+export type { SlugRandomSource } from "./subtools/records/mod.ts";
 // --- Contract types (the `--json` shape) -----------------------------------
 export type {
   Plan,
   PlanAwaitingRelease,
   PlanChangeCounts,
+  PlanConstraintUpdate,
   PlanPending,
   PlanTracked,
   PlanUnresolvedReference,

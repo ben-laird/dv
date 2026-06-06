@@ -33,25 +33,46 @@ import { makeStyler } from "./styler.ts";
 
 const DEFAULT_FAST_OP_TIMEOUT_MS = 60_000;
 
+/** Inputs to {@link runRename} — one declared lineage edge plus run modifiers. */
 export interface RunRenameOptions {
+  /** Old Package name being renamed *from* (the source of the lineage edge). */
   fromPackageName: string;
+  /** New Package name being renamed *to* (the target of the lineage edge). */
   toPackageName: string;
+  /** Explicit `at` Version, overriding the discovery-inferred first Version under `to`. */
   atVersionOverride?: string;
+  /** Preview the ledger append with zero side effects; no file is written. */
   dryRun: boolean;
+  /** Emit the machine-readable `--json` result instead of human output. */
   emitJson: boolean;
+  /** Whether ANSI color is enabled for human-readable output. */
   colorEnabled: boolean;
 }
 
+/** Outcome of {@link runRename} — the appended lineage edge and what changed on disk. */
 export interface RunRenameResult {
+  /** Path to the rename ledger (`.dv/renames.yaml`) that was (or would be) written. */
   ledgerPath: string;
+  /** Old Package name recorded as the edge source. */
   fromPackageName: string;
+  /** New Package name recorded as the edge target. */
   toPackageName: string;
+  /** Version stamped on the entry's `at` field (the new name's first Version). */
   atVersion: string;
+  /** Whether `atVersion` was discovery-`inferred` or supplied as an `override`. */
   atVersionSource: "inferred" | "override";
+  /** Whether the ledger file was created fresh (vs. appended to an existing one). */
   fileCreated: boolean;
+  /** Whether the ledger was actually written (false under `dryRun`). */
   fileWritten: boolean;
 }
 
+/**
+ * Append a `from → to` lineage edge to the rename ledger (`.dv/renames.yaml`),
+ * declaring Package lineage so existing Records and release history referencing
+ * the old name resolve to the new one. Renames are declared, never guessed; this
+ * is bookkeeping only and never touches the actual package.
+ */
 export async function runRename(
   options: RunRenameOptions,
 ): Promise<RunRenameResult> {

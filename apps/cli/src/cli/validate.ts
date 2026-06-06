@@ -12,38 +12,60 @@ import {
 } from "../subtools/renames/mod.ts";
 import { makeStderrTracingHooks } from "./debug-trace.ts";
 
-// `dv validate` per specs/cli.md § dv validate.
-//
-// Safe and side-effect-free — runnable in CI as a pre-merge gate. Loads
-// config + discovery + the rename ledger, parses every Record under
-// .dv/records/, and aggregates problems (config shape, plugin
-// failures, Record shape, body emptiness, Unresolved References) into
-// one report. Exit code is non-zero iff at least one problem was found.
+/**
+ * `dv validate` per `specs/cli.md` § dv validate.
+ *
+ * Safe and side-effect-free — runnable in CI as a pre-merge gate. Loads
+ * config + discovery + the rename ledger, parses every Record under
+ * `.dv/records/`, and aggregates problems (config shape, plugin
+ * failures, Record shape, body emptiness, Unresolved References) into
+ * one report. Exit code is non-zero iff at least one problem was found.
+ */
 
+/** A single problem found by `dv validate`. */
 export interface ValidationProblem {
+  /** Stable machine-readable problem code. */
   code: string;
+  /** Human-readable description of the problem. */
   message: string;
+  /** Originating path or identifier (e.g. the offending Record or config), when known. */
   source?: string;
 }
 
+/** The `--json` report shape for `dv validate`; one {@link ValidationProblem} per issue. */
 export interface ValidationReport {
+  /** Versioned schema URN identifying this report shape. */
   schema: "urn:dv:schema:v1:validation-report";
+  /** `true` iff no problems were found. */
   ok: boolean;
+  /** Number of Records parsed during the run. */
   recordsChecked: number;
+  /** All problems found, empty when `ok`. */
   problems: ValidationProblem[];
 }
 
+/** Runtime options controlling a {@link runValidate} call. */
 export interface RunValidateOptions {
+  /** Emit the {@link ValidationReport} as JSON instead of human-readable output. */
   emitJson: boolean;
+  /** Whether ANSI color is enabled for human-readable output. */
   colorEnabled: boolean;
+  /** Emit plugin tracing to stderr. */
   debug?: boolean;
 }
 
+/** Outcome of a {@link runValidate} call: the {@link ValidationReport} plus a process exit code. */
 export interface RunValidateResult {
+  /** The aggregated validation report. */
   report: ValidationReport;
+  /** Process exit code; non-zero iff problems were found. */
   exitCode: number;
 }
 
+/**
+ * Run `dv validate`: load config, discovery, and the rename ledger, parse
+ * every Record, and aggregate any problems into a {@link RunValidateResult}.
+ */
 export async function runValidate(
   options: RunValidateOptions,
 ): Promise<RunValidateResult> {

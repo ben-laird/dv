@@ -49,42 +49,74 @@ import { makeStyler } from "./styler.ts";
 
 const DEFAULT_FAST_OP_TIMEOUT_MS = 60_000;
 
+/** Options controlling a {@link runRelease} invocation. */
 export interface RunReleaseOptions {
-  // Tri-state: undefined → resolve from `safety.dry-run-by-default`
-  // config, then false.
+  /**
+   * Tri-state: `undefined` → resolve from `safety.dry-run-by-default`
+   * config, then `false`.
+   */
   dryRun?: boolean;
-  // Re-run the release Op for already-tagged Packages (failed-publish
-  // recovery per specs/cli.md § dv release --force).
+  /**
+   * Re-run the release Op for already-tagged Packages (failed-publish
+   * recovery per `specs/cli.md` § `dv release --force`).
+   */
   force: boolean;
-  // Tri-state: undefined → resolve from `git.auto-push` config.
+  /** Tri-state: `undefined` → resolve from `git.auto-push` config. */
   push?: boolean;
+  /** Skip the TTY confirmation prompt; required in non-TTY contexts. */
   yes: boolean;
+  /** Emit the {@link RunReleaseResult} as JSON instead of human-readable output. */
   emitJson: boolean;
+  /** Whether ANSI color is enabled for human-readable output. */
   colorEnabled: boolean;
-  // Tri-state: undefined → honor `git.require-clean-tree`. true →
-  // skip the check. false → force it on. Flag pair: `--allow-dirty`
-  // / `--no-allow-dirty`.
+  /**
+   * Tri-state: `undefined` → honor `git.require-clean-tree`. `true` →
+   * skip the check. `false` → force it on. Flag pair: `--allow-dirty`
+   * / `--no-allow-dirty`.
+   */
   allowDirty?: boolean;
+  /** Emit plugin stdio tracing to stderr. */
   debug?: boolean;
 }
 
+/** Per-Package result of invoking the release plugin Op. */
 export interface ReleaseOpOutcome {
+  /** Name of the Package the release Op ran for. */
   package: string;
+  /** The `pkg-name@x.y.z` Tag minted or reused for this Package. */
   tag: string;
+  /** Whether the release Op succeeded. */
   ok: boolean;
+  /** Whether the plugin reported publishing the Package. */
   published?: boolean;
+  /** Whether the release Op was skipped (e.g. already tagged, no `--force`). */
   skipped?: boolean;
+  /** Optional human-readable detail (failure reason or skip note). */
   message?: string;
 }
 
+/** Release envelope returned by {@link runRelease}. */
 export interface RunReleaseResult {
+  /** The release {@link Plan} computed and executed for this run. */
   plan: Plan;
+  /** Tag names newly minted this run. */
   mintedTagNames: string[];
+  /** Tag names already present and reused (no new Tag minted). */
   reusedTagNames: string[];
+  /** Per-Package release Op outcomes. */
   releaseOpOutcomes: ReleaseOpOutcome[];
+  /** Tag names pushed to the remote (empty when push was disabled). */
   pushedTagNames: string[];
 }
 
+/**
+ * Run the stateless second phase of the two-phase release: mint a
+ * per-Package git Tag for every Package whose current Version isn't
+ * already tagged, invoke each Package's release plugin Op, and
+ * optionally push the Tags. A Package needs releasing iff its current
+ * Version has no matching git Tag. Returns the {@link RunReleaseResult}
+ * envelope.
+ */
 export async function runRelease(
   options: RunReleaseOptions,
 ): Promise<RunReleaseResult> {

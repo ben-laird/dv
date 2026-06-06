@@ -5,43 +5,55 @@
 // Only sections needed by milestone 1 (discovery) are fully typed. The rest
 // keep loose shapes that future subtools will tighten.
 
-// Tagged plugin reference. Exactly one of `path`, `builtin`, or
-// `command` is set; the YAML parser (via the discriminated Zod schema
-// in subtools/config/schema.ts) guarantees that invariant before any
-// runtime code sees this type.
-//
-//   { path: "./scripts/foo" }       — local file or directory
-//   { builtin: "cargo" }            — first-party plugin (none in v1)
-//   { command: "my-plugin" }        — binary on $PATH
-//
-// Replaces the old `use: string` form whose kind was inferred from
-// string shape (specs/config-format.md § Plugin resolution).
+/**
+ * Tagged Plugin reference. Exactly one of `path`, `builtin`, `command`, or
+ * `run` is set; the YAML parser (via the discriminated Zod schema in
+ * subtools/config/schema.ts) guarantees that invariant before any runtime
+ * code sees this type.
+ *
+ * - `{ path }` — local file or directory.
+ * - `{ builtin }` — first-party Plugin (none in v1).
+ * - `{ command }` — binary on `$PATH`.
+ * - `{ run }` — full invocation string.
+ *
+ * Replaces the old `use: string` form whose kind was inferred from
+ * string shape (specs/config-format.md § Plugin resolution).
+ */
 export type PluginReference =
   | { path: string }
   | { builtin: string }
   | { command: string }
   | { run: string };
 
+/**
+ * One config entry mapping a glob `match` to a Plugin `use`, with an
+ * optional per-assignment `timeout`.
+ */
 export interface PluginAssignment {
+  /** Glob (or array of globs) selecting the Packages this assignment claims. */
   match: string | string[];
+  /** The {@link PluginReference} to invoke for matched Packages. */
   use: PluginReference;
+  /** Optional per-Op timeout override (e.g. `"30s"`). */
   timeout?: string;
 }
 
-// Canonical string key for a PluginReference. Used as a Map key when
-// caching `resolvePlugin` results across the assignments in a single
-// run, and as the per-Package `plugin` identifier so a Package knows
-// which assignment's plugin to invoke without having to carry the
-// reference object around.
-//
-//   { path: "./foo" }                → "path:./foo"
-//   { builtin: "cargo" }             → "builtin:cargo"
-//   { command: "x" }                 → "command:x"
-//   { run: "deno run -A jsr:@s/p" }  → "run:deno run -A jsr:@s/p"
-//
-// Two assignments referencing the same plugin produce the same key,
-// which is what the resolve-once cache relies on. The key is not a
-// stable wire format — it's an in-process identifier.
+/**
+ * Canonical string key for a {@link PluginReference}. Used as a `Map` key
+ * when caching `resolvePlugin` results across the assignments in a single
+ * run, and as the per-Package `plugin` identifier so a Package knows which
+ * assignment's Plugin to invoke without having to carry the reference object
+ * around.
+ *
+ * - `{ path: "./foo" }` → `"path:./foo"`
+ * - `{ builtin: "cargo" }` → `"builtin:cargo"`
+ * - `{ command: "x" }` → `"command:x"`
+ * - `{ run: "deno run -A jsr:@s/p" }` → `"run:deno run -A jsr:@s/p"`
+ *
+ * Two assignments referencing the same Plugin produce the same key, which is
+ * what the resolve-once cache relies on. The key is not a stable wire format
+ * — it's an in-process identifier.
+ */
 export function pluginReferenceKey(ref: PluginReference): string {
   if ("path" in ref) return `path:${ref.path}`;
   if ("builtin" in ref) return `builtin:${ref.builtin}`;

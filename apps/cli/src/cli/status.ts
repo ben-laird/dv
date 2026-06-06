@@ -50,17 +50,29 @@ import { makeStyler, type Styler } from "./styler.ts";
 
 const DEFAULT_FAST_OP_TIMEOUT_MS = 60_000;
 
+/** Options controlling a {@link runStatus} run. */
 export interface RunStatusOptions {
+  /** Emit the {@link Plan} as `--json` instead of human-readable output. */
   emitJson: boolean;
+  /** Whether ANSI color is enabled for human-readable output. */
   colorEnabled: boolean;
+  /** Emit plugin tracing to stderr. */
   debug?: boolean;
 }
 
+/** Result of a {@link runStatus} run. */
 export interface RunStatusResult {
+  /** The previewed {@link Plan}, or `null` when no config was found. */
   plan: Plan | null;
+  /** Whether `.dv/config.yaml` was absent. */
   configMissing: boolean;
 }
 
+/**
+ * `dv status`: a read-only preview of `dv version`. Builds and returns the
+ * same {@link Plan} as `dv version --dry-run` (sharing its Plan schema) with
+ * zero side effects.
+ */
 export async function runStatus(
   options: RunStatusOptions,
 ): Promise<RunStatusResult> {

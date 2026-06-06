@@ -27,34 +27,57 @@ import { openEditorForRecordBody } from "./editor.ts";
 // an interactive TTY flow with prompts + $EDITOR. The two paths share
 // validation: known packages, allowed Change Type, non-empty body.
 
+/**
+ * Inputs to {@link runAdd}. Non-interactive fields mirror the `dv add` CLI
+ * flags; any left unset in a TTY context are filled by interactive prompts,
+ * while a non-TTY context requires `changeType`, `packageNames`, and
+ * `message`.
+ */
 export interface RunAddOptions {
-  // Non-interactive inputs (CLI flags). Any of these missing in a TTY
-  // context will be filled by interactive prompts; in a non-TTY context,
-  // type / packages / message are required.
+  /** Record Change Type (`feat`, `fix`, `feat!`, `fix!`). */
   changeType?: ChangeType;
+  /** Target Package names the Record applies to. */
   packageNames?: string[];
+  /** One-line Record summary; suppresses the `$EDITOR` body flow. */
   message?: string;
+  /** Reference links (issues, PRs) recorded in the Record. */
   links?: string[];
+  /** Free-form notes appended to the Record body. */
   notes?: string;
 
-  // Override `records.auto-stage` for this invocation.
+  /** Override `records.auto-stage` for this invocation. */
   stageOverride?: boolean;
 
-  // Override $EDITOR / $VISUAL for this invocation. Honored only when
-  // the editor template is actually launched (i.e. no --message). Same
-  // POSIX-shell parsing as the env var.
+  /**
+   * Override `$EDITOR` / `$VISUAL` for this invocation. Honored only when the
+   * editor template is actually launched (i.e. no `message`). Same POSIX-shell
+   * parsing as the env var.
+   */
   editorOverride?: string;
 
-  // Test seam: deterministic slug generation.
+  /** Test seam: deterministic slug generation. */
   slugRandomSource?: SlugRandomSource;
 }
 
+/** Outcome of a successful {@link runAdd}: the Record file it wrote. */
 export interface RunAddResult {
+  /** Absolute path to the created Record file under `.dv/records/`. */
   recordPath: string;
+  /** Absolute path to the repository root. */
   repoRootPath: string;
+  /** Whether the new Record was git-staged (per `records.auto-stage`). */
   staged: boolean;
 }
 
+/**
+ * Authors a single Record file under `.dv/records/` from {@link RunAddOptions},
+ * via flag inputs (CI / scripts / agents) or an interactive TTY flow with
+ * prompts and `$EDITOR`. Both paths share validation: known Packages, an
+ * allowed Change Type, and a non-empty body.
+ *
+ * @param options Record inputs and per-invocation overrides.
+ * @returns The written Record's path and staging state.
+ */
 export async function runAdd(options: RunAddOptions): Promise<RunAddResult> {
   const repoRootPath = await requireRepoRoot();
   const configFilePath = configPath(repoRootPath);

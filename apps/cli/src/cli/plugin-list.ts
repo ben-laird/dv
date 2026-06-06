@@ -29,33 +29,58 @@ import { makeStyler } from "./styler.ts";
 // `dv plugin verify <plugin>` is the deeper, per-plugin contract
 // check; `dv plugin list` is the shallower, whole-config audit.
 
+/** Inputs to {@link runPluginList}, mirroring the `dv plugin list` flags. */
 export interface RunPluginListOptions {
+  /** Emit machine-readable `--json` instead of the human-readable table. */
   emitJson: boolean;
+  /** Whether ANSI color is enabled for human-readable output. */
   colorEnabled: boolean;
+  /** Emit per-plugin stdio tracing to stderr (`--debug`). */
   debug?: boolean;
 }
 
+/** Outcome of auditing one plugin assignment: resolved, or failed to resolve/discover. */
 export type PluginListEntryStatus = "ok" | "resolve-failed" | "discover-failed";
 
+/** One plugin assignment's audit result — what it resolved to and which Packages it claims. */
 export interface PluginListEntry {
+  /** Position of this assignment in the config `plugins` list. */
   assignmentIndex: number;
+  /** The plugin {@link PluginReference} this assignment points at. */
   pluginReference: PluginReference;
+  /** Stable identity key for {@link PluginListEntry.pluginReference}. */
   pluginReferenceKey: string;
+  /** Globs the assignment matches Packages against. */
   matchGlobs: string[];
+  /** Whether resolution and discovery succeeded for this assignment. */
   status: PluginListEntryStatus;
+  /** Filesystem path the plugin resolved to, when resolution succeeded. */
   resolvedPluginPath?: string;
+  /** Kind of the resolved plugin ({@link ResolvedPlugin}), when resolution succeeded. */
   resolvedPluginKind?: ResolvedPlugin["kind"];
+  /** Packages this plugin claimed during discovery. */
   packages: Package[];
+  /** Stable {@link DvError} code, when this entry failed. */
   errorCode?: string;
+  /** Human-readable failure detail, when this entry failed. */
   errorMessage?: string;
 }
 
+/** Aggregate result of `dv plugin list`: per-assignment {@link PluginListEntry} rows plus a failure flag. */
 export interface RunPluginListResult {
+  /** Absolute path of the repository root the audit ran against. */
   repoRootPath: string;
+  /** One {@link PluginListEntry} per config plugin assignment. */
   entries: PluginListEntry[];
+  /** True if any entry has a non-`ok` {@link PluginListEntryStatus}. */
   hasFailures: boolean;
 }
 
+/**
+ * Run the `dv plugin list` audit: load config, resolve each plugin assignment,
+ * and discover the Packages each claims. Read-only — no write-side plugin ops
+ * fire, and per-assignment failures are surfaced as entries rather than thrown.
+ */
 export async function runPluginList(
   options: RunPluginListOptions,
 ): Promise<RunPluginListResult> {

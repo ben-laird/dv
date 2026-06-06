@@ -61,61 +61,96 @@ import { makeStyler } from "./styler.ts";
 
 const DEFAULT_FAST_OP_TIMEOUT_MS = 60_000;
 
+/** Inputs to {@link runVersion} — the flags and config-derived knobs for one `dv version` run. */
 export interface RunVersionOptions {
+  /** Preview without side effects; falls back to `safety.dry-run-by-default` config when unset. */
   dryRun?: boolean;
+  /** Compute and write changes but skip staging them into the version commit. */
   noCommit: boolean;
+  /** Drop Unresolved References instead of halting on them (`--prune`). */
   prune: boolean;
+  /** Emit the {@link Plan} and result as the versioned `--json` machine format. */
   emitJson: boolean;
+  /** Whether ANSI color is enabled for human-readable output. */
   colorEnabled: boolean;
-  // `--yes` is accepted as a no-op in M3 (dv version doesn't prompt);
-  // wired here so the flag is forward-compatible with later milestones.
+  /**
+   * `--yes` is accepted as a no-op in M3 (`dv version` doesn't prompt);
+   * wired here so the flag is forward-compatible with later milestones.
+   */
   yes: boolean;
-  // Tri-state: undefined → honor `git.require-clean-tree` config (the
-  // default). true → skip the check regardless. false → force the
-  // check on even when config says otherwise. The flag pair on the
-  // command line is `--allow-dirty` / `--no-allow-dirty`.
+  /**
+   * Tri-state clean-tree override. `undefined` → honor `git.require-clean-tree`
+   * config (the default). `true` → skip the check regardless. `false` → force
+   * the check on even when config says otherwise. The command-line flag pair is
+   * `--allow-dirty` / `--no-allow-dirty`.
+   */
   allowDirty?: boolean;
-  // True if the tool-wide `--debug` was set; the runner builds a
-  // stderr tracing reporter and threads it through every plugin
-  // invocation so authors can see exactly what dv asked the plugin.
-  // Optional with a default of false so test callers don't have to
-  // opt out of tracing every time.
+  /**
+   * True if the tool-wide `--debug` was set; the runner builds a stderr tracing
+   * reporter and threads it through every plugin invocation so authors can see
+   * exactly what `dv` asked the plugin. Optional with a default of false so test
+   * callers don't have to opt out of tracing every time.
+   */
   debug?: boolean;
 }
 
+/** Outcome of {@link runVersion} — the executed (or, in dry-run, previewed) {@link Plan} plus summary counts. */
 export interface RunVersionResult {
+  /** The {@link Plan} that was built and executed (or previewed in dry-run). */
   plan: Plan;
+  /** SHA of the version commit, or `null` when nothing was committed (dry-run or `--no-commit`). */
   commitSha: string | null;
+  /** How many Packages received a Bump. */
   bumpedPackageCount: number;
+  /** How many pending Records were consumed by this run. */
   consumedRecordCount: number;
+  /** The constraint rewrites the cascade pass executed. */
   cascadedUpdates: CascadedUpdate[];
+  /** Extra files plugins staged into the version commit (e.g. refreshed lockfiles). */
   finalizedFiles: FinalizedFile[];
 }
 
-// One additional file the finalize pass staged into the version
-// commit. Grouped by the plugin that produced it so the human
-// summary can name the source ("refreshed deno.lock via the deno
-// plugin") rather than dumping a flat list.
+/**
+ * One additional file the finalize pass staged into the version commit.
+ * Grouped by the plugin that produced it so the human summary can name the
+ * source ("refreshed deno.lock via the deno plugin") rather than dumping a
+ * flat list.
+ */
 export interface FinalizedFile {
-  // The canonical plugin reference key (e.g.
-  // "run:deno run -A ./examples/plugins/deno/main.ts"), so the
-  // summary can de-dupe across packages governed by the same plugin.
+  /**
+   * The canonical plugin reference key (e.g.
+   * `run:deno run -A ./examples/plugins/deno/main.ts`), so the summary can
+   * de-dupe across Packages governed by the same plugin.
+   */
   pluginKey: string;
-  // Repo-relative path the plugin reported via
-  // additionalChangedFiles.
+  /** Repo-relative path the plugin reported via `additionalChangedFiles`. */
   path: string;
 }
 
-// A single actual constraint rewrite the cascade pass executed (the
-// plugin reported changed:true). The dependentPath is relative to
-// repoRootPath and gets pushed into touchedPaths so the rewrite lands
-// in the version commit.
+/**
+ * A single constraint rewrite the cascade pass executed (the plugin reported
+ * `changed:true`). The {@link CascadedUpdate.dependentPath} is relative to the
+ * repo root and gets pushed into `touchedPaths` so the rewrite lands in the
+ * version commit.
+ */
 export interface CascadedUpdate {
+  /** Name of the Package whose Bump triggered the rewrite. */
   bumpedPackage: string;
+  /** Name of the consumer Package whose manifest constraint was rewritten. */
   dependent: string;
+  /** Repo-relative path to the rewritten dependent manifest. */
   dependentPath: string;
 }
 
+/**
+ * Runs `dv version`: consumes pending Records and, per Package, applies the
+ * aggregated Bump, rewrites the manifest Version, prepends a CHANGELOG section,
+ * cascades dependent constraints, deletes the consumed Records, and stages
+ * everything into one commit (the Release PR). Plan-then-execute is the spine
+ * (specs/language.md Algebra §7): the same `buildVersionPlan` call powers
+ * `dv status`, `--dry-run`, and the real run, with the dry-run path invoking
+ * zero write-side plugin Ops and touching nothing on disk.
+ */
 export async function runVersion(
   options: RunVersionOptions,
 ): Promise<RunVersionResult> {
