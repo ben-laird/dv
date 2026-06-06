@@ -9,10 +9,12 @@
 // discriminated-union error shapes for typed catch-site narrowing.
 
 export {
+  type CliErrorEnvelopeParseIssue,
+  type CliErrorEnvelopeParseResult,
+  parseCliErrorEnvelope,
   type RawCliErrorEnvelope,
   type RawCliErrorPayload,
-  rawCliErrorEnvelopeSchema,
-  rawCliErrorPayloadSchema,
+  safeParseCliErrorEnvelope,
 } from "./cli-error-schema.ts";
 export {
   CliError,

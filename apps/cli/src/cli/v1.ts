@@ -74,43 +74,73 @@ import { makeStyler } from "./styler.ts";
 
 const DEFAULT_FAST_OP_TIMEOUT_MS = 60_000;
 
+/** Inputs to {@link runV1}, the gated `dv v1 <package>` 0.x → 1.0.0 promotion. */
 export interface RunV1Options {
+  /** Name of the Unstable Package to promote to 1.0.0. */
   packageName: string;
+  /** Preview only, with zero side effects; flag overrides `safety.dry-run-by-default`. */
   dryRun?: boolean;
+  /** Stage and finalize files but skip the git commit. */
   noCommit: boolean;
+  /** Drop Unresolved References instead of halting on them. */
   prune: boolean;
+  /** Emit the machine-readable `--json` result instead of human output. */
   emitJson: boolean;
+  /** Whether ANSI color is enabled for human output. */
   colorEnabled: boolean;
+  /** Skip the confirmation prompt (required in non-TTY contexts). */
   yes: boolean;
+  /** Proceed despite a dirty working tree. */
   allowDirty?: boolean;
+  /** Emit plugin stderr tracing for debugging. */
   debug?: boolean;
 }
 
+/** Outcome of a {@link runV1} promotion. */
 export interface RunV1Result {
+  /** The {@link Plan} that was computed and executed. */
   plan: Plan;
+  /** SHA of the promotion commit, or `null` when `noCommit`/dry-run. */
   commitSha: string | null;
+  /** Name of the Package promoted to 1.0.0. */
   promotedPackage: string;
+  /** Number of Records consumed by the promotion. */
   consumedRecordCount: number;
+  /** Constraint-only cascades applied to consumers of the promoted Package. */
   cascadedUpdates: CascadedUpdate[];
+  /** Manifest files a write-version plugin staged into the commit. */
   finalizedFiles: FinalizedFile[];
 }
 
+/** A single constraint-only cascade: a consumer's manifest updated to the new Version. */
 export interface CascadedUpdate {
+  /** The Package whose Version bumped, triggering the cascade. */
   bumpedPackage: string;
+  /** The consuming Package whose manifest constraint was updated. */
   dependent: string;
+  /** Path to the consumer's manifest file that was rewritten. */
   dependentPath: string;
 }
 
-// One additional file the finalize pass staged into the v1 commit.
-// v1 only ever bumps one package, so there's at most one plugin
-// involved; we still carry the same shape as version's RunVersionResult
-// for consistency (callers reading the result don't have to branch
-// on the command).
+/**
+ * One additional file the finalize pass staged into the v1 commit.
+ * `dv v1` only ever bumps one Package, so there's at most one plugin
+ * involved; we still carry the same shape as `version`'s
+ * `RunVersionResult` for consistency (callers reading the result don't
+ * have to branch on the command).
+ */
 export interface FinalizedFile {
+  /** Key of the plugin that produced the file. */
   pluginKey: string;
+  /** Path to the staged file. */
   path: string;
 }
 
+/**
+ * Execute the gated `dv v1 <package>` promotion: bumps the named Unstable
+ * Package to its 1.0.0 Stability commitment, cascades constraints to
+ * consumers, and (unless dry-run or `noCommit`) commits the result.
+ */
 export async function runV1(options: RunV1Options): Promise<RunV1Result> {
   const repoRootPath = await requireRepoRoot();
   const configFilePath = configPath(repoRootPath);
@@ -810,32 +840,50 @@ interface RenderHumanSummaryArgs {
 // of these is ready to promote?" — *not* a bulk-promote, which is
 // why catalog mode is dry-run-only.
 
+/** Inputs to {@link runV1Catalog}, the dry-run-only `dv v1` discovery listing. */
 export interface RunV1CatalogOptions {
-  // Honors the same dry-run resolution as runV1 (flag > config >
-  // false). Catalog mode requires effective dry-run to be true —
-  // it has no real-run path because there's no single target to
-  // promote. The leaf passes through whatever the user supplied;
-  // we resolve + enforce here so the policy lives in one place.
+  /**
+   * Honors the same dry-run resolution as {@link runV1} (flag > config >
+   * false). Catalog mode requires effective dry-run to be true — it has
+   * no real-run path because there's no single target to promote. The
+   * leaf passes through whatever the user supplied; we resolve and
+   * enforce here so the policy lives in one place.
+   */
   dryRun?: boolean;
+  /** Drop Unresolved References instead of halting on them. */
   prune: boolean;
+  /** Emit the machine-readable `--json` result instead of human output. */
   emitJson: boolean;
+  /** Whether ANSI color is enabled for human output. */
   colorEnabled: boolean;
+  /** Emit plugin stderr tracing for debugging. */
   debug?: boolean;
 }
 
+/** Result of {@link runV1Catalog}: the projected promotion Plan for every Unstable Package. */
 export interface RunV1CatalogResult {
-  // A standard Plan with N pending entries — one per Unstable
-  // Package — each projected to 1.0.0. Tracked still lists every
-  // discovered Package so callers comparing against `dv status`'
-  // output see the same shape. unresolvedReferences are computed
-  // against the *whole* Record set, same as runV1, so the catalog
-  // surfaces ledger issues that would block any actual promotion.
+  /**
+   * A standard {@link Plan} with N pending entries — one per Unstable
+   * Package — each projected to 1.0.0. Tracked still lists every
+   * discovered Package so callers comparing against `dv status`'s
+   * output see the same shape. Unresolved References are computed
+   * against the *whole* Record set, same as {@link runV1}, so the
+   * catalog surfaces ledger issues that would block any actual promotion.
+   */
   plan: Plan;
-  // Convenience counters for human callers; redundant with plan
-  // but matches the shape RunV1Result returns.
+  /**
+   * Convenience count of Unstable Packages eligible for promotion;
+   * redundant with `plan` but matches the shape {@link RunV1Result} returns.
+   */
   eligibleCount: number;
 }
 
+/**
+ * List every discovered Package currently in the Unstable regime (major
+ * == 0) alongside the per-Package {@link Plan} that `dv v1 <pkg> --dry-run`
+ * would emit. A discovery aid for "which of these is ready to promote?" —
+ * *not* a bulk-promote, which is why catalog mode is dry-run-only.
+ */
 export async function runV1Catalog(
   options: RunV1CatalogOptions,
 ): Promise<RunV1CatalogResult> {

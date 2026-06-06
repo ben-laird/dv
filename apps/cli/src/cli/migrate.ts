@@ -7,30 +7,40 @@ import {
 import { requireRepoRoot } from "../subtools/git/mod.ts";
 import { makeStyler } from "./styler.ts";
 
-// `dv migrate config` per specs/config-format.md § Migrating from
-// the pre-1.0 string form. Reads `.dv/config.yaml`, runs every
-// registered migration step from the config-migrations subtool,
-// and writes the result back (unless --dry-run). The subtool owns
-// the per-step logic; this file is a thin orchestration over it,
-// matching the architectural pattern of every other cli/*.ts.
-//
-// Each future breaking config change ships its own migration step
-// in `subtools/config-migrations/step-*.ts`. This command stays
-// the single user-facing entrypoint for all of them.
-
+/**
+ * Inputs to {@link runMigrateConfig}, the `dv migrate config` orchestration
+ * per `specs/config-format.md` § Migrating from the pre-1.0 string form.
+ */
 export interface RunMigrateConfigOptions {
+  /** Compute the migration without writing `.dv/config.yaml` back. */
   dryRun: boolean;
+  /** Emit a machine-readable JSON summary instead of human output. */
   emitJson: boolean;
+  /** Whether to apply ANSI color to human-readable output. */
   colorEnabled: boolean;
 }
 
+/**
+ * Outcome of {@link runMigrateConfig}: the rewritten `.dv/config.yaml` plus
+ * per-step results from the config-migrations registry.
+ */
 export interface RunMigrateConfigResult {
+  /** Absolute path to the `.dv/config.yaml` that was read. */
   configFilePath: string;
+  /** `true` when no registered step changed anything (config already current). */
   alreadyMigrated: boolean;
+  /** Per-step results in registry order; each records the changes it made. */
   stepResults: ConfigMigrationStepResult[];
+  /** `true` when the rewritten text was persisted (never set under `dryRun`). */
   fileWritten: boolean;
 }
 
+/**
+ * Runs `dv migrate config`: reads `.dv/config.yaml`, applies every registered
+ * config-migration step (text-in/text-out so user comments survive), and
+ * writes the result back unless `dryRun`. A thin orchestration over the
+ * config-migrations subtool, which owns the per-step logic.
+ */
 export async function runMigrateConfig(
   options: RunMigrateConfigOptions,
 ): Promise<RunMigrateConfigResult> {

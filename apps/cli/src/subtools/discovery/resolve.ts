@@ -29,6 +29,10 @@ import { PosixTokenizeError, posixTokenize } from "../shell/posix-tokenize.ts";
 // are intercepted in config/parse.ts and routed to a
 // `config-legacy-use-shape` error pointing at `dv migrate config`.
 
+/**
+ * A {@link PluginReference} resolved to an executable form: a `single` file,
+ * a `dir`, or an `invocation`. Produced by {@link resolvePlugin}.
+ */
 export type ResolvedPlugin =
   | { kind: "single"; path: string }
   | { kind: "dir"; path: string }
@@ -48,6 +52,7 @@ interface ResolvePluginArgs {
   repoRootPath: string;
 }
 
+/** Resolves a {@link PluginReference} to a {@link ResolvedPlugin}, per specs/config-format.md § Plugin resolution. */
 export function resolvePlugin(
   args: ResolvePluginArgs,
 ): Promise<ResolvedPlugin> {

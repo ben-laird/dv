@@ -45,9 +45,13 @@ export interface RunConfigMigrationsResult {
   stepResults: ConfigMigrationStepResult[];
 }
 
+/** One migration step's outcome. */
 export interface ConfigMigrationStepResult {
+  /** Stable identifier of the step that ran. */
   stepId: string;
+  /** Human-readable description of what the step does. */
   description: string;
+  /** The discrete changes the step made (see {@link MigrationChange}). */
   changes: MigrationChange[];
 }
 

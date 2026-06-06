@@ -39,6 +39,10 @@ export interface RawCliErrorPayload {
  * Zod schema validating a single {@link RawCliErrorPayload} node. Carries
  * no `.transform()` calls so `z.toJSONSchema()` can emit it faithfully,
  * and uses `z.lazy` for the recursive `subErrors` array.
+ *
+ * @internal Not part of the public surface — see
+ * {@link rawCliErrorEnvelopeSchema} for the rationale and the public
+ * {@link parseCliErrorEnvelope} entry point.
  */
 export const rawCliErrorPayloadSchema: z.ZodType<RawCliErrorPayload> = z
   .object({
@@ -92,6 +96,12 @@ export interface RawCliErrorEnvelope {
  * Zod schema validating a {@link RawCliErrorEnvelope}. The top-level
  * `schema` URN lets downstream tools (shell scripts, agent fleets)
  * version-gate before parsing the recursive `error` tree.
+ *
+ * @internal Not part of the public surface — Zod is an implementation
+ * detail of `@dv-cli/clipc`. Consumers validate via
+ * {@link parseCliErrorEnvelope} / {@link safeParseCliErrorEnvelope}, which
+ * return plain (Zod-free) results. The schema stays exported only so the
+ * in-repo JSON Schema generator can feed it to `z.toJSONSchema()`.
  */
 export const rawCliErrorEnvelopeSchema: z.ZodType<RawCliErrorEnvelope> = z
   .object({
@@ -112,3 +122,50 @@ export const rawCliErrorEnvelopeSchema: z.ZodType<RawCliErrorEnvelope> = z
 // the envelope; declared as an interface above (rather than via
 // `z.infer`) so the export carries an explicit signature for JSR's
 // fast-types check.
+
+/**
+ * The outcome of a Zod-free validation: either a typed value or a flat list
+ * of issues. Mirrors the shape of a Zod `safeParse` result without exposing
+ * any Zod type, so `@dv-cli/clipc`'s public surface stays free of its
+ * validation library. Returned by {@link safeParseCliErrorEnvelope}.
+ */
+export type CliErrorEnvelopeParseResult =
+  | { success: true; data: RawCliErrorEnvelope }
+  | { success: false; issues: CliErrorEnvelopeParseIssue[] };
+
+/** One validation problem from {@link safeParseCliErrorEnvelope}. */
+export interface CliErrorEnvelopeParseIssue {
+  /** Dotted path to the offending field (e.g. `error.subErrors.0.code`). */
+  path: string;
+  /** Human-readable description of why the value was rejected. */
+  message: string;
+}
+
+/**
+ * Validate an unknown value as a {@link RawCliErrorEnvelope} — the JSON shape
+ * a `@dv-cli/clipc`-based CLI emits on stderr under `--json` mode. Throws if
+ * the value doesn't match. Use {@link safeParseCliErrorEnvelope} for a
+ * non-throwing variant.
+ */
+export function parseCliErrorEnvelope(input: unknown): RawCliErrorEnvelope {
+  return rawCliErrorEnvelopeSchema.parse(input);
+}
+
+/**
+ * Non-throwing counterpart to {@link parseCliErrorEnvelope}: validate an
+ * unknown value as a {@link RawCliErrorEnvelope} and return a Zod-free
+ * {@link CliErrorEnvelopeParseResult}.
+ */
+export function safeParseCliErrorEnvelope(
+  input: unknown,
+): CliErrorEnvelopeParseResult {
+  const result = rawCliErrorEnvelopeSchema.safeParse(input);
+  if (result.success) return { success: true, data: result.data };
+  return {
+    success: false,
+    issues: result.error.issues.map((issue) => ({
+      path: issue.path.join("."),
+      message: issue.message,
+    })),
+  };
+}

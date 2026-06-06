@@ -31,6 +31,11 @@ import { makeStyler } from "./styler.ts";
 
 const DEFAULT_INVOKE_TIMEOUT_MS = 60_000;
 
+/**
+ * The closed set of plugin Op names `dv plugin invoke` can exercise, in
+ * pipeline order. The source of truth for {@link PluginOpName}; consumers
+ * iterate it to enumerate the contract surface (see `specs/plugin-contract.md`).
+ */
 export const PLUGIN_OP_NAMES = [
   "info",
   "discover",
@@ -42,46 +47,75 @@ export const PLUGIN_OP_NAMES = [
   "finalize",
 ] as const;
 
+/** Name of a plugin Op `dv plugin invoke` can exercise (`info`, `discover`, etc.). */
 export type PluginOpName = (typeof PLUGIN_OP_NAMES)[number];
 
+/** Narrow an arbitrary string to a {@link PluginOpName} type guard. */
 export function isPluginOpName(value: string): value is PluginOpName {
   return (PLUGIN_OP_NAMES as readonly string[]).includes(value);
 }
 
+/** Inputs to {@link runPluginInvoke}: which plugin and Op to exercise plus the env/stdin context dv would supply. */
 export interface RunPluginInvokeOptions {
+  /** Plugin positional from the CLI (path or configured plugin reference). */
   pluginPositional: string;
+  /** Op to invoke on the resolved plugin. */
   opName: PluginOpName;
+  /** Package name to pass as Op context (sets `DV_PACKAGE_NAME`). */
   packageName?: string;
+  /** Package directory to pass as Op context (sets `DV_PACKAGE_PATH`). */
   packagePath?: string;
+  /** Repo root to pass as Op context (sets `DV_REPO_ROOT`). */
   repoRoot?: string;
+  /** Discovery glob to pass to a `discover` Op. */
   discoverGlob?: string;
+  /** New Version string for a `write-version` Op (sets `DV_NEW_VERSION`). */
   newVersion?: string;
+  /** Git Tag to pass as Op context (sets `DV_GIT_TAG`). */
   gitTag?: string;
-  // finalize-only inputs: --trigger flips DV_FINALIZE_TRIGGER
-  // ("version" or "v1"); --bumped-packages is the literal JSON
-  // payload dv would have built from the run's plan. For an
-  // ad-hoc debug invocation, the user may pass any well-formed
-  // value (e.g. `[]` to simulate "nothing bumped").
+  /**
+   * finalize-only inputs: `--trigger` flips `DV_FINALIZE_TRIGGER`
+   * (`"version"` or `"v1"`); `--bumped-packages` is the literal JSON
+   * payload dv would have built from the run's Plan. For an
+   * ad-hoc debug invocation, the user may pass any well-formed
+   * value (e.g. `[]` to simulate "nothing bumped").
+   */
   finalizeTrigger?: "version" | "v1";
+  /** Literal JSON payload for `finalize`'s bumped-Packages input. */
   bumpedPackagesJson?: string;
+  /** Raw JSON to feed the plugin on stdin, overriding the default payload. */
   stdinJson?: string;
+  /** Per-invocation timeout in milliseconds. */
   timeoutMs?: number;
+  /** Emit the machine-readable `--json` result instead of human output. */
   emitJson: boolean;
+  /** Whether ANSI color is enabled for human output. */
   colorEnabled: boolean;
+  /** Emit `--debug` stdio tracing to stderr. */
   debug?: boolean;
 }
 
+/** Outcome of {@link runPluginInvoke}: the resolved plugin, the full stdio exchange, and the conformance verdict. */
 export interface RunPluginInvokeResult {
+  /** Absolute path the plugin reference resolved to. */
   resolvedPluginPath: string;
+  /** Op that was invoked. */
   opName: PluginOpName;
+  /** Environment variables passed to the plugin process. */
   environmentVariables: Record<string, string>;
+  /** Payload written to the plugin's stdin, or `undefined` if none. */
   stdinPayload: string | undefined;
+  /** Raw stdout captured from the plugin. */
   rawStdout: string;
+  /** Raw stderr captured from the plugin. */
   rawStderr: string;
+  /** Plugin response parsed from stdout against the per-Op Zod schema. */
   parsedResponse: unknown;
+  /** Whether the response conformed to the per-Op response schema. */
   conformant: boolean;
 }
 
+/** Run a single plugin Op via JSON-over-stdio and return the full exchange and conformance verdict. */
 export async function runPluginInvoke(
   options: RunPluginInvokeOptions,
 ): Promise<RunPluginInvokeResult> {

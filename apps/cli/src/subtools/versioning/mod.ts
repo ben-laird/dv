@@ -35,11 +35,11 @@ export {
   type Plan,
   type PlanAwaitingRelease,
   type PlanChangeCounts,
+  type PlanConstraintUpdate,
   type PlanPending,
   type PlanTracked,
   type PlanUnresolvedReference,
   parsedPlanSchema,
-  type RawPlan,
   rawPlanSchema,
 } from "./plan-schema.ts";
 export { invokeReadVersion } from "./read-version.ts";

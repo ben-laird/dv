@@ -98,13 +98,11 @@ jobs:
       - name: deno publish --dry-run (slow-types gate, both packages)
         run: deno task publish:check
 
-      # Doc-lint surfaces missing JSDoc on the public surface. Soft for
-      # now (continue-on-error): the library surface has a large JSDoc
-      # backlog (issue #29) and we don't want to block merges on it —
-      # but the count should stay visible and trend down. Flip to a hard
-      # gate once #29 lands.
-      - name: deno doc --lint (non-blocking)
-        continue-on-error: true
+      # Doc-lint enforces JSDoc on the public surface of @dv-cli/dv and
+      # @dv-cli/clipc. Hard gate as of #29: the backlog is cleared, so any
+      # new undocumented public symbol (or a private-type leak into the
+      # surface) fails the build rather than merely trending a count.
+      - name: deno doc --lint
         run: deno task doc:lint
 
       # === dv-specific gates ===
