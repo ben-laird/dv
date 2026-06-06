@@ -109,6 +109,10 @@ export default defineConfig({
     "specs/walkthrough.md",
     "specs/v1-scope.md",
     "specs/schemas/**",
+    // Design proposals are implementer-facing (they link freely to the
+    // internal specs above), so they stay off the public site like the
+    // rest of the internal design library.
+    "specs/proposals/**",
   ],
   themeConfig: {
     nav: [
