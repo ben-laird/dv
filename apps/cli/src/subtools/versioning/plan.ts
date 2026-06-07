@@ -34,6 +34,12 @@ export interface AwaitingReleaseLookupEntry {
   version: string;
   tag: string;
   firstStable: boolean;
+  /**
+   * CHANGELOG release notes for this Version. Optional in the lookup —
+   * `dv release` fills it; `dv status` / `dv version` leave it absent and
+   * the builder defaults it to `""`.
+   */
+  releaseNotes?: string;
 }
 
 export interface BuildVersionPlanArgs {
@@ -144,6 +150,9 @@ export function buildVersionPlan(args: BuildVersionPlanArgs): Plan {
       version: entry.version,
       tag: entry.tag,
       firstStable: entry.firstStable,
+      // Populated at the command edge (`dv release`) where CHANGELOG IO
+      // lives; the pure plan builder leaves it empty. Never absent.
+      releaseNotes: entry.releaseNotes ?? "",
     }))
     .sort((leftEntry, rightEntry) =>
       leftEntry.package.localeCompare(rightEntry.package),

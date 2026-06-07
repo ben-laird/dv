@@ -2,7 +2,15 @@
 // release sections from Records and splices them into per-Package
 // CHANGELOG.md files (specs/design.md § Per-package CHANGELOG.md).
 
+export {
+  type ExtractReleaseSectionArgs,
+  extractReleaseSection,
+} from "./extract.ts";
 export { upsertChangelogSection } from "./io.ts";
+export {
+  type ResolveOutputPathFromTemplateArgs,
+  resolveOutputPathFromTemplate,
+} from "./path.ts";
 export {
   buildFreshChangelog,
   type PrependChangelogSectionArgs,
