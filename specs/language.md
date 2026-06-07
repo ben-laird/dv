@@ -83,8 +83,11 @@ output; distinct from the Records that feed it.
 computed before any mutation. The single artifact shared by `dv status`
 and `--dry-run`. *Not: preview, diff.*
 
-**Release PR** — the reviewable commit `dv version` produces, merged before
-`dv release` runs. *Not: version commit (in user-facing text).*
+**Release PR** — the reviewable commit `dv version` produces. One of two
+workflows: under **release-on-merge** (the default) it lands on `main`
+automatically as part of the merge; routed through a **Release PR** it is
+reviewed and merged before `dv release` runs. The term names the commit in
+the latter, gated workflow. *Not: version commit (in user-facing text).*
 
 ---
 
@@ -226,8 +229,9 @@ version : Records → ΔManifests + ΔCHANGELOGs + Commit
 release : Manifests × Tags → ΔTags + Publishes
 ```
 
-This is why the phases can be separated by a PR review (the Release PR) and
-why each is independently runnable, dry-runnable, and resumable.
+This is why the phases can run back-to-back on merge (release-on-merge) or
+be separated by a PR review (the Release PR), and why each is independently
+runnable, dry-runnable, and resumable.
 
 ### 7. Plan determinism
 

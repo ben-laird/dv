@@ -156,8 +156,9 @@ entries (and HISTORY entries when `history.enabled: true` in config),
 updates dependents' constraints (constraint-only cascade), and deletes the
 consumed Records. Auto-commits the result by default with a templated
 message (CC-shaped — an emission convention only; `dv` never parses
-contributor commits). **Does not push.** The commit it produces is the
-Release PR.
+contributor commits). **Does not push.** The commit it produces lands on
+`main` under release-on-merge, or is reviewed as a Release PR when a team
+gates the bump.
 
 Halts on an Unresolved Reference (a Record pointing at a Package that no
 longer exists with no Rename edge); `--prune` drops such Records instead.

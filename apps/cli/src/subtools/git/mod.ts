@@ -1,7 +1,7 @@
 // Public surface of the git Substrate (specs/design.md § Capability
 // decomposition: git is a substrate, not a capability of its own). Used
 // by `dv version` to gate the run, stage the changes, and produce the
-// Release PR commit.
+// version-bump commit (the Release PR in a review-gated workflow).
 
 export { type AssertCleanTreeArgs, assertCleanTree } from "./clean-tree.ts";
 export {

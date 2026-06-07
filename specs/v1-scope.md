@@ -109,7 +109,9 @@ Not v1, but the architecture leaves room for each:
 - **CC-accelerator affordances** — `dv record from-commit <sha>` /
   `from-range <range>` to draft Records from Conventional Commits
   history. See `design.md` § Records over commit messages.
-- **GitHub Actions companion** — bot/action that maintains a Release PR.
+- **GitHub Actions companion** — release-on-merge CI that runs both phases
+  on merge to `main` (the default), or a bot/action that maintains a Release
+  PR for teams gating the bump on review. See `guides/ci-integration.md`.
 
 ## Non-goals (probably forever)
 
@@ -158,7 +160,8 @@ A user can:
 2. Write a small shell-script plugin per ecosystem (or use whatever
    built-ins ship by then).
 3. Have contributors file records via `dv add`.
-4. Get a clean Release PR via `dv version`.
+4. Get a clean version-bump commit via `dv version` — landed on `main` by
+   release-on-merge CI, or reviewed as a Release PR first.
 5. Cut tags and trigger publishes via `dv release`.
 
 With SemVer adherence enforced and per-package CHANGELOGs maintained.

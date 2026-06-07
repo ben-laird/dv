@@ -145,11 +145,14 @@ $ dv version
 ```
 
 The consumed Records are gone from `.dv/records/`, and the whole thing
-is one commit — the **Release PR**. Open it, review it, merge it.
+is one commit. Under **release-on-merge** (the default workflow) that
+commit lands on `main` automatically; teams that gate the bump on review
+open it as a **Release PR** and merge it first.
 
 ## 6. Release (phase two)
 
-After the Release PR merges, cut Tags and publish. `dv release` is
+Once the bump commit is on `main` (directly under release-on-merge, or
+after the Release PR merges), cut Tags and publish. `dv release` is
 **stateless**: it compares each Package's current Version to existing Tags
 and acts on whatever is untagged.
 
