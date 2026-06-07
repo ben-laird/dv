@@ -1,5 +1,6 @@
 import { DvError } from "../domain/errors.ts";
 import type { Package } from "../domain/package.ts";
+import { SCHEMA_URNS } from "../domain/schema-urns.ts";
 import { parseVersion } from "../domain/version.ts";
 import {
   extractReleaseSection,
@@ -101,6 +102,8 @@ export interface ReleaseOpOutcome {
 
 /** Release envelope returned by {@link runRelease}. */
 export interface RunReleaseResult {
+  /** Versioned schema URN identifying this envelope shape. */
+  schema: typeof SCHEMA_URNS.releaseResult;
   /** The release {@link Plan} computed and executed for this run. */
   plan: Plan;
   /** Tag names newly minted this run. */
@@ -212,6 +215,7 @@ export async function runRelease(
     // so consumers parse one shape across no-op / dry-run / real runs.
     // The action arrays are empty here — nothing was minted or pushed.
     const noopResult: RunReleaseResult = {
+      schema: SCHEMA_URNS.releaseResult,
       plan,
       mintedTagNames: [],
       reusedTagNames: [],
@@ -225,6 +229,7 @@ export async function runRelease(
 
   if (effectiveDryRun) {
     const dryRunResult: RunReleaseResult = {
+      schema: SCHEMA_URNS.releaseResult,
       plan,
       mintedTagNames: [],
       reusedTagNames: [],
@@ -376,20 +381,17 @@ export async function runRelease(
     }
   }
 
+  const result: RunReleaseResult = {
+    schema: SCHEMA_URNS.releaseResult,
+    plan,
+    mintedTagNames,
+    reusedTagNames,
+    releaseOpOutcomes,
+    pushedTagNames,
+  };
+
   if (options.emitJson) {
-    console.log(
-      JSON.stringify(
-        {
-          plan,
-          mintedTagNames,
-          reusedTagNames,
-          releaseOpOutcomes,
-          pushedTagNames,
-        },
-        null,
-        2,
-      ),
-    );
+    console.log(JSON.stringify(result, null, 2));
   } else {
     renderHumanSummary({
       plan,
@@ -430,13 +432,7 @@ export async function runRelease(
     });
   }
 
-  return {
-    plan,
-    mintedTagNames,
-    reusedTagNames,
-    releaseOpOutcomes,
-    pushedTagNames,
-  };
+  return result;
 }
 
 interface ReleaseWorkEntry {

@@ -1,4 +1,5 @@
 import { DvError } from "../domain/errors.ts";
+import { SCHEMA_URNS } from "../domain/schema-urns.ts";
 import { resolvePlugin } from "../subtools/discovery/resolve.ts";
 import {
   invokeInfo,
@@ -429,7 +430,7 @@ function finishVerify(args: FinishVerifyArgs): RunPluginVerifyResult {
     console.log(
       JSON.stringify(
         {
-          schema: "urn:dv:schema:v1:plugin-verify-result",
+          schema: SCHEMA_URNS.pluginVerifyResult,
           pluginPath: args.resolvedPluginPath,
           checks: args.checks,
           summary: { passedCount, failedCount, skippedCount },

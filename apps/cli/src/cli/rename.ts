@@ -1,6 +1,7 @@
 import { relative } from "@std/path";
 import { type PluginAssignment, pluginReferenceKey } from "../domain/config.ts";
 import { DvError } from "../domain/errors.ts";
+import { SCHEMA_URNS } from "../domain/schema-urns.ts";
 import { formatVersion } from "../domain/version.ts";
 import { configPath, loadConfig } from "../subtools/config/mod.ts";
 import { discoverPackages } from "../subtools/discovery/mod.ts";
@@ -113,7 +114,7 @@ export async function runRename(
       console.log(
         JSON.stringify(
           {
-            schema: "urn:dv:schema:v1:rename-result",
+            schema: SCHEMA_URNS.renameResult,
             ledgerPath,
             fromPackageName: options.fromPackageName,
             toPackageName: options.toPackageName,
@@ -161,7 +162,7 @@ export async function runRename(
     console.log(
       JSON.stringify(
         {
-          schema: "urn:dv:schema:v1:rename-result",
+          schema: SCHEMA_URNS.renameResult,
           ledgerPath,
           fromPackageName: options.fromPackageName,
           toPackageName: options.toPackageName,

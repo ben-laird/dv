@@ -1,5 +1,6 @@
 import { relative } from "@std/path";
 import { DvError } from "../domain/errors.ts";
+import { SCHEMA_URNS } from "../domain/schema-urns.ts";
 import { configPath, loadConfig, recordsPath } from "../subtools/config/mod.ts";
 import { discoverPackages } from "../subtools/discovery/mod.ts";
 import { requireRepoRoot } from "../subtools/git/repo-root.ts";
@@ -35,7 +36,7 @@ export interface ValidationProblem {
 /** The `--json` report shape for `dv validate`; one {@link ValidationProblem} per issue. */
 export interface ValidationReport {
   /** Versioned schema URN identifying this report shape. */
-  schema: "urn:dv:schema:v1:validation-report";
+  schema: typeof SCHEMA_URNS.validationReport;
   /** `true` iff no problems were found. */
   ok: boolean;
   /** Number of Records parsed during the run. */
@@ -136,7 +137,7 @@ export async function runValidate(
   const totalRecordsChecked =
     recordsListing.parsedRecords.length + recordsListing.failures.length;
   const validationReport: ValidationReport = {
-    schema: "urn:dv:schema:v1:validation-report",
+    schema: SCHEMA_URNS.validationReport,
     ok: validationProblems.length === 0,
     recordsChecked: totalRecordsChecked,
     problems: validationProblems,

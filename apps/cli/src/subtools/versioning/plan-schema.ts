@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { SCHEMA_URNS } from "../../domain/schema-urns.ts";
 
 // --- Public Plan contract (Zod-free) ---------------------------------------
 // The Plan types are hand-written interfaces, not `z.infer` aliases, so the
@@ -103,7 +104,7 @@ export interface PlanTracked {
  */
 export interface Plan {
   /** Schema id — always `urn:dv:schema:v1:plan`. */
-  schema: "urn:dv:schema:v1:plan";
+  schema: typeof SCHEMA_URNS.plan;
   /** Which command produced this Plan. */
   command: "status" | "version" | "release";
   /** Per-Package bumps that `dv version` would apply. */
@@ -250,7 +251,7 @@ const planTrackedPackageSchema: z.ZodType<PlanTracked> = z
 
 export const rawPlanSchema: z.ZodType<Plan> = z
   .object({
-    schema: z.literal("urn:dv:schema:v1:plan").describe("Schema id."),
+    schema: z.literal(SCHEMA_URNS.plan).describe("Schema id."),
     command: z
       .enum(["status", "version", "release"])
       .describe("Which command produced this Plan."),
@@ -273,7 +274,7 @@ export const rawPlanSchema: z.ZodType<Plan> = z
   })
   .strict()
   .meta({
-    id: "urn:dv:schema:v1:plan",
+    id: SCHEMA_URNS.plan,
     title: "dv Plan",
     description:
       "The side-effect-free Plan emitted by `dv status --json` and `dv version|release --dry-run --json`. A pure function of repo state (specs/language.md Algebra §7).",

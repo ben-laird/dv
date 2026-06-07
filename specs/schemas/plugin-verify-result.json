@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:dv:schema:v1:plugin-verify-result",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "urn:dv:schema:v1:plugin-verify-result",
+      "description": "Versioned schema URN identifying this payload."
+    },
+    "pluginPath": {
+      "type": "string"
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "fail",
+              "skipped"
+            ]
+          },
+          "detail": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "outcome",
+          "detail"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "summary": {
+      "type": "object",
+      "properties": {
+        "passedCount": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "failedCount": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "skippedCount": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "passedCount",
+        "failedCount",
+        "skippedCount"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schema",
+    "pluginPath",
+    "checks",
+    "summary"
+  ],
+  "additionalProperties": false,
+  "title": "Plugin-verify result",
+  "description": "The `dv plugin verify --json` conformance report: per-Op checks plus a pass/fail/skip summary."
+}

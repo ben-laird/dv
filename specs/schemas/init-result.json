@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:dv:schema:v1:init-result",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "urn:dv:schema:v1:init-result",
+      "description": "Versioned schema URN identifying this payload."
+    },
+    "repoRoot": {
+      "type": "string"
+    },
+    "alreadyInitialized": {
+      "type": "boolean"
+    },
+    "created": {
+      "type": "object",
+      "properties": {
+        "config": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "recordsDir": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "gitignore": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "config",
+        "recordsDir",
+        "gitignore"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schema",
+    "repoRoot",
+    "alreadyInitialized",
+    "created"
+  ],
+  "additionalProperties": false,
+  "title": "Init result",
+  "description": "The `dv init --json` envelope: which `.dv/` artifacts were created (null when already present)."
+}

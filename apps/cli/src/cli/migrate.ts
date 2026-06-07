@@ -1,4 +1,5 @@
 import { DvError } from "../domain/errors.ts";
+import { SCHEMA_URNS } from "../domain/schema-urns.ts";
 import { configPath } from "../subtools/config/mod.ts";
 import {
   type ConfigMigrationStepResult,
@@ -74,7 +75,7 @@ export async function runMigrateConfig(
       console.log(
         JSON.stringify(
           {
-            schema: "urn:dv:schema:v1:migrate-config-result",
+            schema: SCHEMA_URNS.migrateConfigResult,
             configFilePath,
             alreadyMigrated: true,
             stepResults: [],
@@ -106,7 +107,7 @@ export async function runMigrateConfig(
     console.log(
       JSON.stringify(
         {
-          schema: "urn:dv:schema:v1:migrate-config-result",
+          schema: SCHEMA_URNS.migrateConfigResult,
           configFilePath,
           alreadyMigrated: false,
           stepResults,

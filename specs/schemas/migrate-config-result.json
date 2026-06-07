@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:dv:schema:v1:migrate-config-result",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "urn:dv:schema:v1:migrate-config-result",
+      "description": "Versioned schema URN identifying this payload."
+    },
+    "configFilePath": {
+      "type": "string"
+    },
+    "alreadyMigrated": {
+      "type": "boolean"
+    },
+    "stepResults": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "stepId": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "before": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "before",
+                "kind",
+                "value"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "stepId",
+          "description",
+          "changes"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "fileWritten": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "schema",
+    "configFilePath",
+    "alreadyMigrated",
+    "stepResults",
+    "fileWritten"
+  ],
+  "additionalProperties": false,
+  "title": "Migrate-config result",
+  "description": "The `dv migrate config --json` envelope: per-step config-migration changes and whether the file was rewritten."
+}

@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:dv:schema:v1:rename-result",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "urn:dv:schema:v1:rename-result",
+      "description": "Versioned schema URN identifying this payload."
+    },
+    "ledgerPath": {
+      "type": "string"
+    },
+    "fromPackageName": {
+      "type": "string"
+    },
+    "toPackageName": {
+      "type": "string"
+    },
+    "atVersion": {
+      "type": "string"
+    },
+    "atVersionSource": {
+      "type": "string",
+      "enum": [
+        "inferred",
+        "override"
+      ]
+    },
+    "fileCreated": {
+      "type": "boolean"
+    },
+    "fileWritten": {
+      "type": "boolean"
+    },
+    "dryRun": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "schema",
+    "ledgerPath",
+    "fromPackageName",
+    "toPackageName",
+    "atVersion",
+    "atVersionSource",
+    "fileCreated",
+    "fileWritten",
+    "dryRun"
+  ],
+  "additionalProperties": false,
+  "title": "Rename result",
+  "description": "The `dv rename --json` envelope: the appended lineage edge and what changed on disk."
+}

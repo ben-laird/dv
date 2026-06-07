@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:dv:schema:v1:validation-report",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "urn:dv:schema:v1:validation-report",
+      "description": "Versioned schema URN identifying this payload."
+    },
+    "ok": {
+      "type": "boolean"
+    },
+    "recordsChecked": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    },
+    "problems": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "ok",
+    "recordsChecked",
+    "problems"
+  ],
+  "additionalProperties": false,
+  "title": "Validation report",
+  "description": "The `dv validate --json` report: ok flag + problems."
+}

@@ -16,6 +16,20 @@
 import { rawCliErrorEnvelopeSchema } from "@dv-cli/clipc/internal/error-schema";
 import { resolve } from "@std/path";
 import { z } from "zod";
+import {
+  rawInitResultSchema,
+  rawMigrateConfigResultSchema,
+  rawPluginInvokeResultSchema,
+  rawPluginListResultSchema,
+  rawPluginVerifyResultSchema,
+  rawReleaseResultSchema,
+  rawRenameResultSchema,
+  rawValidationReportSchema,
+} from "../cli/schemas/json-contracts.ts";
+import {
+  assertVersionedSchemaUrns,
+  SCHEMA_URNS,
+} from "../domain/schema-urns.ts";
 import { rawConfigLayerSchema } from "../subtools/config/schema.ts";
 import { rawRecordFrontmatterSchema } from "../subtools/records/schema.ts";
 import { renameLedgerSchema } from "../subtools/renames/schema.ts";
@@ -29,32 +43,69 @@ interface GeneratedSchemaFile {
 
 const REPO_ROOT = resolveRepoRoot();
 
+// Freeze gate: every registered contract id must carry the versioned
+// `urn:dv:schema:vN:` prefix. Throws (failing generate AND check) if not,
+// so an unversioned `--json` contract id can't ship.
+assertVersionedSchemaUrns();
+
+const schemaFile = (
+  fileName: string,
+  schema: z.ZodType,
+  schemaId: string,
+): GeneratedSchemaFile => ({
+  outputPath: resolve(REPO_ROOT, "specs/schemas", fileName),
+  schema,
+  schemaId,
+});
+
 const GENERATED_SCHEMA_FILES: GeneratedSchemaFile[] = [
-  {
-    outputPath: resolve(REPO_ROOT, "specs/schemas/config.json"),
-    schema: rawConfigLayerSchema,
-    schemaId: "urn:dv:schema:v1:config",
-  },
-  {
-    outputPath: resolve(REPO_ROOT, "specs/schemas/record.json"),
-    schema: rawRecordFrontmatterSchema,
-    schemaId: "urn:dv:schema:v1:record",
-  },
-  {
-    outputPath: resolve(REPO_ROOT, "specs/schemas/rename-ledger.json"),
-    schema: renameLedgerSchema,
-    schemaId: "urn:dv:schema:v1:rename-ledger",
-  },
-  {
-    outputPath: resolve(REPO_ROOT, "specs/schemas/plan.json"),
-    schema: rawPlanSchema,
-    schemaId: "urn:dv:schema:v1:plan",
-  },
-  {
-    outputPath: resolve(REPO_ROOT, "specs/schemas/cli-error.json"),
-    schema: rawCliErrorEnvelopeSchema,
-    schemaId: "urn:dv:schema:v1:cli-error",
-  },
+  // Data-file / shared schemas.
+  schemaFile("config.json", rawConfigLayerSchema, SCHEMA_URNS.config),
+  schemaFile("record.json", rawRecordFrontmatterSchema, SCHEMA_URNS.record),
+  schemaFile(
+    "rename-ledger.json",
+    renameLedgerSchema,
+    SCHEMA_URNS.renameLedger,
+  ),
+  schemaFile("plan.json", rawPlanSchema, SCHEMA_URNS.plan),
+  schemaFile("cli-error.json", rawCliErrorEnvelopeSchema, SCHEMA_URNS.cliError),
+  // Command `--json` result envelopes (issue #19 freeze).
+  schemaFile(
+    "validation-report.json",
+    rawValidationReportSchema,
+    SCHEMA_URNS.validationReport,
+  ),
+  schemaFile(
+    "release-result.json",
+    rawReleaseResultSchema,
+    SCHEMA_URNS.releaseResult,
+  ),
+  schemaFile(
+    "rename-result.json",
+    rawRenameResultSchema,
+    SCHEMA_URNS.renameResult,
+  ),
+  schemaFile(
+    "migrate-config-result.json",
+    rawMigrateConfigResultSchema,
+    SCHEMA_URNS.migrateConfigResult,
+  ),
+  schemaFile("init-result.json", rawInitResultSchema, SCHEMA_URNS.initResult),
+  schemaFile(
+    "plugin-list-result.json",
+    rawPluginListResultSchema,
+    SCHEMA_URNS.pluginListResult,
+  ),
+  schemaFile(
+    "plugin-verify-result.json",
+    rawPluginVerifyResultSchema,
+    SCHEMA_URNS.pluginVerifyResult,
+  ),
+  schemaFile(
+    "plugin-invoke-result.json",
+    rawPluginInvokeResultSchema,
+    SCHEMA_URNS.pluginInvokeResult,
+  ),
 ];
 
 interface RenderJsonSchemaArgs {

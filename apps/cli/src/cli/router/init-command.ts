@@ -1,5 +1,6 @@
 import { done, forCtx } from "@dv-cli/clipc";
 import { join, relative } from "@std/path";
+import { SCHEMA_URNS } from "../../domain/schema-urns.ts";
 import {
   CONFIG_DIR,
   configPath,
@@ -45,7 +46,7 @@ export const initLeaf = command({
       console.log(
         JSON.stringify(
           {
-            schema: "urn:dv:schema:v1:init-result",
+            schema: SCHEMA_URNS.initResult,
             repoRoot: initResult.repoRoot,
             alreadyInitialized: wasAlreadyInitialized,
             created: {

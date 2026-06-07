@@ -1,4 +1,5 @@
 import { DvError } from "../domain/errors.ts";
+import { SCHEMA_URNS } from "../domain/schema-urns.ts";
 import { resolvePlugin } from "../subtools/discovery/resolve.ts";
 import {
   DV_CONTRACT_VERSION,
@@ -181,7 +182,7 @@ export async function runPluginInvoke(
     console.log(
       JSON.stringify(
         {
-          schema: "urn:dv:schema:v1:plugin-invoke-result",
+          schema: SCHEMA_URNS.pluginInvokeResult,
           pluginPath: resolvedPlugin.path,
           opName: options.opName,
           environmentVariables,
