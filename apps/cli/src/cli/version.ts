@@ -5,6 +5,7 @@ import type { Record as DvRecord } from "../domain/record.ts";
 import { parseVersion } from "../domain/version.ts";
 import {
   renderReleaseSection,
+  resolveOutputPathFromTemplate,
   upsertChangelogSection,
 } from "../subtools/changelog/mod.ts";
 import { configPath, loadConfig, recordsPath } from "../subtools/config/mod.ts";
@@ -715,23 +716,6 @@ async function readAllCurrentVersions(
     });
   }
   return entries;
-}
-
-interface ResolveOutputPathFromTemplateArgs {
-  package: Package;
-  locationTemplate: string;
-  newVersion: string;
-  repoRootPath: string;
-}
-
-function resolveOutputPathFromTemplate(
-  args: ResolveOutputPathFromTemplateArgs,
-): string {
-  const rendered = args.locationTemplate
-    .replaceAll("{package}", args.package.name)
-    .replaceAll("{package-path}", args.package.path)
-    .replaceAll("{version}", args.newVersion);
-  return join(args.repoRootPath, rendered);
 }
 
 function indexPackagesByName(packages: Package[]): Map<string, Package> {

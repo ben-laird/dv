@@ -22,6 +22,10 @@ interface SetUpReleaseFixtureArgs {
   // Override the example plugin's `release` script with custom
   // behavior — e.g. exit-nonzero to simulate a failed publish.
   releaseScriptOverride?: string;
+  // Optional CHANGELOG.md contents for pkg-a, written at the default
+  // `{package-path}/CHANGELOG.md` location so release-notes extraction
+  // can be exercised.
+  changelogContentA?: string;
 }
 
 interface ReleaseFixtureResult {
@@ -156,6 +160,13 @@ Deno.exit(result.code);
     `${JSON.stringify({ name: "pkg-b", version: args.initialVersionB ?? "1.0.0" }, null, 2)}\n`,
   );
 
+  if (args.changelogContentA !== undefined) {
+    await Deno.writeTextFile(
+      join(packageADir, "CHANGELOG.md"),
+      args.changelogContentA,
+    );
+  }
+
   await new Deno.Command("git", {
     args: ["-C", repoRootPath, "add", "."],
   }).output();
@@ -276,6 +287,51 @@ Deno.test("runRelease --dry-run lists the plan without minting or invoking", asy
 
     // And no release op was invoked
     assertEquals(result.releaseOpOutcomes, []);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+Deno.test("runRelease populates releaseNotes on awaiting-release entries from the CHANGELOG", async () => {
+  // Given pkg-a is untagged and has a CHANGELOG section for its version
+  const fixture = await setUpReleaseFixture({
+    changelogContentA: `# Changelog
+
+## [1.0.0] - 2026-06-07
+
+### Added
+
+- The first thing
+- The second thing
+`,
+  });
+
+  try {
+    // When dv release --dry-run runs (no side effects)
+    const { result } = await captureStdout(() =>
+      runRelease({
+        dryRun: true,
+        force: false,
+        yes: true,
+        emitJson: false,
+        colorEnabled: false,
+      }),
+    );
+
+    // Then pkg-a's entry carries the extracted notes (heading dropped)
+    const entryA = result.plan.awaitingRelease.find(
+      (entry) => entry.package === "pkg-a",
+    );
+    assertEquals(
+      entryA?.releaseNotes,
+      "### Added\n\n- The first thing\n- The second thing",
+    );
+
+    // And pkg-b, which has no CHANGELOG, gets the empty-string default
+    const entryB = result.plan.awaitingRelease.find(
+      (entry) => entry.package === "pkg-b",
+    );
+    assertEquals(entryB?.releaseNotes, "");
   } finally {
     await fixture.cleanup();
   }

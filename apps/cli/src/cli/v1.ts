@@ -5,6 +5,7 @@ import type { Record as DvRecord } from "../domain/record.ts";
 import { parseVersion } from "../domain/version.ts";
 import {
   renderReleaseSection,
+  resolveOutputPathFromTemplate,
   upsertChangelogSection,
 } from "../subtools/changelog/mod.ts";
 import { configPath, loadConfig, recordsPath } from "../subtools/config/mod.ts";
@@ -350,7 +351,10 @@ export async function runV1(options: RunV1Options): Promise<RunV1Result> {
     schema: "urn:dv:schema:v1:plan",
     command: "version",
     pending: [pendingEntry],
-    awaitingRelease: awaitingReleaseLookup,
+    awaitingRelease: awaitingReleaseLookup.map((entry) => ({
+      ...entry,
+      releaseNotes: "",
+    })),
     unresolvedReferences,
     tracked: allPackageCurrentVersions.map((entry) => {
       const pkg = packagesByName.get(entry.packageName);
@@ -759,23 +763,6 @@ function computeChangeCounts(records: DvRecord[]): {
   return { feat, fix, breaking };
 }
 
-interface ResolveOutputPathFromTemplateArgs {
-  package: Package;
-  locationTemplate: string;
-  newVersion: string;
-  repoRootPath: string;
-}
-
-function resolveOutputPathFromTemplate(
-  args: ResolveOutputPathFromTemplateArgs,
-): string {
-  const filled = args.locationTemplate
-    .replaceAll("{package}", args.package.name)
-    .replaceAll("{package-path}", args.package.path)
-    .replaceAll("{version}", args.newVersion);
-  return join(args.repoRootPath, filled);
-}
-
 function todayDateString(): string {
   const now = new Date();
   const yyyy = now.getUTCFullYear();
@@ -1039,7 +1026,10 @@ export async function runV1Catalog(
     schema: "urn:dv:schema:v1:plan",
     command: "version",
     pending: pendingEntries,
-    awaitingRelease: awaitingReleaseLookup,
+    awaitingRelease: awaitingReleaseLookup.map((entry) => ({
+      ...entry,
+      releaseNotes: "",
+    })),
     unresolvedReferences: dedupedUnresolved,
     tracked: allPackageCurrentVersions.map((entry) => {
       const pkg = packagesByName.get(entry.packageName);
