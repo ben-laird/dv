@@ -50,7 +50,7 @@ From the repo root:
 | `deno task test`              | Run the whole test suite (`deno test -A`).                           |
 | `deno task schemas:generate`  | Emit `specs/schemas/*.json` from the Zod source.                     |
 | `deno task schemas:check`     | CI gate: re-generate in memory; fail if diff vs disk.                |
-| `deno task verify`            | All gates in sequence (fmt:check, lint, check, test, schemas:check). |
+| `deno task verify`            | Every CI gate, fail-fast (the single source of truth: `apps/cli/src/scripts/ci.ts`). |
 
 The `install` task is what to use when iterating on TTY output — colors,
 prompts, banners. The installed shim runs the in-tree source against the

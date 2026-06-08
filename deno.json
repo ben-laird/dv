@@ -17,7 +17,7 @@
     "schemas:check": "deno run -A apps/cli/src/scripts/generate-schemas.ts check",
     "publish:check": "deno publish --dry-run --no-provenance --allow-dirty",
     "doc:lint": "deno doc --lint apps/cli/src/lib.ts packages/clipc/src/mod.ts",
-    "verify": "deno task fmt:check && deno task lint && deno task check && deno task test && deno task schemas:check && deno task publish:check",
+    "verify": "deno run -A apps/cli/src/scripts/ci.ts",
     "gate": "deno run -A apps/cli/src/scripts/gate.ts"
   },
   "imports": {
