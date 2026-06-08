@@ -8,20 +8,49 @@
 // breaks consumers bumps the version segment. `assertVersionedSchemaUrns`
 // (below) is the gate that keeps the version segment present.
 
+/** The current contract major version, the `vN` segment of every URN. */
 export const SCHEMA_URN_MAJOR = "v1" as const;
 
-const urn = (name: string): string =>
+/** The full URN for a contract `name`, e.g. `urn:dv:schema:v1:plan`. */
+export type SchemaUrnOf<Name extends string> =
+  `urn:dv:schema:${typeof SCHEMA_URN_MAJOR}:${Name}`;
+
+// Builds a URN preserving the literal `name` in the return type, so each
+// SCHEMA_URNS member keeps a precise literal type (consumers do
+// `z.literal(SCHEMA_URNS.plan)` and `schema: typeof SCHEMA_URNS.plan`).
+const urn = <Name extends string>(name: Name): SchemaUrnOf<Name> =>
   `urn:dv:schema:${SCHEMA_URN_MAJOR}:${name}`;
 
-/** Every `--json` contract id dv emits, keyed by a stable short name. */
-export const SCHEMA_URNS = {
+/**
+ * The registry of every `--json` contract id dv emits, keyed by a stable
+ * short name. Explicitly typed (not just inferred) so it stays out of JSR's
+ * slow-types gate while keeping each value's literal URN type.
+ */
+export interface SchemaUrns {
   // Data-file / shared schemas (generated from their own Zod sources).
+  readonly config: SchemaUrnOf<"config">;
+  readonly record: SchemaUrnOf<"record">;
+  readonly renameLedger: SchemaUrnOf<"rename-ledger">;
+  readonly plan: SchemaUrnOf<"plan">;
+  readonly cliError: SchemaUrnOf<"cli-error">;
+  // Command `--json` result envelopes.
+  readonly validationReport: SchemaUrnOf<"validation-report">;
+  readonly releaseResult: SchemaUrnOf<"release-result">;
+  readonly renameResult: SchemaUrnOf<"rename-result">;
+  readonly migrateConfigResult: SchemaUrnOf<"migrate-config-result">;
+  readonly initResult: SchemaUrnOf<"init-result">;
+  readonly pluginListResult: SchemaUrnOf<"plugin-list-result">;
+  readonly pluginVerifyResult: SchemaUrnOf<"plugin-verify-result">;
+  readonly pluginInvokeResult: SchemaUrnOf<"plugin-invoke-result">;
+}
+
+/** Every `--json` contract id dv emits, keyed by a stable short name. */
+export const SCHEMA_URNS: SchemaUrns = {
   config: urn("config"),
   record: urn("record"),
   renameLedger: urn("rename-ledger"),
   plan: urn("plan"),
   cliError: urn("cli-error"),
-  // Command `--json` result envelopes.
   validationReport: urn("validation-report"),
   releaseResult: urn("release-result"),
   renameResult: urn("rename-result"),
@@ -30,10 +59,10 @@ export const SCHEMA_URNS = {
   pluginListResult: urn("plugin-list-result"),
   pluginVerifyResult: urn("plugin-verify-result"),
   pluginInvokeResult: urn("plugin-invoke-result"),
-} as const;
+};
 
 /** A value of {@link SCHEMA_URNS} — every emitted contract id. */
-export type SchemaUrn = (typeof SCHEMA_URNS)[keyof typeof SCHEMA_URNS];
+export type SchemaUrn = SchemaUrns[keyof SchemaUrns];
 
 /**
  * The freeze gate: throws if any registered URN is missing the
