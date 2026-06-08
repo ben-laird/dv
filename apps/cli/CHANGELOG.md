@@ -4,6 +4,12 @@ All notable changes to this Package are documented in this file. The
 format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this Package adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.10.0] - 2026-06-08
+
+### Added
+
+- Expose release notes in dv release --json
+
 ## [0.9.0] - 2026-06-06
 
 ### Added
