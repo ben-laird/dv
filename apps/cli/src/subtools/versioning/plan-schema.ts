@@ -62,6 +62,13 @@ export interface PlanAwaitingRelease {
   tag: string;
   /** True if this would be the Package's first `1.0.0` (a celebrated event). */
   firstStable: boolean;
+  /**
+   * The CHANGELOG release-notes body for this Version (heading dropped),
+   * extracted from the Package's CHANGELOG.md so consumers (e.g. a GitHub
+   * Release channel) don't re-parse the file. Empty string when no section
+   * was found; never absent.
+   */
+  releaseNotes: string;
 }
 
 /**
@@ -199,12 +206,17 @@ const planAwaitingReleaseSchema: z.ZodType<PlanAwaitingRelease> = z
       .describe(
         "True if this would be the Package's first 1.0.0 (celebrated). False otherwise; never absent.",
       ),
+    releaseNotes: z
+      .string()
+      .describe(
+        "The CHANGELOG release-notes body for this Version (heading dropped), extracted from the Package's CHANGELOG.md. Empty string when no section was found; never absent.",
+      ),
   })
   .strict()
   .meta({
     title: "Awaiting-release entry",
     description:
-      "A Package whose current Version has no Tag — what `dv release` would tag. Always empty in M3 — tag-state queries are M5.",
+      "A Package whose current Version has no Tag — what `dv release` would tag, with its CHANGELOG release notes.",
   });
 
 const planUnresolvedReferenceSchema: z.ZodType<PlanUnresolvedReference> = z

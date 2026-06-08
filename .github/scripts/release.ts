@@ -35,7 +35,12 @@ import { Octokit } from "npm:@octokit/rest@^21";
  */
 interface ReleaseJson {
   plan: {
-    awaitingRelease: Array<{ package: string; version: string; tag: string }>;
+    awaitingRelease: Array<{
+      package: string;
+      version: string;
+      tag: string;
+      releaseNotes: string;
+    }>;
   };
   mintedTagNames: string[];
 }
@@ -90,12 +95,9 @@ async function main(): Promise<void> {
 /**
  * Creates a GitHub Release for each tag `dv release` minted this run.
  * Reused tags (already published in a prior run) are skipped — they
- * already have a Release. The body is the matching package's new
- * CHANGELOG.md section.
- *
- * NOTE: the release notes are recovered by slicing CHANGELOG.md because
- * `dv release --json` does not expose them. This is the pragmatic
- * now-fix; a native `dv`-emitted release-notes field is on the ROADMAP.
+ * already have a Release. The body is the package's new CHANGELOG
+ * section, which `dv release --json` exposes directly as
+ * `awaitingRelease[].releaseNotes` (no CHANGELOG re-parsing here).
  */
 async function mintGitHubReleases(args: {
   environment: ReleaseEnvironment;
@@ -115,81 +117,19 @@ async function mintGitHubReleases(args: {
   for (const entry of awaitingRelease) {
     if (!newlyMinted.has(entry.tag)) continue;
 
-    const body = await readChangelogSection({
-      packageName: entry.package,
-      version: entry.version,
-    });
+    const body =
+      entry.releaseNotes.length > 0
+        ? entry.releaseNotes
+        : `Release ${entry.tag}. See the package CHANGELOG.md for details.`;
 
     await octokit.repos.createRelease({
       owner: environment.owner,
       repo: environment.repo,
       tag_name: entry.tag,
       name: entry.tag,
-      body:
-        body ??
-        `Release ${entry.tag}. See the package CHANGELOG.md for details.`,
+      body,
     });
     console.log(`Created GitHub Release for ${entry.tag}.`);
-  }
-}
-
-/**
- * Slices the section for `version` out of the package's CHANGELOG.md.
- * Keep a Changelog format: a section runs from its `## [version]` heading
- * to the next `## [` heading (or end of file). Returns null if the file
- * or the section is not found.
- */
-async function readChangelogSection(args: {
-  packageName: string;
-  version: string;
-}): Promise<string | null> {
-  const changelogPath = await findChangelogPath(args.packageName);
-  if (changelogPath === null) return null;
-
-  const changelogText = await Deno.readTextFile(changelogPath);
-  const lines = changelogText.split("\n");
-
-  const isVersionHeading = (line: string): boolean => line.startsWith("## [");
-  const isTargetHeading = (line: string): boolean =>
-    line.startsWith(`## [${args.version}]`);
-
-  const startIndex = lines.findIndex(isTargetHeading);
-  if (startIndex === -1) return null;
-
-  let endIndex = lines.length;
-  for (let lineIndex = startIndex + 1; lineIndex < lines.length; lineIndex++) {
-    const line = lines[lineIndex] ?? "";
-    if (isVersionHeading(line)) {
-      endIndex = lineIndex;
-      break;
-    }
-  }
-
-  // Drop the heading line itself — the Release title already carries the
-  // tag — and trim surrounding blank lines.
-  return lines
-    .slice(startIndex + 1, endIndex)
-    .join("\n")
-    .trim();
-}
-
-/**
- * Resolves a package's CHANGELOG.md path from the tracked-package list so
- * we honor dv's real on-disk layout rather than guessing a directory.
- */
-async function findChangelogPath(packageName: string): Promise<string | null> {
-  const plan = await runDvJson<{
-    tracked: Array<{ package: string; path: string }>;
-  }>(["status", "--json"]);
-  const tracked = plan.tracked.find((entry) => entry.package === packageName);
-  if (tracked === undefined) return null;
-
-  const candidate = `${tracked.path}/CHANGELOG.md`.replace(/^\.\//, "");
-  try {
-    await Deno.stat(candidate);
-    return candidate;
-  } catch {
-    return null;
   }
 }
 

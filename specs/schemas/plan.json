@@ -141,17 +141,22 @@
           "firstStable": {
             "type": "boolean",
             "description": "True if this would be the Package's first 1.0.0 (celebrated). False otherwise; never absent."
+          },
+          "releaseNotes": {
+            "type": "string",
+            "description": "The CHANGELOG release-notes body for this Version (heading dropped), extracted from the Package's CHANGELOG.md. Empty string when no section was found; never absent."
           }
         },
         "required": [
           "package",
           "version",
           "tag",
-          "firstStable"
+          "firstStable",
+          "releaseNotes"
         ],
         "additionalProperties": false,
         "title": "Awaiting-release entry",
-        "description": "A Package whose current Version has no Tag — what `dv release` would tag. Always empty in M3 — tag-state queries are M5."
+        "description": "A Package whose current Version has no Tag — what `dv release` would tag, with its CHANGELOG release notes."
       },
       "description": "Packages whose current Version has no Tag."
     },

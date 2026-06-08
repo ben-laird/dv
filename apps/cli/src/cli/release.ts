@@ -1,6 +1,10 @@
 import { DvError } from "../domain/errors.ts";
 import type { Package } from "../domain/package.ts";
 import { parseVersion } from "../domain/version.ts";
+import {
+  extractReleaseSection,
+  resolveOutputPathFromTemplate,
+} from "../subtools/changelog/mod.ts";
 import { configPath, loadConfig } from "../subtools/config/mod.ts";
 import { discoverPackages } from "../subtools/discovery/mod.ts";
 import type { ResolvedPlugin } from "../subtools/discovery/resolve.ts";
@@ -187,6 +191,17 @@ export async function runRelease(
     renameLedger: [],
     packageCurrentVersions,
     awaitingReleaseLookup,
+  });
+
+  // Populate each awaiting-release entry's CHANGELOG notes. dv version
+  // already consumed the Records, so the notes are recovered from the
+  // CHANGELOG dv itself wrote — exposed here so release-channel consumers
+  // (e.g. a GitHub Release) don't re-parse the file.
+  await populateReleaseNotes({
+    plan,
+    packagesByName,
+    changelogLocationTemplate: loadedConfig.changelog.location,
+    repoRootPath,
   });
 
   // Idempotence (Algebra §5): nothing to release and not --force →
@@ -428,6 +443,45 @@ interface ReleaseWorkEntry {
   pkg: Package;
   version: string;
   tag: string;
+}
+
+interface PopulateReleaseNotesArgs {
+  plan: Plan;
+  packagesByName: Map<string, Package>;
+  changelogLocationTemplate: string;
+  repoRootPath: string;
+}
+
+// Fills `releaseNotes` on each awaiting-release Plan entry by reading the
+// Package's CHANGELOG.md and slicing out the `## [version]` section dv
+// rendered at `dv version` time. Mutates the entries in place. A missing
+// CHANGELOG or absent section leaves the entry's default empty string —
+// notes are best-effort, never a release blocker.
+async function populateReleaseNotes(
+  args: PopulateReleaseNotesArgs,
+): Promise<void> {
+  for (const entry of args.plan.awaitingRelease) {
+    const pkg = args.packagesByName.get(entry.package);
+    if (pkg === undefined) continue;
+    const changelogPath = resolveOutputPathFromTemplate({
+      package: pkg,
+      locationTemplate: args.changelogLocationTemplate,
+      newVersion: entry.version,
+      repoRootPath: args.repoRootPath,
+    });
+    let changelogText: string;
+    try {
+      changelogText = await Deno.readTextFile(changelogPath);
+    } catch (caughtError) {
+      if (caughtError instanceof Deno.errors.NotFound) continue;
+      throw caughtError;
+    }
+    const section = extractReleaseSection({
+      changelogText,
+      version: entry.version,
+    });
+    if (section !== null) entry.releaseNotes = section;
+  }
 }
 
 interface BuildReleaseWorkListArgs {
