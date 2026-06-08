@@ -5,6 +5,12 @@ one h3 subsection per Record consumed during that release, with the
 Record's body prose verbatim. For terse one-line bullets, see
 CHANGELOG.md.
 
+## [0.11.0] - 2026-06-08
+
+### Expose release notes in dv release --json
+
+### Freeze and version-stamp the --json contract
+
 ## [0.10.0] - 2026-06-08
 
 ### Expose release notes in dv release --json
