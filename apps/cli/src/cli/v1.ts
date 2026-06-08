@@ -2,6 +2,7 @@ import { join, relative } from "@std/path";
 import { DvError } from "../domain/errors.ts";
 import type { Package } from "../domain/package.ts";
 import type { Record as DvRecord } from "../domain/record.ts";
+import { SCHEMA_URNS } from "../domain/schema-urns.ts";
 import { parseVersion } from "../domain/version.ts";
 import {
   renderReleaseSection,
@@ -348,7 +349,7 @@ export async function runV1(options: RunV1Options): Promise<RunV1Result> {
     constraintUpdates,
   };
   const plan: Plan = {
-    schema: "urn:dv:schema:v1:plan",
+    schema: SCHEMA_URNS.plan,
     command: "version",
     pending: [pendingEntry],
     awaitingRelease: awaitingReleaseLookup.map((entry) => ({
@@ -1023,7 +1024,7 @@ export async function runV1Catalog(
   });
 
   const plan: Plan = {
-    schema: "urn:dv:schema:v1:plan",
+    schema: SCHEMA_URNS.plan,
     command: "version",
     pending: pendingEntries,
     awaitingRelease: awaitingReleaseLookup.map((entry) => ({

@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:dv:schema:v1:plugin-invoke-result",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "urn:dv:schema:v1:plugin-invoke-result",
+      "description": "Versioned schema URN identifying this payload."
+    },
+    "pluginPath": {
+      "type": "string"
+    },
+    "opName": {
+      "type": "string"
+    },
+    "environmentVariables": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "stdinPayload": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "rawStdout": {
+      "type": "string"
+    },
+    "rawStderr": {
+      "type": "string"
+    },
+    "parsedResponse": {},
+    "conformant": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "schema",
+    "pluginPath",
+    "opName",
+    "environmentVariables",
+    "stdinPayload",
+    "rawStdout",
+    "rawStderr",
+    "parsedResponse",
+    "conformant"
+  ],
+  "additionalProperties": false,
+  "title": "Plugin-invoke result",
+  "description": "The `dv plugin invoke --json` exchange: the full stdio round-trip and the conformance verdict."
+}

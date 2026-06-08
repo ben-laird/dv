@@ -1,6 +1,7 @@
 import type { Package } from "../../domain/package.ts";
 import type { Record as DvRecord } from "../../domain/record.ts";
 import type { Rename } from "../../domain/rename.ts";
+import { SCHEMA_URNS } from "../../domain/schema-urns.ts";
 import { stabilityOf } from "../../domain/stability.ts";
 import { formatVersion, type Version } from "../../domain/version.ts";
 import { buildRenameResolver } from "../renames/mod.ts";
@@ -159,7 +160,7 @@ export function buildVersionPlan(args: BuildVersionPlanArgs): Plan {
     );
 
   return {
-    schema: "urn:dv:schema:v1:plan",
+    schema: SCHEMA_URNS.plan,
     command: args.command,
     pending: pendingEntries,
     awaitingRelease: awaitingReleaseEntries,

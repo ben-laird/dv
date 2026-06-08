@@ -1,0 +1,303 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:dv:schema:v1:release-result",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "urn:dv:schema:v1:release-result",
+      "description": "Versioned schema URN identifying this payload."
+    },
+    "plan": {
+      "$ref": "#/$defs/urn:dv:schema:v1:plan"
+    },
+    "mintedTagNames": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "reusedTagNames": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "releaseOpOutcomes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "package": {
+            "type": "string"
+          },
+          "tag": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "published": {
+            "type": "boolean"
+          },
+          "skipped": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "package",
+          "tag",
+          "ok"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "pushedTagNames": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "plan",
+    "mintedTagNames",
+    "reusedTagNames",
+    "releaseOpOutcomes",
+    "pushedTagNames"
+  ],
+  "additionalProperties": false,
+  "title": "Release result",
+  "description": "The `dv release --json` envelope: the executed Plan plus minted/reused/pushed tags and per-Package release-op outcomes.",
+  "$defs": {
+    "urn:dv:schema:v1:plan": {
+      "type": "object",
+      "properties": {
+        "schema": {
+          "type": "string",
+          "const": "urn:dv:schema:v1:plan",
+          "description": "Schema id."
+        },
+        "command": {
+          "type": "string",
+          "enum": [
+            "status",
+            "version",
+            "release"
+          ],
+          "description": "Which command produced this Plan."
+        },
+        "pending": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "package": {
+                "type": "string"
+              },
+              "currentVersion": {
+                "type": "string",
+                "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$"
+              },
+              "projectedVersion": {
+                "type": "string",
+                "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$"
+              },
+              "bump": {
+                "type": "string",
+                "enum": [
+                  "patch",
+                  "minor",
+                  "major"
+                ]
+              },
+              "stability": {
+                "type": "string",
+                "enum": [
+                  "Unstable",
+                  "Stable"
+                ]
+              },
+              "changeCounts": {
+                "type": "object",
+                "properties": {
+                  "feat": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "fix": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "breaking": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "feat",
+                  "fix",
+                  "breaking"
+                ],
+                "additionalProperties": false,
+                "title": "Change counts",
+                "description": "Per-Package tally of the Records feeding the bump. `breaking` counts feat! and fix! together (independent of the Unstable cap)."
+              },
+              "records": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Record filenames feeding this bump, sorted lexicographically."
+              },
+              "constraintUpdates": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "dependent": {
+                      "type": "string"
+                    },
+                    "newConstraint": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "dependent",
+                    "newConstraint"
+                  ],
+                  "additionalProperties": false,
+                  "title": "Constraint update",
+                  "description": "A dependent Package whose constraint on the bumped Package will be rewritten. When dv can resolve the dependency graph (the plugin implements `get-dependencies`) this lists only real dependents; for packages whose plugin lacks that op, dv falls back to listing them as candidates and the plugin filters at execute time via `changed: false`."
+                },
+                "description": "Dependents whose constraint may be rewritten when this Package bumps. The plugin filters per-manifest at execute time."
+              }
+            },
+            "required": [
+              "package",
+              "currentVersion",
+              "projectedVersion",
+              "bump",
+              "stability",
+              "changeCounts",
+              "records",
+              "constraintUpdates"
+            ],
+            "additionalProperties": false,
+            "title": "Pending bump",
+            "description": "What `dv version` would do for one Package: the aggregated Bump, projected Version, change counts, and the Records feeding it."
+          },
+          "description": "Per-Package bumps that `dv version` would apply."
+        },
+        "awaitingRelease": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "package": {
+                "type": "string"
+              },
+              "version": {
+                "type": "string",
+                "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$"
+              },
+              "tag": {
+                "type": "string",
+                "description": "The Tag that would be minted."
+              },
+              "firstStable": {
+                "type": "boolean",
+                "description": "True if this would be the Package's first 1.0.0 (celebrated). False otherwise; never absent."
+              },
+              "releaseNotes": {
+                "type": "string",
+                "description": "The CHANGELOG release-notes body for this Version (heading dropped), extracted from the Package's CHANGELOG.md. Empty string when no section was found; never absent."
+              }
+            },
+            "required": [
+              "package",
+              "version",
+              "tag",
+              "firstStable",
+              "releaseNotes"
+            ],
+            "additionalProperties": false,
+            "title": "Awaiting-release entry",
+            "description": "A Package whose current Version has no Tag — what `dv release` would tag, with its CHANGELOG release notes."
+          },
+          "description": "Packages whose current Version has no Tag."
+        },
+        "unresolvedReferences": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "record": {
+                "type": "string",
+                "description": "Filename of the Record carrying the reference."
+              },
+              "reference": {
+                "type": "string",
+                "description": "The package name as written in the Record."
+              }
+            },
+            "required": [
+              "record",
+              "reference"
+            ],
+            "additionalProperties": false,
+            "title": "Unresolved Reference",
+            "description": "A Record references a Package that no discovery plugin claims and no rename ledger edge maps to. Halts `dv version` unless --prune."
+          },
+          "description": "Records pointing at no current Package (halt `dv version` unless --prune)."
+        },
+        "tracked": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "package": {
+                "type": "string"
+              },
+              "currentVersion": {
+                "type": "string",
+                "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$"
+              },
+              "path": {
+                "type": "string",
+                "description": "Directory relative to repo root."
+              }
+            },
+            "required": [
+              "package",
+              "currentVersion",
+              "path"
+            ],
+            "additionalProperties": false,
+            "title": "Tracked package",
+            "description": "A Package discovery resolved and whose current Version the read-version Op returned. Lists every Package dv is aware of, regardless of whether any Records are pending against it."
+          },
+          "description": "Every Package discovery resolved, with its current Version. Independent of `pending` — populated even when no Records are queued."
+        }
+      },
+      "required": [
+        "schema",
+        "command",
+        "pending",
+        "awaitingRelease",
+        "unresolvedReferences",
+        "tracked"
+      ],
+      "additionalProperties": false,
+      "title": "dv Plan",
+      "description": "The side-effect-free Plan emitted by `dv status --json` and `dv version|release --dry-run --json`. A pure function of repo state (specs/language.md Algebra §7)."
+    }
+  }
+}

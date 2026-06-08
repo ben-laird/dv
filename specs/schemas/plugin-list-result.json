@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:dv:schema:v1:plugin-list-result",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "urn:dv:schema:v1:plugin-list-result",
+      "description": "Versioned schema URN identifying this payload."
+    },
+    "repoRootPath": {
+      "type": "string"
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "assignmentIndex": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "pluginReferenceKey": {
+            "type": "string"
+          },
+          "matchGlobs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "resolve-failed",
+              "discover-failed"
+            ]
+          },
+          "resolvedPluginPath": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "resolvedPluginKind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "packages": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "path"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "errorCode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "errorMessage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "assignmentIndex",
+          "pluginReferenceKey",
+          "matchGlobs",
+          "status",
+          "resolvedPluginPath",
+          "resolvedPluginKind",
+          "packages",
+          "errorCode",
+          "errorMessage"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "hasFailures": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "schema",
+    "repoRootPath",
+    "entries",
+    "hasFailures"
+  ],
+  "additionalProperties": false,
+  "title": "Plugin-list result",
+  "description": "The `dv plugin list --json` audit: one entry per config plugin assignment with the Packages it claims."
+}

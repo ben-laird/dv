@@ -1,7 +1,9 @@
 import { assertEquals, assertRejects, assertStringIncludes } from "@std/assert";
 import { fromFileUrl, join, resolve } from "@std/path";
 import { DvError } from "../domain/errors.ts";
+import { SCHEMA_URNS } from "../domain/schema-urns.ts";
 import { runRelease } from "./release.ts";
+import { rawReleaseResultSchema } from "./schemas/json-contracts.ts";
 
 // Integration tests for `dv release` against temp git repos using
 // the real `examples/plugins/deno` plugin — same dogfooding-grade
@@ -392,6 +394,17 @@ function assertIsWrappedEnvelope(parsed: Record<string, unknown>): void {
     Object.hasOwn(parsed, "awaitingRelease"),
     false,
     "--json emitted the bare Plan (awaitingRelease at top level) instead of the wrapped envelope",
+  );
+  // The frozen contract: the payload carries its schema id and validates
+  // against the committed release-result schema (issue #19).
+  assertEquals(parsed.schema, SCHEMA_URNS.releaseResult);
+  const validated = rawReleaseResultSchema.safeParse(parsed);
+  assertEquals(
+    validated.success,
+    true,
+    `--json output does not conform to the release-result schema: ${
+      validated.success ? "" : JSON.stringify(validated.error.issues)
+    }`,
   );
 }
 

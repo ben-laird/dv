@@ -6,6 +6,7 @@ import {
 } from "../domain/config.ts";
 import { DvError } from "../domain/errors.ts";
 import type { Package } from "../domain/package.ts";
+import { SCHEMA_URNS } from "../domain/schema-urns.ts";
 import { configPath, loadConfig } from "../subtools/config/mod.ts";
 import { runDiscoveryAssignment } from "../subtools/discovery/mod.ts";
 import {
@@ -120,7 +121,7 @@ export async function runPluginList(
     console.log(
       JSON.stringify(
         {
-          schema: "urn:dv:schema:v1:plugin-list-result",
+          schema: SCHEMA_URNS.pluginListResult,
           repoRootPath,
           entries: entries.map((entry) => ({
             assignmentIndex: entry.assignmentIndex,
