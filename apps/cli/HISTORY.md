@@ -5,6 +5,10 @@ one h3 subsection per Record consumed during that release, with the
 Record's body prose verbatim. For terse one-line bullets, see
 CHANGELOG.md.
 
+## [0.10.0] - 2026-06-08
+
+### Expose release notes in dv release --json
+
 ## [0.9.0] - 2026-06-06
 
 ### Document the entire public library surface with JSDoc and re-export the domain and contract types it references
