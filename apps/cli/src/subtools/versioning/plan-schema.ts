@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { SCHEMA_URNS } from "../../domain/schema-urns.ts";
+import { SCHEMA_URNS, type SchemaUrns } from "../../domain/schema-urns.ts";
 
 // --- Public Plan contract (Zod-free) ---------------------------------------
 // The Plan types are hand-written interfaces, not `z.infer` aliases, so the
@@ -104,7 +104,7 @@ export interface PlanTracked {
  */
 export interface Plan {
   /** Schema id — always `urn:dv:schema:v1:plan`. */
-  schema: typeof SCHEMA_URNS.plan;
+  schema: SchemaUrns["plan"];
   /** Which command produced this Plan. */
   command: "status" | "version" | "release";
   /** Per-Package bumps that `dv version` would apply. */

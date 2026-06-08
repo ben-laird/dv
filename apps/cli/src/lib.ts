@@ -139,6 +139,14 @@ export {
 export { CHANGE_TYPES, type ChangeType } from "./domain/change-type.ts";
 export type { PluginAssignment, PluginReference } from "./domain/config.ts";
 export type { Package } from "./domain/package.ts";
+// The frozen `--json` contract ids every command's output is stamped with.
+export {
+  SCHEMA_URN_MAJOR,
+  SCHEMA_URNS,
+  type SchemaUrn,
+  type SchemaUrnOf,
+  type SchemaUrns,
+} from "./domain/schema-urns.ts";
 // --- Binary boundary -------------------------------------------------------
 export { main } from "./main.ts";
 export type {

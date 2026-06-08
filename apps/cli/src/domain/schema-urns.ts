@@ -16,8 +16,10 @@ export type SchemaUrnOf<Name extends string> =
   `urn:dv:schema:${typeof SCHEMA_URN_MAJOR}:${Name}`;
 
 // Builds a URN preserving the literal `name` in the return type, so each
-// SCHEMA_URNS member keeps a precise literal type (consumers do
-// `z.literal(SCHEMA_URNS.plan)` and `schema: typeof SCHEMA_URNS.plan`).
+// SCHEMA_URNS member keeps a precise literal type. Consumers use the value
+// for `z.literal(SCHEMA_URNS.plan)` and the `SchemaUrns` interface for
+// public type positions, e.g. `schema: SchemaUrns["plan"]` (referencing
+// the value's type in a public type trips `deno doc --lint`).
 const urn = <Name extends string>(name: Name): SchemaUrnOf<Name> =>
   `urn:dv:schema:${SCHEMA_URN_MAJOR}:${name}`;
 
@@ -28,19 +30,32 @@ const urn = <Name extends string>(name: Name): SchemaUrnOf<Name> =>
  */
 export interface SchemaUrns {
   // Data-file / shared schemas (generated from their own Zod sources).
+  /** Id of the `.dv/config.yaml` schema. */
   readonly config: SchemaUrnOf<"config">;
+  /** Id of the Record-frontmatter schema. */
   readonly record: SchemaUrnOf<"record">;
+  /** Id of the `.dv/renames.yaml` ledger schema. */
   readonly renameLedger: SchemaUrnOf<"rename-ledger">;
+  /** Id of the Plan emitted by `dv status` / `version` / `release`. */
   readonly plan: SchemaUrnOf<"plan">;
+  /** Id of the `--json` error envelope. */
   readonly cliError: SchemaUrnOf<"cli-error">;
   // Command `--json` result envelopes.
+  /** Id of the `dv validate --json` report. */
   readonly validationReport: SchemaUrnOf<"validation-report">;
+  /** Id of the `dv release --json` envelope. */
   readonly releaseResult: SchemaUrnOf<"release-result">;
+  /** Id of the `dv rename --json` envelope. */
   readonly renameResult: SchemaUrnOf<"rename-result">;
+  /** Id of the `dv migrate config --json` envelope. */
   readonly migrateConfigResult: SchemaUrnOf<"migrate-config-result">;
+  /** Id of the `dv init --json` envelope. */
   readonly initResult: SchemaUrnOf<"init-result">;
+  /** Id of the `dv plugin list --json` envelope. */
   readonly pluginListResult: SchemaUrnOf<"plugin-list-result">;
+  /** Id of the `dv plugin verify --json` envelope. */
   readonly pluginVerifyResult: SchemaUrnOf<"plugin-verify-result">;
+  /** Id of the `dv plugin invoke --json` envelope. */
   readonly pluginInvokeResult: SchemaUrnOf<"plugin-invoke-result">;
 }
 

@@ -1,6 +1,6 @@
 import { DvError } from "../domain/errors.ts";
 import type { Package } from "../domain/package.ts";
-import { SCHEMA_URNS } from "../domain/schema-urns.ts";
+import { SCHEMA_URNS, type SchemaUrns } from "../domain/schema-urns.ts";
 import { parseVersion } from "../domain/version.ts";
 import {
   extractReleaseSection,
@@ -103,7 +103,7 @@ export interface ReleaseOpOutcome {
 /** Release envelope returned by {@link runRelease}. */
 export interface RunReleaseResult {
   /** Versioned schema URN identifying this envelope shape. */
-  schema: typeof SCHEMA_URNS.releaseResult;
+  schema: SchemaUrns["releaseResult"];
   /** The release {@link Plan} computed and executed for this run. */
   plan: Plan;
   /** Tag names newly minted this run. */
