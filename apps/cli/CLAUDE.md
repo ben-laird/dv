@@ -89,5 +89,10 @@ descriptive variable names).
 - Iterate quickly with `deno task install` — puts an in-tree `dv` shim
   on PATH so you can run it in your real terminal, see colors, and
   exercise prompts. Edits land on the next invocation.
-- Run `deno task fmt`, `lint`, `check`, and `test` before calling
-  anything done.
+- Run `deno task verify` before calling anything done — it runs the
+  **full** CI gate set (the same `apps/cli/src/scripts/ci.ts` the
+  `validate` workflow runs), so a green local run means a green PR. Don't
+  cherry-pick individual gates and assume CI agrees; `verify` is the whole
+  set, including `doc:lint`, `publish:check`, the dogfood `dv validate` /
+  `dv plugin verify` gates, and the docs build. (`deno task gate` is the
+  apply-fixes inner-loop variant.)
