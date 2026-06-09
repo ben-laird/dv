@@ -1,13 +1,22 @@
 # Cut a release
 
 This guide walks through running a real release end-to-end, including
-the things you'll actually do in practice — previewing first, gating
-on review, handling failures. If you've never used dv, start with the
+the things you'll actually do in practice — previewing first, handling
+failures, and (if your team wants it) gating the bump on review. If
+you've never used dv, start with the
 [Getting started tutorial](/getting-started) first; this assumes you
 already know what Records are.
 
 Skim the page top-to-bottom the first time. After that, the **TL;DR**
 at the top is what most days look like.
+
+The default workflow is **release-on-merge** (plain GitHub Flow):
+merging a feature PR to `main` runs both phases automatically, because
+the bump is derived from the Records that PR carried. Teams that want a
+human to approve the bump before it lands can route the `dv version`
+commit through a **Release PR** instead — same two commands, one extra
+review gate. This guide shows release-on-merge first, then the Release
+PR variant.
 
 ## TL;DR
 
@@ -15,18 +24,20 @@ at the top is what most days look like.
 # 1. Verify the plan
 $ dv status
 
-# 2. Land the Release PR
+# 2. Bump versions + write CHANGELOGs
 $ dv version --dry-run    # preview
-$ dv version              # for real (one commit)
-# → review, merge
+$ dv version              # for real (one commit, straight to main
+                          # under release-on-merge)
 
 # 3. Tag + publish
 $ dv release --dry-run    # preview
 $ dv release              # for real
 ```
 
-Three commands, two phases, plus the merge. The rest of this page is
-the *why* and the edge cases.
+Three commands, two phases. Under release-on-merge both phases run in
+CI on merge to `main`; if you gate behind a Release PR, the `dv version`
+commit is reviewed and merged before `dv release` runs. The rest of this
+page is the *why* and the edge cases.
 
 ## Step 1: see what's pending with `dv status`
 
@@ -100,7 +111,7 @@ The `--json` shape is documented in the [Plan schema](https://github.com/ben-lai
 and is stable across the three commands (`dv status`, `dv version
 --dry-run`, `dv release --dry-run`).
 
-## Step 3: land the Release PR with `dv version`
+## Step 3: bump versions with `dv version`
 
 ```sh
 $ dv version
@@ -125,11 +136,16 @@ What dv did:
 7. **Refreshed lockfiles** via the plugin's `finalize` op.
 8. **Staged everything** into one commit.
 
-That commit is the **Release PR**. Open it as a PR, review it, merge it.
+Under **release-on-merge**, this commit lands on `main` as part of the
+CI job that ran on the merge — there's no separate step. If you prefer
+to gate the bump on review, that same commit becomes a **Release PR**:
+open it as a PR, review it, and merge it before `dv release` runs (see
+[the Release PR variant](#the-release-pr-variant) below).
 
-### Reviewing the Release PR
+### What to review (either workflow)
 
-Things to look at:
+Whether the bump commit lands automatically or you review it as a
+Release PR, these are the things worth a look:
 
 - **The CHANGELOG entries** read as you'd want them to. Each Record's
   `notes` field became one CHANGELOG bullet. If the bullet reads
@@ -191,12 +207,37 @@ right call when a package was renamed and old Records should resolve
 to the new name. See [Packages and plugins](/concepts/packages-and-plugins)
 for more on the rename ledger.
 
-## Step 4: the merge
+## Step 4: how the bump reaches `main`
 
-Nothing dv-specific here. Whatever your team's PR workflow is —
-review, approval, merge button — applies. After the Release PR
-merges to `main`, the manifests and CHANGELOGs are committed; the
-git tags don't exist yet.
+After `dv version`, the manifests and CHANGELOGs are committed; the git
+tags don't exist yet. How that commit gets to `main` is your team's
+call — dv works the same either way.
+
+- **Release-on-merge (default).** The `dv version` commit is produced by
+  the CI job running on merge to `main`, so it's already on `main` — the
+  feature PR you merged *was* the review. `dv release` runs next in the
+  same job. There's no second PR. See the
+  [CI integration guide](/guides/ci-integration) for the workflow.
+- **Release PR (variant).** If you want a human to approve the bump
+  itself, route the `dv version` commit through a PR — see below.
+
+### The Release PR variant
+
+Some teams want the version bump and CHANGELOG reviewed before anything
+is tagged. To do that, run `dv version` so its commit lands on a branch,
+open that branch as a PR, and merge it before running `dv release`:
+
+```sh
+$ dv version              # one commit on a release branch
+# → open as a PR, review the bump + CHANGELOG, merge to main
+$ dv release              # only after the Release PR merges
+```
+
+The commit `dv version` produces is the **Release PR** in this workflow.
+Nothing dv-specific happens at merge time — whatever your team's PR
+workflow is (review, approval, merge button) applies. Once it merges to
+`main`, proceed to `dv release`. (`--no-commit`, below, is handy if you
+want to shape the commit yourself before opening the PR.)
 
 ## Step 5: tag + publish with `dv release`
 

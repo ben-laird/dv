@@ -2,7 +2,8 @@ import type { GitSign } from "../../domain/config.ts";
 import { DvError } from "../../domain/errors.ts";
 
 // Creates a commit from currently-staged changes. `dv version` produces
-// exactly one such commit (the Release PR) per specs/cli.md § dv version.
+// exactly one such commit — the version-bump commit (the Release PR in a
+// review-gated workflow) per specs/cli.md § dv version.
 //
 // Signing follows the git.sign config option (specs/config-format.md §
 // git.sign): `"auto"` honors git's own commit.gpgsign config (no flag

@@ -53,7 +53,8 @@ import { makeStyler } from "./styler.ts";
 // `dv version` per specs/cli.md § dv version. Consumes pending Records
 // and (per Package) applies the aggregated Bump, rewrites the manifest
 // Version, prepends a CHANGELOG section, deletes the consumed Records,
-// and stages everything into one commit (the Release PR).
+// and stages everything into one commit (the version-bump commit; the
+// Release PR in a review-gated workflow).
 //
 // Plan-then-execute is the spine (specs/language.md Algebra §7): the
 // same buildVersionPlan call powers `dv status`, `dv version --dry-run`,
@@ -147,7 +148,8 @@ export interface CascadedUpdate {
  * Runs `dv version`: consumes pending Records and, per Package, applies the
  * aggregated Bump, rewrites the manifest Version, prepends a CHANGELOG section,
  * cascades dependent constraints, deletes the consumed Records, and stages
- * everything into one commit (the Release PR). Plan-then-execute is the spine
+ * everything into one commit (the version-bump commit; the Release PR in a
+ * review-gated workflow). Plan-then-execute is the spine
  * (specs/language.md Algebra §7): the same `buildVersionPlan` call powers
  * `dv status`, `--dry-run`, and the real run, with the dry-run path invoking
  * zero write-side plugin Ops and touching nothing on disk.
