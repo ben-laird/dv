@@ -48,6 +48,56 @@ Deno.test("parseSubcommandArgv keeps positional tokens in argv", () => {
   assertEquals(parsed.flags.yes, true);
 });
 
+Deno.test("parseSubcommandArgv keeps positionals that look like numbers as the exact strings typed", () => {
+  // Given a leaf with no flags, and words that parseArgs would read as numbers
+  const flagSpecMap = {} satisfies Record<string, FlagSpec>;
+  const numberLikeWords = ["007", "01234567", "1e3", "0x10", "Infinity"];
+
+  // When they arrive as positionals, before and after `--` (where `-5` must go)
+  const parsed = parseSubcommandArgv({
+    flagSpecMap,
+    subcommandArgv: [...numberLikeWords, "--", "-5", "007"],
+  });
+
+  // Then every word reaches the leaf unchanged, still a string
+  assertEquals(parsed.argv, [...numberLikeWords, "-5", "007"]);
+});
+
+Deno.test("parseSubcommandArgv keeps a string flag's number-like value as typed", () => {
+  // Given a leaf with a declared string flag
+  const flagSpecMap = {
+    id: { kind: "string" },
+  } satisfies Record<string, FlagSpec>;
+
+  // When its value looks like a number, spaced and joined with `=`
+  const spaced = parseSubcommandArgv({
+    flagSpecMap,
+    subcommandArgv: ["--id", "007"],
+  });
+  const joined = parseSubcommandArgv({
+    flagSpecMap,
+    subcommandArgv: ["--id=01234567"],
+  });
+
+  // Then the value is the exact string typed
+  assertEquals(spaced.flags.id, "007");
+  assertEquals(joined.flags.id, "01234567");
+});
+
+Deno.test("parseSubcommandArgv passes --help and -h after `--` through as words", () => {
+  // Given a leaf with no flags
+  const flagSpecMap = {} satisfies Record<string, FlagSpec>;
+
+  // When help tokens follow `--`
+  const parsed = parseSubcommandArgv({
+    flagSpecMap,
+    subcommandArgv: ["--", "--help", "-h"],
+  });
+
+  // Then they are positionals, not unknown flags
+  assertEquals(parsed.argv, ["--help", "-h"]);
+});
+
 Deno.test("parseSubcommandArgv resolves aliases without leaking the short key into flags", () => {
   // Given a flag with a single-char alias
   const flagSpecMap = {

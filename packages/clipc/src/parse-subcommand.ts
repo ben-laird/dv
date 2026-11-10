@@ -34,7 +34,9 @@ export function parseSubcommandArgv<TFlagMap extends Record<string, FlagSpec>>(
 ): ParseSubcommandArgvResult<TFlagMap> {
   const lowered = lowerFlagSpec(args.flagSpecMap);
   const parsed = parseArgs(args.subcommandArgv, {
-    string: lowered.string,
+    // `_` keeps every positional a string: parseArgs would otherwise turn
+    // `007` into 7. The leaf knows its own types, so numbers are its call.
+    string: ["_", ...lowered.string],
     boolean: lowered.boolean,
     collect: lowered.collect,
     alias: lowered.alias,
@@ -47,8 +49,8 @@ export function parseSubcommandArgv<TFlagMap extends Record<string, FlagSpec>>(
   });
 
   // parseArgs collects positionals into `_` and the rest of the keys
-  // are declared flags. We narrow `_` to string[] (it's `(string|number)[]`
-  // by default, but our `unknown` keeps tokens as-is).
+  // are declared flags. `_` is typed `(string|number)[]`, but listing it
+  // under `string` above means every element is already a string.
   const positionalsRaw = parsed._;
   const argv = positionalsRaw.map((token) => String(token));
 

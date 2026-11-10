@@ -2,6 +2,7 @@ import { CliError } from "../errors.ts";
 import type { FlagSpec, FlagsOf } from "../flag-spec.ts";
 import { type CommandNode, command as makeCommand } from "./command.ts";
 import { formatRouterHelp } from "./help.ts";
+import { requestsHelp } from "./help-request.ts";
 import {
   type CliHandler,
   type CliRequest,
@@ -164,30 +165,19 @@ export function router<Ctx = unknown>(spec: RouterSpec<Ctx>): RouterNode<Ctx> {
   //   - If --help / -h appears BEFORE the subcommand token (or no
   //     subcommand exists) → return router help. `--help` after a
   //     subcommand belongs to that subcommand; the router doesn't
-  //     intercept it.
+  //     intercept it, and after `--` it is a word, never a switch.
   //   - Match → trampoline into child with the *remaining* argv.
   //   - No match → typed unknown-subcommand error.
   const defaultDispatch: DefaultDispatch<Ctx> = (req, options) => {
-    let subcommandIndex = -1;
-    let helpRequestedBeforeSubcommand = false;
-    for (let i = 0; i < req.argv.length; i++) {
-      const token = req.argv[i] ?? "";
-      if (token === "--help" || token === "-h") {
-        helpRequestedBeforeSubcommand = true;
-        continue;
-      }
-      if (!token.startsWith("-")) {
-        subcommandIndex = i;
-        break;
-      }
-    }
+    const subcommandIndex = req.argv.findIndex(
+      (token) => !token.startsWith("-"),
+    );
 
     if (subcommandIndex === -1) {
       // No subcommand found (empty argv, all flags, or only --help
       // with no subcommand). Either way the right move is router
       // help; we don't distinguish `--help` from no-arg invocations
       // since both mean "tell me what I can do here."
-      void helpRequestedBeforeSubcommand;
       return done({
         kind: "help",
         text: formatRouterHelp({
@@ -198,7 +188,7 @@ export function router<Ctx = unknown>(spec: RouterSpec<Ctx>): RouterNode<Ctx> {
       });
     }
 
-    if (helpRequestedBeforeSubcommand) {
+    if (requestsHelp(req.argv.slice(0, subcommandIndex))) {
       // `dv plugin --help list` is ambiguous; we treat it as "help
       // about plugin," matching the convention most tree-routed
       // CLIs use (kubectl, git, cargo). The user asked for help
