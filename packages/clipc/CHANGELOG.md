@@ -4,6 +4,13 @@ All notable changes to this Package are documented in this file. The
 format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this Package adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.4.1] - 2026-11-11
+
+### Fixed
+
+- Treat --help and -h after `--` as words, not a help request ([link](https://github.com/ben-laird/dv/issues/39))
+- Keep number-like positionals as the strings typed ([link](https://github.com/ben-laird/dv/issues/39))
+
 ## [0.4.0] - 2026-06-06
 
 ### Changed

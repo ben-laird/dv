@@ -11,6 +11,6 @@
     "compile": "deno compile -A -o ../../dist/dv src/main.ts"
   },
   "imports": {
-    "@dv-cli/clipc": "jsr:@dv-cli/clipc@^0.4.0"
+    "@dv-cli/clipc": "jsr:@dv-cli/clipc@^0.4.1"
   }
 }

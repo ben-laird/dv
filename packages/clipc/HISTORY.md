@@ -5,6 +5,26 @@ one h3 subsection per Record consumed during that release, with the
 Record's body prose verbatim. For terse one-line bullets, see
 CHANGELOG.md.
 
+## [0.4.1] - 2026-11-11
+
+### Treat --help and -h after `--` as words, not a help request
+
+`mycli add -- --help` printed the leaf's help instead of passing `--help` to
+it. Everything after `--` is a positional word, never a switch, so routers
+and leaves now look for `--help` and `-h` only before a `--`. Help before
+`--` works as before at every level.
+
+### Keep number-like positionals as the strings typed
+
+A leaf's positional words reached `run` coerced to numbers whenever they
+looked like one: `mycli add 007` gave the leaf `7`, `01234567` became
+`1234567`, and `1e3` became `1000`. clipc now lists `_` under `string` when
+it parses a leaf's argv, so every positional arrives exactly as typed. A leaf
+that wants a number parses its own, since only it knows its types.
+
+Declared `string` and `collect` flag values were never coerced, and an
+undeclared flag is refused as `unknown-flag`, so no flag value changes.
+
 ## [0.4.0] - 2026-06-06
 
 ### Stop exporting the raw Zod error schemas; validate via Zod-free parser functions instead
