@@ -86,6 +86,9 @@ tree, formatted from the same flag specs and descriptions you already wrote
 `mycli add 007` hands it `"007"`, never `7`; a leaf that wants a number parses
 its own. Everything after `--` is a positional word, never a switch:
 `mycli add -- --help` passes `--help` to the leaf instead of printing help.
+A lone `-` is a word too (by convention it often means stdin): `mycli add -`
+hands the leaf `"-"`, and `--title -` sets `title` to `"-"`, as `-t -` and
+`--title=-` do.
 
 ## A larger example
 

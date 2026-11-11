@@ -1,5 +1,6 @@
 import { CliError } from "../errors.ts";
 import type { FlagSpec, FlagsOf } from "../flag-spec.ts";
+import { isFlagToken } from "../flag-token.ts";
 import { type CommandNode, command as makeCommand } from "./command.ts";
 import { formatRouterHelp } from "./help.ts";
 import { requestsHelp } from "./help-request.ts";
@@ -169,9 +170,7 @@ export function router<Ctx = unknown>(spec: RouterSpec<Ctx>): RouterNode<Ctx> {
   //   - Match → trampoline into child with the *remaining* argv.
   //   - No match → typed unknown-subcommand error.
   const defaultDispatch: DefaultDispatch<Ctx> = (req, options) => {
-    const subcommandIndex = req.argv.findIndex(
-      (token) => !token.startsWith("-"),
-    );
+    const subcommandIndex = req.argv.findIndex((token) => !isFlagToken(token));
 
     if (subcommandIndex === -1) {
       // No subcommand found (empty argv, all flags, or only --help

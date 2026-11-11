@@ -98,6 +98,88 @@ Deno.test("parseSubcommandArgv passes --help and -h after `--` through as words"
   assertEquals(parsed.argv, ["--help", "-h"]);
 });
 
+Deno.test("parseSubcommandArgv keeps a bare `-` as a positional word", () => {
+  // Given a leaf with one switch
+  const flagSpecMap = {
+    json: { kind: "boolean" },
+  } satisfies Record<string, FlagSpec>;
+
+  // When `-` comes alone, before the switch, after it, and between words
+  const alone = parseSubcommandArgv({ flagSpecMap, subcommandArgv: ["-"] });
+  const mixed = parseSubcommandArgv({
+    flagSpecMap,
+    subcommandArgv: ["-", "--json", "a", "-", "b"],
+  });
+
+  // Then every `-` is a word, in order, and the switch still parses
+  assertEquals(alone.argv, ["-"]);
+  assertEquals(alone.flags.json, false);
+  assertEquals(mixed.argv, ["-", "a", "-", "b"]);
+  assertEquals(mixed.flags.json, true);
+});
+
+Deno.test("parseSubcommandArgv gives a value flag `-` as its value, spaced or joined", () => {
+  // Given a string flag with a short alias and a collect flag
+  const flagSpecMap = {
+    title: { kind: "string", alias: "t" },
+    packages: { kind: "collect" },
+  } satisfies Record<string, FlagSpec>;
+
+  // When `-` is each flag's value, in the long, short and joined forms
+  const spellings = [
+    ["--title", "-", "word"],
+    ["-t", "-", "word"],
+    ["--title=-", "word"],
+  ];
+  const parsedTitles = spellings.map((subcommandArgv) =>
+    parseSubcommandArgv({ flagSpecMap, subcommandArgv }),
+  );
+  const parsedPackages = parseSubcommandArgv({
+    flagSpecMap,
+    subcommandArgv: ["--packages", "-", "--packages", "a"],
+  });
+
+  // Then every spelling sets the value to `-` and leaves the word alone
+  for (const parsed of parsedTitles) {
+    assertEquals(parsed.flags.title, "-");
+    assertEquals(parsed.argv, ["word"]);
+  }
+  assertEquals(parsedPackages.flags.packages, ["-", "a"]);
+  assertEquals(parsedPackages.argv, []);
+});
+
+Deno.test("parseSubcommandArgv leaves `--title -` after `--` as words", () => {
+  // Given a leaf with a string flag
+  const flagSpecMap = {
+    title: { kind: "string" },
+  } satisfies Record<string, FlagSpec>;
+
+  // When the flag and `-` follow `--`
+  const parsed = parseSubcommandArgv({
+    flagSpecMap,
+    subcommandArgv: ["--", "--title", "-"],
+  });
+
+  // Then both are words and the flag is unset
+  assertEquals(parsed.argv, ["--title", "-"]);
+  assertEquals(parsed.flags.title, undefined);
+});
+
+Deno.test("parseSubcommandArgv still refuses -x, --x and -5 beside a bare `-`", () => {
+  // Given a leaf that declares none of them
+  const flagSpecMap = {} satisfies Record<string, FlagSpec>;
+
+  for (const token of ["-x", "--x", "-5"]) {
+    // When it follows a bare `-`
+    // Then UnknownFlagError names that token, not `-`
+    const caught = assertThrows(
+      () => parseSubcommandArgv({ flagSpecMap, subcommandArgv: ["-", token] }),
+      UnknownFlagError,
+    );
+    assertEquals(caught.flagToken, token);
+  }
+});
+
 Deno.test("parseSubcommandArgv resolves aliases without leaking the short key into flags", () => {
   // Given a flag with a single-char alias
   const flagSpecMap = {

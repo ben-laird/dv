@@ -380,6 +380,151 @@ Deno.test("--help before `--` still prints help at the root, a sub-router and a 
   }
 });
 
+// A leaf with a value flag and a switch that echoes both and its words:
+// `test-cli note [--title|-t <v>] [--json] <words>`.
+function echoNoteTree() {
+  return router({
+    commands: {
+      note: command({
+        flags: {
+          title: { kind: "string", alias: "t" },
+          json: { kind: "boolean" },
+        },
+        run: ({ flags, argv }) =>
+          done({
+            kind: "ok",
+            stdout: JSON.stringify({
+              title: flags.title,
+              json: flags.json,
+              argv,
+            }),
+          }),
+      }),
+    },
+  });
+}
+
+Deno.test("a bare `-` reaches the leaf as a word, alone or among other words", async () => {
+  // Given a leaf that echoes its words
+  const root = echoWordsTree();
+
+  // When `-` is the only word, sits between words, or follows `--`
+  const alone = await runWithCapture({
+    rootRouter: root,
+    argv: ["plugin", "add", "-"],
+  });
+  const between = await runWithCapture({
+    rootRouter: root,
+    argv: ["plugin", "add", "a", "-", "b"],
+  });
+  const afterDoubleDash = await runWithCapture({
+    rootRouter: root,
+    argv: ["plugin", "add", "--", "-"],
+  });
+
+  // Then the leaf runs and receives `-` as typed
+  assertEquals(alone.exitCode, 0);
+  assertEquals(alone.stdoutLines, [JSON.stringify(["-"])]);
+  assertEquals(between.exitCode, 0);
+  assertEquals(between.stdoutLines, [JSON.stringify(["a", "-", "b"])]);
+  assertEquals(afterDoubleDash.exitCode, 0);
+  assertEquals(afterDoubleDash.stdoutLines, [JSON.stringify(["-"])]);
+});
+
+Deno.test("a bare `-` is a word before and after the leaf's flags", async () => {
+  // Given a leaf with a value flag and a switch
+  const root = echoNoteTree();
+
+  // When `-` comes before a switch, after it, and as a value flag's value
+  const beforeSwitch = await runWithCapture({
+    rootRouter: root,
+    argv: ["note", "-", "--json"],
+  });
+  const afterSwitch = await runWithCapture({
+    rootRouter: root,
+    argv: ["note", "--json", "-"],
+  });
+  const longValue = await runWithCapture({
+    rootRouter: root,
+    argv: ["note", "--title", "-", "word"],
+  });
+  const shortValue = await runWithCapture({
+    rootRouter: root,
+    argv: ["note", "-t", "-", "word"],
+  });
+  const joinedValue = await runWithCapture({
+    rootRouter: root,
+    argv: ["note", "--title=-", "word"],
+  });
+
+  // Then `-` is a word in the first two, and the title in the last three
+  const asWord = JSON.stringify({ json: true, argv: ["-"] });
+  assertEquals(beforeSwitch.stdoutLines, [asWord]);
+  assertEquals(afterSwitch.stdoutLines, [asWord]);
+  const asTitle = JSON.stringify({ title: "-", json: false, argv: ["word"] });
+  for (const run of [longValue, shortValue, joinedValue]) {
+    assertEquals(run.exitCode, 0);
+    assertEquals(run.stdoutLines, [asTitle]);
+  }
+});
+
+Deno.test("a bare `-` in a subcommand's place is an unknown subcommand, not a flag", async () => {
+  // Given a router with a known subcommand
+  const root = echoWordsTree();
+
+  // When `-` stands where a subcommand goes, at the root and at a sub-router
+  const atRoot = await runWithCapture({ rootRouter: root, argv: ["-"] });
+  const atRouter = await runWithCapture({
+    rootRouter: root,
+    argv: ["plugin", "-", "add"],
+  });
+
+  // Then each router names `-` as the subcommand it does not know
+  for (const run of [atRoot, atRouter]) {
+    assertEquals(run.exitCode, 2);
+    const stderrText = run.stderrLines.join("\n");
+    assertStringIncludes(stderrText, "unknown-subcommand");
+    assertStringIncludes(stderrText, "unknown subcommand '-'");
+  }
+});
+
+Deno.test("--help still prints help when a bare `-` comes before it at a leaf", async () => {
+  // Given a leaf that echoes its words
+  const root = echoWordsTree();
+
+  // When `-` precedes --help
+  const result = await runWithCapture({
+    rootRouter: root,
+    argv: ["plugin", "add", "-", "--help"],
+  });
+
+  // Then the leaf's help prints and the leaf never runs
+  assertEquals(result.exitCode, 0);
+  assertStringIncludes(
+    result.stdoutLines.join("\n"),
+    "Usage: test-cli plugin add",
+  );
+});
+
+Deno.test("-x, --x and -5 before `--` are still unknown flags", async () => {
+  // Given a leaf that declares none of them
+  const root = echoNoteTree();
+
+  for (const token of ["-x", "--x", "-5"]) {
+    // When it is passed beside a bare `-`
+    const run = await runWithCapture({
+      rootRouter: root,
+      argv: ["note", "-", token],
+    });
+
+    // Then it is refused as an unknown flag, naming the token
+    assertEquals(run.exitCode, 2);
+    const stderrText = run.stderrLines.join("\n");
+    assertStringIncludes(stderrText, "unknown-flag");
+    assertStringIncludes(stderrText, `unknown flag '${token}'`);
+  }
+});
+
 Deno.test("router returns kind:error with exit 2 for an unknown subcommand", async () => {
   // Given a router with a known subcommand
   const root = router({
