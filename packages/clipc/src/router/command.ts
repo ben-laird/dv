@@ -2,6 +2,7 @@ import { CliError } from "../errors.ts";
 import type { FlagSpec, FlagsOf } from "../flag-spec.ts";
 import { parseSubcommandArgv, UnknownFlagError } from "../parse-subcommand.ts";
 import { formatCommandHelp } from "./help.ts";
+import { requestsHelp } from "./help-request.ts";
 import { type CliHandler, type CliRequest, done } from "./types.ts";
 
 // A leaf command in the router tree. `command()` is the user-facing
@@ -31,7 +32,10 @@ import { type CliHandler, type CliRequest, done } from "./types.ts";
 export interface CommandRequest<TFlags extends Record<string, FlagSpec>, Ctx> {
   /** Parsed flags, typed from the literal flag-spec map. */
   flags: FlagsOf<TFlags>;
-  /** Positional argv remaining after flag parsing. */
+  /**
+   * Positional argv remaining after flag parsing, each word exactly as typed
+   * (`007` stays `"007"`). Words after `--` land here too, even `--help`.
+   */
   argv: string[];
   /** Shared per-run context. */
   ctx: Ctx;
@@ -90,8 +94,8 @@ export interface CommandNode<Ctx = unknown> {
 // you specify only the second of two parameters).
 /**
  * Defines a leaf command in the router tree. Returns a
- * {@link CommandNode} whose handler intercepts `--help`/`-h`, parses
- * `spec.flags` from the incoming argv, and then invokes `spec.run`
+ * {@link CommandNode} whose handler intercepts `--help`/`-h` (before
+ * any `--`), parses `spec.flags` from the incoming argv, and then invokes `spec.run`
  * with the typed flags, remaining positional argv, shared ctx, and
  * breadcrumb path. An undeclared flag is returned as a typed
  * `unknown-flag` error (exit 2), not thrown.
@@ -122,8 +126,9 @@ export function command<
     // Intercept --help/-h before flag parsing so leaves don't have
     // to declare it. The framework owns this token at every node;
     // a leaf that genuinely wants `--help` as a domain flag would
-    // be... ill-advised, so this isn't worth a config knob.
-    if (request.argv.includes("--help") || request.argv.includes("-h")) {
+    // be... ill-advised, so this isn't worth a config knob. After
+    // `--` it is a word like any other, and reaches the leaf.
+    if (requestsHelp(request.argv)) {
       return done({
         kind: "help",
         text: formatCommandHelp({

@@ -276,6 +276,110 @@ Deno.test("leaf returns help on --help with its flag spec rendered", async () =>
   assertStringIncludes(helpText, "build target");
 });
 
+// A tree whose leaf echoes the words it received as JSON, so a test can
+// see exactly what reached it: `test-cli plugin add <words>`.
+function echoWordsTree() {
+  return router({
+    commands: {
+      plugin: router({
+        commands: {
+          add: command({
+            flags: {},
+            run: ({ argv }) =>
+              done({ kind: "ok", stdout: JSON.stringify(argv) }),
+          }),
+        },
+      }),
+    },
+  });
+}
+
+Deno.test("a leaf receives number-like words exactly as typed", async () => {
+  // Given a leaf that echoes its words
+  const root = echoWordsTree();
+
+  // When the user passes words that look like numbers, `-5` after `--`
+  const result = await runWithCapture({
+    rootRouter: root,
+    argv: [
+      "plugin",
+      "add",
+      "007",
+      "01234567",
+      "1e3",
+      "0x10",
+      "Infinity",
+      "--",
+      "-5",
+    ],
+  });
+
+  // Then each word arrives unchanged
+  assertEquals(result.exitCode, 0);
+  assertEquals(result.stdoutLines, [
+    JSON.stringify(["007", "01234567", "1e3", "0x10", "Infinity", "-5"]),
+  ]);
+});
+
+Deno.test("--help and -h after `--` reach the leaf as words instead of printing help", async () => {
+  // Given a leaf that echoes its words
+  const root = echoWordsTree();
+
+  // When help tokens follow `--`, at the leaf and before the subcommand
+  const atLeaf = await runWithCapture({
+    rootRouter: root,
+    argv: ["plugin", "add", "--", "--help", "-h"],
+  });
+  const beforeSubcommand = await runWithCapture({
+    rootRouter: root,
+    argv: ["plugin", "--", "add", "-h"],
+  });
+
+  // Then the leaf runs and receives them as words
+  assertEquals(atLeaf.exitCode, 0);
+  assertEquals(atLeaf.stdoutLines, [JSON.stringify(["--help", "-h"])]);
+  assertEquals(beforeSubcommand.exitCode, 0);
+  assertEquals(beforeSubcommand.stdoutLines, [JSON.stringify(["-h"])]);
+});
+
+Deno.test("--help before `--` still prints help at the root, a sub-router and a leaf", async () => {
+  // Given a leaf that echoes its words, under a sub-router
+  const root = echoWordsTree();
+
+  // When --help or -h comes before a `--` at each level
+  const atRoot = await runWithCapture({
+    rootRouter: root,
+    argv: ["--help", "plugin", "--", "word"],
+  });
+  const atRouter = await runWithCapture({
+    rootRouter: root,
+    argv: ["plugin", "-h", "add", "--", "word"],
+  });
+  const atLeaf = await runWithCapture({
+    rootRouter: root,
+    argv: ["plugin", "add", "--help", "--", "word"],
+  });
+
+  // Then each level prints its own help and the leaf never runs
+  assertEquals(atRoot.exitCode, 0);
+  assertStringIncludes(atRoot.stdoutLines.join("\n"), "plugin");
+  assertStringIncludes(atRoot.stdoutLines.join("\n"), "Subcommands:");
+  assertEquals(atRouter.exitCode, 0);
+  assertStringIncludes(atRouter.stdoutLines.join("\n"), "Subcommands:");
+  assertStringIncludes(atRouter.stdoutLines.join("\n"), "add");
+  assertEquals(atLeaf.exitCode, 0);
+  assertStringIncludes(
+    atLeaf.stdoutLines.join("\n"),
+    "Usage: test-cli plugin add",
+  );
+  for (const run of [atRoot, atRouter, atLeaf]) {
+    assertEquals(
+      run.stdoutLines.some((line) => line.includes("word")),
+      false,
+    );
+  }
+});
+
 Deno.test("router returns kind:error with exit 2 for an unknown subcommand", async () => {
   // Given a router with a known subcommand
   const root = router({
