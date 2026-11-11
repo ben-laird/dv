@@ -4,6 +4,12 @@ All notable changes to this Package are documented in this file. The
 format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this Package adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.4.2] - 2026-11-11
+
+### Fixed
+
+- Treat a lone `-` as a word, not an unknown flag ([link](https://github.com/ben-laird/dv/issues/41))
+
 ## [0.4.1] - 2026-11-11
 
 ### Fixed
