@@ -36,3 +36,17 @@ Deno.test("requestsHelp answers false for argv with no help token", () => {
   // Then it does not ask for help
   assertEquals(answer, false);
 });
+
+Deno.test("requestsHelp reads past a bare `-`, which is a word", () => {
+  // Given a bare `-` before a help token, and a bare `-` alone
+  const dashThenHelp = ["-", "--help"];
+  const dashAlone = ["-"];
+
+  // When requestsHelp reads each
+  const helpAnswer = requestsHelp(dashThenHelp);
+  const dashAnswer = requestsHelp(dashAlone);
+
+  // Then `-` neither asks for help nor hides the help token after it
+  assertEquals(helpAnswer, true);
+  assertEquals(dashAnswer, false);
+});

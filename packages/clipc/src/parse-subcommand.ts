@@ -1,7 +1,8 @@
 import { parseArgs } from "@std/cli/parse-args";
 import { type FlagSpec, type FlagsOf, lowerFlagSpec } from "./flag-spec.ts";
+import { isFlagToken } from "./flag-token.ts";
 
-// Internal sentinel: an unknown flag (a token starting with `-` that
+// Internal sentinel: an unknown flag (a flag token, per isFlagToken, that
 // isn't declared) becomes this throw, caught by defineCli's dispatch
 // and converted to "unknown flag '--foo'" + exit 2. Throwing through
 // parseArgs' synchronous `unknown` callback is the structural trick
@@ -33,7 +34,11 @@ export function parseSubcommandArgv<TFlagMap extends Record<string, FlagSpec>>(
   args: ParseSubcommandArgvArgs<TFlagMap>,
 ): ParseSubcommandArgvResult<TFlagMap> {
   const lowered = lowerFlagSpec(args.flagSpecMap);
-  const parsed = parseArgs(args.subcommandArgv, {
+  const subcommandArgv = joinDashValues({
+    argv: args.subcommandArgv,
+    valueFlags: new Set(lowered.string),
+  });
+  const parsed = parseArgs(subcommandArgv, {
     // `_` keeps every positional a string: parseArgs would otherwise turn
     // `007` into 7. The leaf knows its own types, so numbers are its call.
     string: ["_", ...lowered.string],
@@ -41,7 +46,8 @@ export function parseSubcommandArgv<TFlagMap extends Record<string, FlagSpec>>(
     collect: lowered.collect,
     alias: lowered.alias,
     unknown: (token) => {
-      if (token.startsWith("-")) {
+      // parseArgs calls this for positionals too, and a lone `-` is one.
+      if (isFlagToken(token)) {
         throw new UnknownFlagError(token);
       }
       return true;
@@ -67,4 +73,34 @@ export function parseSubcommandArgv<TFlagMap extends Record<string, FlagSpec>>(
     flags: flagsObject as FlagsOf<TFlagMap>,
     argv,
   };
+}
+
+interface JoinDashValuesArgs {
+  argv: readonly string[];
+  valueFlags: ReadonlySet<string>;
+}
+
+// parseArgs reads `--title -` as an empty title plus a word `-` (while
+// `-t -` gives "-"): a long flag's spaced value may not start with `-`.
+// Joining it as `--title=-` makes the long form match the short one.
+function joinDashValues(args: JoinDashValuesArgs): string[] {
+  const joined: string[] = [];
+  for (let index = 0; index < args.argv.length; index++) {
+    const token = args.argv[index] ?? "";
+    if (token === "--") {
+      joined.push(...args.argv.slice(index));
+      break;
+    }
+    const isDashValue =
+      args.argv[index + 1] === "-" &&
+      token.startsWith("--") &&
+      args.valueFlags.has(token.slice(2));
+    if (isDashValue) {
+      joined.push(`${token}=-`);
+      index++;
+      continue;
+    }
+    joined.push(token);
+  }
+  return joined;
 }
