@@ -261,10 +261,18 @@ aren't in `candidates` (npm packages from the registry, std-lib,
 etc.) MUST be omitted — the topological sort only considers
 *intra-workspace* edges.
 
-The op SHOULD be read-only: it may read the manifest and the
-package's sources (or ask the ecosystem's own tooling to), but it must
-not write anything. dv may invoke this op repeatedly across a workspace,
-and ordering depends on consistent results.
+The op SHOULD NOT modify the repository. It MAY read the manifest and
+the package's sources, and MAY run the ecosystem's own tooling to do so
+(the reference Deno plugin runs `deno info`). That tooling may write
+outside the repository, e.g. to its own cache. dv may invoke this op
+repeatedly across a workspace, and ordering depends on consistent
+results, so the answer SHOULD depend only on the repository's contents.
+
+Because it may run ecosystem tooling, the op can be slower than a
+manifest read, and it may need that ecosystem's caches or network
+access. Plugin authors should keep it within the fast-op timeout and
+prefer offline modes; dv operators running in a sandbox or offline CI
+should expect it to need the same environment as the ecosystem's build.
 
 `{ ok: false, error: "..." }` is a hard error and aborts the
 release pre-tag. The plugin should reserve this for genuine read
