@@ -3,7 +3,7 @@ import { SCHEMA_URNS } from "../../domain/schema-urns.ts";
 import { rawPlanSchema } from "../../subtools/versioning/plan-schema.ts";
 
 // Zod sources for every `dv` command `--json` result envelope. These feed
-// `z.toJSONSchema()` in the schema generator (specs/schemas/*-result.json)
+// `z.toJSONSchema()` in the schema generator (apps/cli/schemas/*-result.json)
 // and back the contract-conformance tests that assert each command's
 // emitted output validates against its schema.
 //

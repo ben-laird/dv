@@ -44,7 +44,7 @@ per capability; commands compose them and hold no domain logic of their own.
   function of repo state) and then executes it. `dv status`, `--dry-run`, and
   the real run share the _same_ plan-building code — they must not diverge
   (`specs/language.md` Algebra §7). The Plan serializes to
-  `specs/schemas/plan.json`.
+  `apps/cli/schemas/plan.json`.
 - **Keep the core algebra pure.** `classify` / `apply` / `aggregate` / bump-join
   touch no git, filesystem, or plugins. Push IO to the edges so the laws stay
   property-testable.
@@ -52,7 +52,7 @@ per capability; commands compose them and hold no domain logic of their own.
   released iff its current Version has a matching Tag (Algebra §4).
 - **Plugins are a boundary.** All plugin interaction is JSON-over-stdio per
   `specs/plugin-contract.md`. Validate responses against
-  `specs/schemas/plugin-responses.json`; honor the per-slot timeouts.
+  `apps/cli/schemas/plugin-responses.json`; honor the per-slot timeouts.
 - **`--json` is a contract**, matching the committed schemas — never an ad-hoc
   shape.
 
@@ -66,7 +66,7 @@ per capability; commands compose them and hold no domain logic of their own.
   `Stability`, `ChangeType` — so the compiler enforces the lexicon.
 - **Zod** validates every contract boundary: `.dv/config.yaml`, plugin
   stdio JSON, the Plan emitted by `--json`. Hand-rolled validation is a
-  regression. JSON Schemas under `specs/schemas/` are **generated** from the
+  regression. JSON Schemas under `apps/cli/schemas/` are **generated** from the
   Zod source via `deno task schemas:generate`; `deno task schemas:check`
   is the drift gate. Never hand-edit a generated JSON Schema.
 - Each Zod schema file exports both a `raw…Schema` (pure shape, fed to

@@ -3,7 +3,7 @@ import { DvError } from "../../domain/errors.ts";
 import { parseDurationMs } from "./duration.ts";
 
 Deno.test("parseDurationMs accepts every documented unit suffix", () => {
-  // Given the four units documented in specs/schemas/config.json $defs/duration
+  // Given the four units documented in apps/cli/schemas/config.json $defs/duration
   const durationsByUnit = {
     milliseconds: { input: "500ms", expectedMs: 500 },
     seconds: { input: "60s", expectedMs: 60_000 },

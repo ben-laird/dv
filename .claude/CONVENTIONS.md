@@ -29,7 +29,7 @@ at the repo root.
 - **Validation:** [Zod](https://zod.dev) at every contract boundary —
   config files, plugin stdio JSON, anything that crosses out of the
   TypeScript type system. Zod schemas are the in-code source of truth
-  and stay in lockstep with `specs/schemas/*.json`.
+  and stay in lockstep with `apps/cli/schemas/*.json`.
 
 ### Daily tasks
 
@@ -48,7 +48,7 @@ From the repo root:
 | `deno task lint:fix`          | Apply Biome's safe fixes, then run `deno lint`.                      |
 | `deno task check`             | Per-workspace `deno check`.                                          |
 | `deno task test`              | Run the whole test suite (`deno test -A`).                           |
-| `deno task schemas:generate`  | Emit `specs/schemas/*.json` from the Zod source.                     |
+| `deno task schemas:generate`  | Emit `apps/cli/schemas/*.json` from the Zod source.                     |
 | `deno task schemas:check`     | CI gate: re-generate in memory; fail if diff vs disk.                |
 | `deno task verify`            | Every CI gate, fail-fast (the single source of truth: `apps/cli/src/scripts/ci.ts`). |
 
@@ -146,7 +146,7 @@ neither code path can rot.
 - Every contract surface (`.dv/config.yaml`, plugin stdio JSON,
   the Plan emitted by `--json`) is described by a **Zod schema in
   source**. That schema is the single source of truth.
-- JSON Schema files under [specs/schemas/](specs/schemas/) are
+- JSON Schema files under [apps/cli/schemas/](apps/cli/schemas/) are
   **generated**, never hand-edited. Run `deno task schemas:generate`
   after touching a Zod schema; `deno task schemas:check` is the CI
   gate that fails on drift.

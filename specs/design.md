@@ -282,7 +282,7 @@ Changesets). Rejected because:
   `extends` chains, `overrides`) reads cleaner in YAML than in
   JSON.
 - The strongest pro-JSON argument is autocomplete in editors. The
-  generated JSON Schema at `specs/schemas/config.json` plus the
+  generated JSON Schema at `apps/cli/schemas/config.json` plus the
   `# yaml-language-server: $schema=...` directive at the top of
   `.dv/config.yaml` gives us that — without giving up comments or
   readability.

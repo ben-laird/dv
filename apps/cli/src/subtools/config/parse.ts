@@ -226,7 +226,7 @@ function configErrorFromZod(args: ConfigErrorFromZodArgs): DvError {
     return new DvError({
       code: "config-unknown-key",
       message,
-      hint: "check the config schema at specs/schemas/config.json",
+      hint: "check the config schema at apps/cli/schemas/config.json",
       context: { configFilePath: args.configFilePath },
     });
   }

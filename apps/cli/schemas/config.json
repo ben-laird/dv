@@ -4,7 +4,7 @@
   "type": "object",
   "properties": {
     "$schema": {
-      "description": "Pointer to the dv config schema for editor autocomplete (e.g. ./specs/schemas/config.json or a published URL).",
+      "description": "Pointer to the dv config schema for editor autocomplete and validation, e.g. https://jsr.io/@dv-cli/dv/<version>/schemas/config.json (dv init writes it).",
       "type": "string"
     },
     "extends": {
