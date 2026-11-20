@@ -806,23 +806,31 @@ interface RenderHumanSummaryArgs {
 
 function renderHumanSummary(args: RenderHumanSummaryArgs): void {
   const styler = makeStyler(args.colorEnabled);
-  // A successful op only counts as a publish when the plugin didn't say
-  // otherwise: `published: false` (e.g. a `publish: false` package) or
-  // `skipped: true` (already published) succeed without publishing. A
-  // bare `{ ok: true }` — the contract's minimal response — counts.
+  // A successful op counts as a publish unless the plugin said
+  // otherwise: `skipped: true` means it was already published (an
+  // idempotent re-run); `published: false` means there was nothing to
+  // publish (e.g. a `publish: false` package). A bare `{ ok: true }` —
+  // the contract's minimal response — counts as published.
   const succeededOutcomes = args.releaseOpOutcomes.filter(
     (outcome) => outcome.ok,
   );
-  const publishedCount = succeededOutcomes.filter(
-    (outcome) => outcome.published !== false && outcome.skipped !== true,
+  const skippedCount = succeededOutcomes.filter(
+    (outcome) => outcome.skipped === true,
   ).length;
-  const notPublishedCount = succeededOutcomes.length - publishedCount;
-  const failedCount = args.releaseOpOutcomes.length - succeededOutcomes.length;
+  const notPublishedCount = succeededOutcomes.filter(
+    (outcome) => outcome.skipped !== true && outcome.published === false,
+  ).length;
+  const succeededCount = succeededOutcomes.length;
+  const publishedCount = succeededCount - skippedCount - notPublishedCount;
+  const failedCount = args.releaseOpOutcomes.length - succeededCount;
   const segments: string[] = [`tagged ${args.mintedTagNames.length}`];
   if (args.reusedTagNames.length > 0) {
     segments.push(`reused ${args.reusedTagNames.length}`);
   }
   segments.push(`published ${publishedCount}`);
+  if (skippedCount > 0) {
+    segments.push(`${skippedCount} skipped`);
+  }
   if (notPublishedCount > 0) {
     segments.push(`${notPublishedCount} not published`);
   }

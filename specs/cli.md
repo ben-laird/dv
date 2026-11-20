@@ -212,10 +212,26 @@ shape regardless of outcome (git's default-vs-`--porcelain` discipline:
 
 ```
 $ dv release --dry-run
-Plan: tag core@1.5.0, cli@0.8.1, utils@2.1.0; publish 3 packages
+Plan (dry-run):
+  core 1.5.0 → tag core@1.5.0
+  cli 0.8.1 → tag cli@0.8.1
+  utils 2.1.0 → tag utils@2.1.0
 $ dv release --yes
-✓ tagged 3 packages, published 3
+✓ tagged 3, published 3
 ```
+
+The human summary line lists comma-separated segments. `tagged N` and
+`published N` always appear; the rest appear only when non-zero:
+
+| Segment             | Counts                                                                                     |
+| ------------------- | ------------------------------------------------------------------------------------------ |
+| `tagged N`          | Tags minted this run.                                                                      |
+| `reused N`          | Tags that already existed (re-run with `--force`).                                         |
+| `published N`       | Release Ops that succeeded and published: `{ ok: true }` without `skipped` or `published: false`. |
+| `N skipped`         | Release Ops that reported `skipped: true`: the Version was already published.              |
+| `N not published`   | Release Ops that reported `published: false`: nothing to publish (e.g. `"publish": false`). |
+| `N failed`          | Release Ops that failed (`ok: false`, a non-zero exit, or a timeout).                      |
+| `pushed N`          | Tags pushed to the remote.                                                                 |
 
 ---
 

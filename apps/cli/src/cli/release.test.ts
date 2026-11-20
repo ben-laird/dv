@@ -777,6 +777,31 @@ Deno.test("runRelease's summary counts published:false outcomes as not published
   }
 });
 
+Deno.test("runRelease's summary counts skipped:true outcomes as skipped, not published", async () => {
+  // Given: a release op reporting every package as already published
+  const fixture = await setUpReleaseFixture({
+    releaseScriptOverride: `console.log(JSON.stringify({ ok: true, skipped: true }));\n`,
+  });
+
+  try {
+    // When: dv release runs
+    const { capturedStdout } = await captureStdout(() =>
+      runRelease({
+        force: false,
+        yes: true,
+        emitJson: false,
+        colorEnabled: false,
+      }),
+    );
+
+    // Then: they count as skipped, separately from "not published"
+    assertStringIncludes(capturedStdout, "published 0, 2 skipped");
+    assertEquals(capturedStdout.includes("not published"), false);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
 Deno.test("runRelease's summary counts a release op that omits published as published", async () => {
   // Given: a release op answering with the contract's minimal `{ ok: true }`
   const fixture = await setUpReleaseFixture({
