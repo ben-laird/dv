@@ -40,7 +40,7 @@ export async function invokeInfo(args: InvokeInfoArgs): Promise<InfoResponse> {
     resolvedPlugin,
     repoRootPath: args.repoRootPath,
     opName: "info",
-    environmentVariables: buildInfoEnvironment(),
+    environmentVariables: buildInfoEnvironment(args.repoRootPath),
     timeoutMs: args.timeoutMs ?? DEFAULT_INFO_TIMEOUT_MS,
     tracingHooks: args.tracingHooks,
   });
@@ -59,9 +59,10 @@ export async function invokeInfo(args: InvokeInfoArgs): Promise<InfoResponse> {
   return validatedResponse;
 }
 
-function buildInfoEnvironment(): Record<string, string> {
+function buildInfoEnvironment(repoRootPath: string): Record<string, string> {
   const childEnvironment: Record<string, string> = {
     PATH: Deno.env.get("PATH") ?? "",
+    DV_REPO_ROOT: repoRootPath,
   };
   const homeDirectory = Deno.env.get("HOME");
   if (homeDirectory) childEnvironment.HOME = homeDirectory;
