@@ -12,7 +12,7 @@ themselves have one home.
 Every release of `@dv-cli/dv` publishes the schemas with it, and JSR
 serves each published file at an immutable, versioned URL:
 
-```
+```text
 https://jsr.io/@dv-cli/dv/<version>/schemas/<name>.json
 ```
 

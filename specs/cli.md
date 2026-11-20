@@ -41,6 +41,12 @@ Scaffolds a fresh repo: writes a starter `.dv/config.yaml` and
 creates the `.dv/records/` directory. Idempotent — re-running against
 an initialized repo is a no-op, not an error.
 
+The starter config points at the published config schema for the
+running dv version, both as a `# yaml-language-server: $schema=…`
+modeline on its first line and as a `$schema` key, so editors offer
+autocomplete and validation from the start. See
+[config-format.md § `$schema`](config-format.md#schema).
+
 ```
 $ dv init
 created .dv/config.yaml

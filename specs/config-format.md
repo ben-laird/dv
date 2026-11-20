@@ -19,7 +19,7 @@ Biome's `biome.json`.
 ## Top-level shape
 
 ```yaml
-$schema: https://dv.dev/schema/v1.yaml
+$schema: https://jsr.io/@dv-cli/dv/0.11.0/schemas/config.json
 
 extends: []
 
@@ -48,14 +48,34 @@ user-configurable in v1, so it has no config section.
 
 ## `$schema`
 
-Recommended for editor support. Points at the versioned JSON Schema:
+Recommended for editor support. Points at the JSON Schema for the config,
+which every dv release publishes to JSR at an immutable, versioned URL:
 
-```yaml
-$schema: https://dv.dev/schema/v1.yaml
+```text
+https://jsr.io/@dv-cli/dv/<version>/schemas/config.json
 ```
 
-VS Code with the YAML extension (and most other modern editors) will pick
-this up automatically and provide autocomplete and validation.
+Use the version of dv that reads the config, so the schema matches the
+parser exactly. `dv init` writes the pointer for the running version in
+two forms:
+
+```yaml
+# yaml-language-server: $schema=https://jsr.io/@dv-cli/dv/0.11.0/schemas/config.json
+
+$schema: https://jsr.io/@dv-cli/dv/0.11.0/schemas/config.json
+```
+
+- The **`# yaml-language-server:` modeline** on the first line is what
+  editors backed by yaml-language-server (VS Code's YAML extension, and
+  most others) read to provide autocomplete and validation. It works
+  without the editor parsing the document first.
+- The **`$schema` key** keeps the pointer in the config's data, where any
+  tool that reads the parsed YAML can find it. dv accepts and ignores it.
+
+Both carry the same URL; keep them in step when you upgrade dv. The
+schemas for records (`record.json`), the rename ledger
+(`rename-ledger.json`) and every `--json` contract are published alongside
+it under the same `schemas/` path.
 
 ## `extends`
 
@@ -496,7 +516,7 @@ are repo-level and documented under `git` above.)
 ## Full example
 
 ```yaml
-$schema: https://dv.dev/schema/v1.yaml
+$schema: https://jsr.io/@dv-cli/dv/0.11.0/schemas/config.json
 
 discovery:
   plugins:
