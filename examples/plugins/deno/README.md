@@ -1,7 +1,7 @@
 # deno — example plugin
 
 A reference plugin for Deno workspaces (packages with a `deno.json` or
-`deno.jsonc` carrying a `name` and `version`). Copy `main.ts` into your own repo and adapt — it is
+`deno.jsonc` carrying a `name`; a missing `version` reads as `0.0.0`). Copy `main.ts` into your own repo and adapt — it is
 not a maintained dependency (`examples/CLAUDE.md`).
 
 ## Wiring it up

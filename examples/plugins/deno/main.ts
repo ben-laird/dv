@@ -543,8 +543,9 @@ async function runRelease(): Promise<void> {
 
   // --allow-dirty: dv has written the version commit and tag, but
   // the tree may still carry unrelated changes (e.g. CI artifacts).
-  // --quiet keeps JSR's progress chatter off stdout, which dv
-  // parses as JSON.
+  // Its stdout/stderr are piped into this process, never straight to
+  // dv; --quiet drops progress chatter so the stderr we quote in a
+  // failure message is just the error.
   const publishCommand = resolvePublishCommand();
   if (!publishCommand.ok) failWith(publishCommand.error);
   const [executable, ...publishArgs] = publishCommand.value;
@@ -653,8 +654,8 @@ async function runFinalize(): Promise<void> {
   const lockfileBefore = await readFileOrUndefined(lockfilePath);
 
   // `deno install` (no args) refreshes the lockfile against the
-  // current manifests. Quiet so its output doesn't leak into our
-  // stdout (which dv parses as JSON).
+  // current manifests. Its output is piped, not passed to dv; --quiet
+  // keeps the stderr we quote on failure down to the error itself.
   const installResult = await new Deno.Command("deno", {
     args: ["install", "--quiet"],
     cwd: repoRoot,
