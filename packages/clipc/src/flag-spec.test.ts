@@ -59,6 +59,33 @@ Deno.test("checkFlagSpecMap refuses a boolean spelling declared in values beside
   }
 });
 
+Deno.test("checkFlagSpecMap refuses an optional-value flag named as another flag's negation", () => {
+  // Given a boolean `foo` and an optional-value flag named `no-foo`
+  const flagSpecMap: Record<string, FlagSpec> = {
+    foo: { kind: "boolean" },
+    "no-foo": { kind: "optional-value" },
+  };
+
+  // When the map is checked
+  const check = checkFlagSpecMap(flagSpecMap);
+
+  // Then the mirror collision is an error value naming the rename
+  assertEquals(check, {
+    ok: false,
+    error: {
+      kind: "negated-name-collision",
+      flagName: "no-foo",
+      baseFlagName: "foo",
+    },
+  });
+  if (!check.ok) {
+    assertEquals(
+      describeFlagSpecError(check.error),
+      "optional-value flag 'no-foo' collides with flag 'foo': '--no-foo' reads as the negation of 'foo'; rename the optional-value flag so it doesn't start with 'no-'",
+    );
+  }
+});
+
 Deno.test("checkFlagSpecMap accepts no- flags that shadow nothing", () => {
   // Given a no- boolean beside a plain boolean of the same stem, and an
   // optional-value flag whose own name starts with no-
@@ -71,7 +98,8 @@ Deno.test("checkFlagSpecMap accepts no- flags that shadow nothing", () => {
   // When the map is checked
   const check = checkFlagSpecMap(flagSpecMap);
 
-  // Then it passes: only an optional-value stem claims `--no-<stem>`
+  // Then it passes: `verify` isn't declared, so `no-verify` claims nothing
+  // another flag needs, and only an optional-value stem claims `--no-<stem>`
   assertEquals(check, { ok: true });
 });
 

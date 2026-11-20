@@ -43,8 +43,11 @@
  * `<string>` for a free value (`--x[=<string>]`). A `valueName` replaces that
  * list with `--x[=<valueName>]`, which hides a closed set, so leave it unset
  * when the set is short. The flag takes no `alias`: a short letter has no
- * attached-value spelling. Declaring a separate `no-x` flag beside it is
- * refused, since `--no-x` already means `false`.
+ * attached-value spelling. `command()` refuses, by throwing when the tree is
+ * built, a separate `no-x` flag beside it (`--no-x` already means `false`),
+ * an optional-value flag named `no-y` beside a declared `y` (its name would
+ * shadow `y`'s negation), and `"true"`/`"false"` in `values` when
+ * `booleans: true` (those spellings already read as booleans).
  *
  * @example
  * ```ts
@@ -208,6 +211,13 @@ export type FlagSpecError =
       negatedFlagName: string;
     }
   | {
+      kind: "negated-name-collision";
+      /** The `"optional-value"` flag named `no-<base>`. */
+      flagName: string;
+      /** The declared `<base>` flag whose negation that name spells. */
+      baseFlagName: string;
+    }
+  | {
       kind: "boolean-spelling-in-values";
       /** The `"optional-value"` flag with `booleans: true`. */
       flagName: string;
@@ -221,9 +231,11 @@ export type FlagSpecCheck = { ok: true } | { ok: false; error: FlagSpecError };
 /**
  * Checks a flag map for declarations that can't all be honored. An
  * `"optional-value"` flag `x` reads `--no-x` as `false`, so a separately
- * declared `no-x` flag would never be set; and with `booleans: true` it
- * reads `=true` / `=false` as booleans, so declaring either in `values`
- * would never yield that string.
+ * declared `no-x` flag would never be set. Mirrored, an `"optional-value"`
+ * flag named `no-y` claims the `--no-y` token, so it can't sit beside a
+ * declared `y` of any kind. And with `booleans: true` it reads `=true` /
+ * `=false` as booleans, so declaring either in `values` would never yield
+ * that string.
  *
  * @param flagSpecMap - The command's flag map keyed by flag name.
  * @returns `{ ok: true }`, or the first {@link FlagSpecError} found.
@@ -238,6 +250,16 @@ export function checkFlagSpecMap(
       return {
         ok: false,
         error: { kind: "negation-collision", flagName, negatedFlagName },
+      };
+    }
+    const baseFlagName = flagName.slice(3);
+    if (
+      flagName.startsWith("no-") &&
+      Object.hasOwn(flagSpecMap, baseFlagName)
+    ) {
+      return {
+        ok: false,
+        error: { kind: "negated-name-collision", flagName, baseFlagName },
       };
     }
     if (flagSpec.booleans !== true) continue;
@@ -263,6 +285,8 @@ export function describeFlagSpecError(error: FlagSpecError): string {
   switch (error.kind) {
     case "negation-collision":
       return `flag '${error.negatedFlagName}' collides with optional-value flag '${error.flagName}', which already reads '--${error.negatedFlagName}' as false; drop the separate '${error.negatedFlagName}' flag`;
+    case "negated-name-collision":
+      return `optional-value flag '${error.flagName}' collides with flag '${error.baseFlagName}': '--${error.flagName}' reads as the negation of '${error.baseFlagName}'; rename the optional-value flag so it doesn't start with 'no-'`;
     case "boolean-spelling-in-values":
       return `optional-value flag '${error.flagName}' declares '${error.value}' in values, but booleans: true already reads '--${error.flagName}=${error.value}' as a boolean; drop '${error.value}' from values`;
   }
