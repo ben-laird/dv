@@ -238,10 +238,10 @@ async function runUpdateDependency(): Promise<void> {
     console.log(JSON.stringify({ ok: true, changed: false }));
     return;
   }
-  const rewrittenSpecifier = rewriteSpecifierVersion(
+  const rewrittenSpecifier = rewriteSpecifierVersion({
     originalSpecifier,
-    newVersion,
-  );
+    nextVersion: newVersion,
+  });
   if (rewrittenSpecifier === originalSpecifier) {
     console.log(JSON.stringify({ ok: true, changed: false }));
     return;
@@ -271,10 +271,13 @@ async function runUpdateDependency(): Promise<void> {
 // commit-derived modes compute bumps from git history, which is the
 // one thing dv owns and must not delegate (Records, not commits, are
 // authoritative — specs/design.md § Records over commit messages).
-function rewriteSpecifierVersion(
-  originalSpecifier: string,
-  nextVersion: string,
-): string {
+function rewriteSpecifierVersion({
+  originalSpecifier,
+  nextVersion,
+}: {
+  originalSpecifier: string;
+  nextVersion: string;
+}): string {
   const matchedPattern = originalSpecifier.match(
     /^((?:jsr:|npm:)?@?[\w./-]+)@([\^~]?)([\dA-Za-z.\-+]+)$/,
   );
