@@ -21,35 +21,40 @@ import { expandGlob } from "jsr:@std/fs@^1/expand-glob";
 import { parse as parseJsonc } from "jsr:@std/jsonc@^1";
 import { dirname, join, relative } from "jsr:@std/path@^1";
 
-const op = Deno.args[0];
-switch (op) {
-  case "info":
-    runInfo();
-    break;
-  case "discover":
-    await runDiscover();
-    break;
-  case "read-version":
-    await runReadVersion();
-    break;
-  case "write-version":
-    await runWriteVersion();
-    break;
-  case "update-dependency":
-    await runUpdateDependency();
-    break;
-  case "get-dependencies":
-    await runGetDependencies();
-    break;
-  case "release":
-    await runRelease();
-    break;
-  case "finalize":
-    await runFinalize();
-    break;
-  default:
-    console.error(`unknown dv op: '${op ?? "<missing>"}'`);
-    Deno.exit(1);
+// Entry point, run at the bottom of the file once every declaration
+// is initialized. Guarded by import.meta.main so the tests can import
+// helpers without dispatching an op.
+async function main(): Promise<void> {
+  const op = Deno.args[0];
+  switch (op) {
+    case "info":
+      runInfo();
+      break;
+    case "discover":
+      await runDiscover();
+      break;
+    case "read-version":
+      await runReadVersion();
+      break;
+    case "write-version":
+      await runWriteVersion();
+      break;
+    case "update-dependency":
+      await runUpdateDependency();
+      break;
+    case "get-dependencies":
+      await runGetDependencies();
+      break;
+    case "release":
+      await runRelease();
+      break;
+    case "finalize":
+      await runFinalize();
+      break;
+    default:
+      console.error(`unknown dv op: '${op ?? "<missing>"}'`);
+      Deno.exit(1);
+  }
 }
 
 // === info ======================================================
@@ -971,4 +976,8 @@ function scanJsonc(text: string): JsoncNode {
   };
 
   return scanValue();
+}
+
+if (import.meta.main) {
+  await main();
 }
