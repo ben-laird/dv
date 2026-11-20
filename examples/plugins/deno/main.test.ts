@@ -12,15 +12,22 @@ interface OpOutcome {
   response: unknown;
 }
 
-async function runOp({
-  op,
-  env,
-  stdin,
-}: {
+interface RunOpArgs {
   op: string;
   env: Record<string, string>;
   stdin?: unknown;
-}): Promise<OpOutcome> {
+}
+
+async function runOp(args: RunOpArgs): Promise<OpOutcome> {
+  const { outcome } = await runOpCapturingStderr(args);
+  return outcome;
+}
+
+async function runOpCapturingStderr({
+  op,
+  env,
+  stdin,
+}: RunOpArgs): Promise<{ outcome: OpOutcome; stderr: string }> {
   const child = new Deno.Command("deno", {
     args: ["run", "-A", pluginEntryPath, op],
     env: { ...env, DV_OPERATION: op },
@@ -35,9 +42,10 @@ async function runOp({
   await writer.close();
   const output = await child.output();
   const stdoutText = new TextDecoder().decode(output.stdout).trim();
+  const response = stdoutText === "" ? undefined : JSON.parse(stdoutText);
   return {
-    exitCode: output.code,
-    response: stdoutText === "" ? undefined : JSON.parse(stdoutText),
+    outcome: { exitCode: output.code, response },
+    stderr: new TextDecoder().decode(output.stderr),
   };
 }
 
@@ -315,25 +323,41 @@ Deno.test("get-dependencies reports a leaf member as having no dependencies", as
   });
 });
 
-Deno.test("get-dependencies returns a contract error when an entry point is missing", async () => {
+Deno.test("get-dependencies falls back to import-map deps with a warning when the graph is broken", async () => {
   await withTempDir(async (repoRoot) => {
-    // Given: member a exports a file that does not exist
+    // Given: member a declares c in its import map, imports b through
+    // the workspace, and exports a file that does not exist
     await writeWorkspaceFixture(repoRoot);
-    await Deno.remove(join(repoRoot, "packages", "a", "mod.ts"));
+    await Deno.writeTextFile(
+      join(repoRoot, "packages", "a", "deno.json"),
+      `${JSON.stringify(
+        {
+          name: "@fixture/a",
+          version: "1.0.0",
+          exports: "./missing.ts",
+          imports: { "@fixture/c": "jsr:@fixture/c@^1.0.0" },
+        },
+        null,
+        2,
+      )}\n`,
+    );
 
     // When: dv asks which candidates a depends on
-    const outcome = await runOp({
+    const { outcome, stderr } = await runOpCapturingStderr({
       op: "get-dependencies",
       env: getDependenciesEnv({ repoRoot, member: "a" }),
-      stdin: { candidates: ["@fixture/b"] },
+      stdin: { candidates: ["@fixture/b", "@fixture/c"] },
     });
 
-    // Then: the op fails loudly with a structured error
-    assertEquals(outcome.exitCode, 1);
-    assertEquals(
-      isRecord(outcome.response) ? outcome.response.ok : undefined,
-      false,
-    );
+    // Then: the op succeeds with the import-map deps only, and warns
+    // on stderr naming the package and the deno info failure
+    assertEquals(outcome, {
+      exitCode: 0,
+      response: { ok: true, dependencies: ["@fixture/c"] },
+    });
+    assertStringIncludes(stderr, "warning: @fixture/a:");
+    assertStringIncludes(stderr, "missing.ts");
+    assertEquals(stderr.includes("\u001b"), false);
   });
 });
 

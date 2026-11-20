@@ -260,6 +260,8 @@ function rewriteSpecifierVersion({
 //    dependency. `--no-remote --no-npm --no-lock` keeps this an
 //    offline, read-only walk: registry modules are skipped (they
 //    are never workspace members) and deno.lock is never written.
+//    If the walk fails, the op warns on stderr and falls back to
+//    source 1 alone.
 //
 // Only names in `candidates` are reported; external deps
 // (registry packages, std-lib) don't affect publish ordering.
@@ -302,9 +304,18 @@ async function runGetDependencies(): Promise<void> {
       packageDir: packagePath,
       exports: manifest.value.parsed.exports,
     });
-    if (!graphPackages.ok) failWith(graphPackages.error);
-    for (const packageName of graphPackages.value) {
-      if (candidateSet.has(packageName)) dependencies.add(packageName);
+    if (graphPackages.ok) {
+      for (const packageName of graphPackages.value) {
+        if (candidateSet.has(packageName)) dependencies.add(packageName);
+      }
+    } else {
+      // A broken graph (say, an entry point that is a gitignored
+      // generated file) degrades to the import-map answer instead of
+      // aborting the release. stderr is free-form diagnostics for dv.
+      const packageName = Deno.env.get("DV_PACKAGE_NAME") ?? packagePath;
+      console.error(
+        `warning: ${packageName}: module graph unavailable, reporting import-map dependencies only (${graphPackages.error})`,
+      );
     }
   }
   console.log(
