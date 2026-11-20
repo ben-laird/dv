@@ -23,6 +23,12 @@ export interface InvokeOpArgs {
   // invokes before/after/error in order so a tracer can log the
   // full lifecycle of one child process. Default: no-op.
   tracingHooks?: TracingHooks;
+  // Receives a successful Op's stderr, which the contract says is
+  // passed through to the user. Default: dv's own stderr, each line
+  // prefixed with the plugin + op. Skipped under tracing (`--debug`
+  // already prints it); `plugin invoke` passes a no-op because it
+  // renders stderr itself. Never stdout, so `--json` stays clean.
+  forwardStderr?: (args: { prefix: string; rawStderr: string }) => void;
 }
 
 export interface InvokeOpResult {
@@ -196,5 +202,20 @@ export async function invokeOp(args: InvokeOpArgs): Promise<InvokeOpResult> {
     rawStdout,
     rawStderr,
   });
+  if (args.tracingHooks === undefined && rawStderr.trim() !== "") {
+    const forwardStderr = args.forwardStderr ?? writePrefixedToStderr;
+    forwardStderr({ prefix: `[${resolvedPlugin.path} ${opName}]`, rawStderr });
+  }
   return { rawStdout, rawStderr };
+}
+
+function writePrefixedToStderr({
+  prefix,
+  rawStderr,
+}: {
+  prefix: string;
+  rawStderr: string;
+}): void {
+  const lines = rawStderr.trimEnd().split("\n");
+  console.error(lines.map((line) => `${prefix} ${line}`).join("\n"));
 }
