@@ -717,6 +717,48 @@ Tool-wide output conventions (every command, not just status):
   `-v` / `--verbose` detail level, consistent across commands that support
   them.
 
+#### Contract versioning
+
+Every machine contract (the `--json` envelopes, the Plan, the config,
+Record frontmatter, the rename ledger, plugin responses) is versioned by
+SemVer, but only the **major** appears in its id:
+`urn:dv:schema:v<major>:<name>`. The URN names a *compatibility promise*,
+not a snapshot.
+
+- **Major (`v1` → `v2`): any change an existing consumer or producer can
+  trip on.** Removing a field, renaming it, changing its type, making an
+  optional field required, narrowing the values a field accepts, or
+  adding a member to a **closed** enumeration. dv honors both namespaces
+  for a deprecation window.
+- **Minor (stays `v1`): purely additive change every conforming party
+  already tolerates.** Adding an optional field, or adding a member to an
+  **open** enumeration.
+- **Patch (stays `v1`): descriptions and documentation only.** No change
+  to what validates.
+
+Open versus closed is decided per field, in the spec, up front:
+
+- A **closed** enumeration is one whose schema lists its members (`enum`
+  or `const` alternatives) — Bump (`major | minor | patch`), Change Type,
+  Stability. Consumers are entitled to match on it exhaustively, so a new
+  member is breaking in output contracts and needs a new major. (In input
+  contracts — files dv reads — accepting a new member is additive, since
+  no existing file contains it.)
+- An **open** enumeration is a field typed as a plain `string` and
+  documented as extensible, such as a problem or warning `code`.
+  Consumers must handle values they don't recognize (treat them
+  generically: show the message, count it), so new values are minor.
+
+The minor rule rests on one obligation for consumers of dv's output:
+**ignore properties you don't recognize.** Each published schema sets
+`additionalProperties: false` to describe exactly what that dv release
+emits, so a consumer that validates output strictly should validate it
+against the schema of the release that produced it. Exact pinning is
+always available: every release publishes its schemas at an immutable
+per-version URL, `https://jsr.io/@dv-cli/dv/<version>/schemas/<name>.json`
+(see `specs/schemas/README.md`). The URN says which contract a payload
+claims; the versioned URL says exactly which revision of it.
+
 ### Constraint-only cascading
 
 When package A bumps and package B depends on A, `dv` updates B's

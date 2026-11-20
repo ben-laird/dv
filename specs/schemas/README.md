@@ -66,9 +66,27 @@ their subtools); the single registry of contract ids is
 
 ## Versioning discipline
 
-Each schema's `$id` is version-namespaced (`urn:dv:schema:v1:…`). A breaking
-change to any schema increments that namespace (`v2`), and the host honors
-both for a deprecation window. `dv plugin verify` checks Plugins against the
+Each schema's `$id` is version-namespaced (`urn:dv:schema:v1:…`). Contracts
+follow SemVer with only the major in the URN (full policy:
+[design.md § Contract versioning](../design.md#contract-versioning)):
+
+- **Major — new namespace (`v1` → `v2`).** Removing, renaming or retyping
+  a field; making an optional field required; narrowing accepted values;
+  adding a member to a *closed* enumeration (one the schema lists as
+  `enum`/`const`, such as Bump or Change Type) in an output contract. The
+  host honors both namespaces for a deprecation window.
+- **Minor — same namespace.** Adding an optional field, or a new value of
+  an *open* enumeration (a plain-`string` field documented as extensible,
+  such as a problem or warning `code`), which consumers must already
+  tolerate.
+- **Patch — same namespace.** Description-only changes.
+
+Consumers must ignore properties they don't recognize. A published schema
+sets `additionalProperties: false` for the exact release that emits it, so
+strict validators should use that release's schema. Exact pinning is
+always available through the per-version JSR URLs above.
+
+`dv plugin verify` checks Plugins against the
 `plugin-responses` schema; `--json` consumers pin the `plan` and `config`
 schema versions. This is what lets downstream tooling — and Plugin authors'
 own CI — depend on the contract without tracking `dv`'s internal changes.
