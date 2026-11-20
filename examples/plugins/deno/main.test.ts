@@ -337,6 +337,65 @@ Deno.test("get-dependencies returns a contract error when an entry point is miss
   });
 });
 
+Deno.test("release skips publishing a package marked publish: false", async () => {
+  await withTempDir(async (packageDir) => {
+    // Given: a member Deno itself would refuse to publish (no exports either)
+    await Deno.writeTextFile(
+      join(packageDir, "deno.json"),
+      `{\n\t"name": "@fixture/app",\n\t"version": "1.0.0",\n\t"publish": false\n}\n`,
+    );
+
+    // When: dv fires the release op after tagging it
+    const outcome = await runOp({
+      op: "release",
+      env: {
+        DV_PACKAGE_NAME: "@fixture/app",
+        DV_PACKAGE_PATH: packageDir,
+        DV_NEW_VERSION: "1.0.0",
+        DV_GIT_TAG: "@fixture/app@1.0.0",
+      },
+    });
+
+    // Then: the op succeeds without running deno publish
+    assertEquals(outcome, {
+      exitCode: 0,
+      response: {
+        ok: true,
+        published: false,
+        message: `@fixture/app@1.0.0 not published: "publish": false in ${join(packageDir, "deno.json")}`,
+      },
+    });
+  });
+});
+
+Deno.test("release reports a failed deno publish as data, not a crash", async () => {
+  await withTempDir(async (packageDir) => {
+    // Given: a publishable-looking member that deno publish rejects (no exports)
+    await Deno.writeTextFile(
+      join(packageDir, "deno.json"),
+      `{\n\t"name": "@fixture/broken",\n\t"version": "1.0.0"\n}\n`,
+    );
+
+    // When: dv fires the release op
+    const outcome = await runOp({
+      op: "release",
+      env: {
+        DV_PACKAGE_NAME: "@fixture/broken",
+        DV_PACKAGE_PATH: packageDir,
+        DV_NEW_VERSION: "1.0.0",
+        DV_GIT_TAG: "@fixture/broken@1.0.0",
+      },
+    });
+
+    // Then: the op exits 0 with ok:false so dv records the outcome
+    assertEquals(outcome.exitCode, 0);
+    assertEquals(
+      isRecord(outcome.response) ? outcome.response.ok : undefined,
+      false,
+    );
+  });
+});
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }

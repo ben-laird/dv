@@ -69,6 +69,12 @@ covers the four arms and when to pick which.
   per `specs/plugin-contract.md`, a release-op failure does NOT roll back
   the tag, so dv records the outcome, carries on with the other packages,
   and `dv release --force` retries once the cause is fixed.
+  A package whose manifest sets `"publish": false` (Deno's marker for a
+  workspace member that never goes to JSR) is skipped with
+  `{ ok: true, published: false, message }`, and `deno publish` is never
+  run. dv has already versioned and tagged it by then. The contract has
+  no way for a plugin to say "don't tag this package", so the tag still
+  marks the release in git.
 
 ## How
 

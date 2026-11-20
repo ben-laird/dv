@@ -496,6 +496,22 @@ async function runRelease(): Promise<void> {
   const newVersion = Deno.env.get("DV_NEW_VERSION") ?? "<unknown>";
   if (!packagePath) failWith("DV_PACKAGE_PATH is required");
 
+  // `"publish": false` is Deno's own marker for a workspace member
+  // that never goes to JSR (an app, an internal tool). dv still
+  // versions and tags it; the plugin just has nothing to publish.
+  const manifest = await readManifest(packagePath);
+  if (!manifest.ok) failWith(manifest.error);
+  if (manifest.value.parsed.publish === false) {
+    console.log(
+      JSON.stringify({
+        ok: true,
+        published: false,
+        message: `${packageName}@${newVersion} not published: "publish": false in ${manifest.value.path}`,
+      }),
+    );
+    return;
+  }
+
   // --allow-dirty: dv has written the version commit and tag, but
   // the tree may still carry unrelated changes (e.g. CI artifacts).
   // --quiet keeps JSR's progress chatter off stdout, which dv
