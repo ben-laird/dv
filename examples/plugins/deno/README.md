@@ -1,7 +1,7 @@
 # deno — example plugin
 
-A reference plugin for Deno workspaces (packages with a `deno.json` carrying
-a `name` and `version`). Copy `main.ts` into your own repo and adapt — it is
+A reference plugin for Deno workspaces (packages with a `deno.json` or
+`deno.jsonc` carrying a `name` and `version`). Copy `main.ts` into your own repo and adapt — it is
 not a maintained dependency (`examples/CLAUDE.md`).
 
 ## Wiring it up
@@ -27,19 +27,20 @@ covers the four arms and when to pick which.
 ## What it implements
 
 - `discover` — walks the glob in `DV_DISCOVER_GLOB`, returns every directory
-  with a `deno.json` whose `name` field is set. The Package name is that
-  field; the path is relative to `DV_REPO_ROOT`.
-- `read-version` — reads `deno.json`'s `version` field. Manifests without a
+  with a `deno.json` (or `deno.jsonc`) whose `name` field is set. The
+  Package name is that field; the path is relative to `DV_REPO_ROOT`.
+- `read-version` — reads the manifest's `version` field. Manifests without a
   `version` field report `"0.0.0"` (the documented "no version yet"
   default; dv's algebra treats `0.0.0` as Unstable).
-- `write-version` — sets `deno.json`'s `version` field to `DV_NEW_VERSION`.
-  Preserves other fields and their insertion order; output is JSON with
-  2-space indent and a trailing newline. Acceptable for the example because
-  `deno.json` files in this repo don't carry root-level comments — a real-
-  world plugin handling comment-bearing manifests would do surgical line
-  edits.
-- `update-dependency` — rewrites `imports[<dependency>]` in `deno.json` to
-  point at `DV_NEW_VERSION`. Preserves any existing range prefix (`^`,
+- `write-version` — sets the manifest's `version` field to `DV_NEW_VERSION`
+  by editing the value **in place in the original text**: indentation
+  (tabs or spaces), blank-line grouping, key order, and `deno.jsonc`
+  comments survive byte-for-byte, so the release commit passes a Biome /
+  `deno fmt` gate. A missing `version` is inserted after `name`, indented
+  like its siblings. Every edit is re-parsed to prove it produced valid
+  JSON(C) and set the intended value.
+- `update-dependency` — rewrites `imports[<dependency>]` in the manifest
+  (same in-place edit) to point at the new version. Preserves any existing range prefix (`^`,
   `~`) and defaults to caret (`^`) for unrecognized forms — the modern
   Deno convention. Manifests with no `imports` map, or no entry for the
   named dependency, return `{ ok: true, changed: false }` — the documented

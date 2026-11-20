@@ -18,7 +18,8 @@
 // shape; per-Op functions inside it stay small and focused.
 
 import { expandGlob } from "jsr:@std/fs@^1/expand-glob";
-import { dirname, join, relative } from "jsr:@std/path@^1";
+import { parse as parseJsonc } from "jsr:@std/jsonc@^1";
+import { join, relative } from "jsr:@std/path@^1";
 
 const op = Deno.args[0];
 switch (op) {
@@ -72,7 +73,7 @@ function runInfo(): void {
         "finalize",
       ],
       name: "deno",
-      version: "0.1.0",
+      version: "0.2.0",
     }),
   );
 }
@@ -86,23 +87,18 @@ async function runDiscover(): Promise<void> {
     console.error("DV_REPO_ROOT and DV_DISCOVER_GLOB are required");
     Deno.exit(1);
   }
-  const denoJsonGlob = `${glob.replace(/\/$/, "")}/deno.json`;
   const packages: { name: string; path: string }[] = [];
-  for await (const entry of expandGlob(denoJsonGlob, {
+  for await (const entry of expandGlob(glob.replace(/\/$/, ""), {
     root: repoRoot,
-    includeDirs: false,
+    includeDirs: true,
   })) {
-    let parsed: { name?: string };
-    try {
-      parsed = JSON.parse(await Deno.readTextFile(entry.path));
-    } catch {
-      continue;
-    }
-    if (typeof parsed.name !== "string" || parsed.name.length === 0) continue;
-    packages.push({
-      name: parsed.name,
-      path: relative(repoRoot, dirname(entry.path)),
-    });
+    if (!entry.isDirectory) continue;
+    const manifest = await readManifest(entry.path);
+    // Directories without a (parseable) manifest aren't packages.
+    if (!manifest.ok) continue;
+    const name = manifest.value.parsed.name;
+    if (typeof name !== "string" || name.length === 0) continue;
+    packages.push({ name, path: relative(repoRoot, entry.path) });
   }
   packages.sort((a, b) => a.path.localeCompare(b.path));
   console.log(JSON.stringify({ packages }));
@@ -116,30 +112,24 @@ async function runReadVersion(): Promise<void> {
     console.error("DV_PACKAGE_PATH is required");
     Deno.exit(1);
   }
-  const manifestPath = join(packagePath, "deno.json");
-  let parsed: { version?: unknown };
-  try {
-    parsed = JSON.parse(await Deno.readTextFile(manifestPath));
-  } catch (caughtError) {
-    const reason =
-      caughtError instanceof Error ? caughtError.message : String(caughtError);
-    console.log(
-      JSON.stringify({ ok: false, error: `cannot read deno.json: ${reason}` }),
-    );
-    Deno.exit(1);
-  }
+  const manifest = await readManifest(packagePath);
+  if (!manifest.ok) failWith(manifest.error);
   // Manifests without a `version` field report 0.0.0 — the
   // documented "no version yet" default. dv's algebra treats
   // 0.0.0 as Unstable.
+  const version = manifest.value.parsed.version;
   const reportedVersion =
-    typeof parsed.version === "string" && parsed.version.length > 0
-      ? parsed.version
-      : "0.0.0";
+    typeof version === "string" && version.length > 0 ? version : "0.0.0";
   console.log(JSON.stringify({ version: reportedVersion }));
 }
 
 // === write-version =============================================
 
+// Edits the `version` value in place in the manifest's original
+// text, so tabs, blank-line grouping, key order, and (in
+// deno.jsonc) comments survive byte-for-byte. Re-serializing with
+// JSON.stringify would reformat the whole file and fail a repo's
+// fmt gate on the release commit.
 async function runWriteVersion(): Promise<void> {
   const packagePath = Deno.env.get("DV_PACKAGE_PATH");
   const newVersion = Deno.env.get("DV_NEW_VERSION");
@@ -147,27 +137,16 @@ async function runWriteVersion(): Promise<void> {
     console.error("DV_PACKAGE_PATH and DV_NEW_VERSION are required");
     Deno.exit(1);
   }
-  const manifestPath = join(packagePath, "deno.json");
-  let parsed: Record<string, unknown>;
-  try {
-    parsed = JSON.parse(await Deno.readTextFile(manifestPath));
-  } catch (caughtError) {
-    const reason =
-      caughtError instanceof Error ? caughtError.message : String(caughtError);
-    console.log(
-      JSON.stringify({ ok: false, error: `cannot read deno.json: ${reason}` }),
-    );
-    Deno.exit(1);
-  }
-  // Set/replace the `version` field. Preserves other fields and
-  // their insertion order; formatting is JSON.stringify's standard
-  // 2-space indent + trailing newline (acceptable for v1 — deno.json
-  // files in this repo do not carry comments at the root).
-  parsed.version = newVersion;
-  await Deno.writeTextFile(
-    manifestPath,
-    `${JSON.stringify(parsed, null, 2)}\n`,
-  );
+  const manifest = await readManifest(packagePath);
+  if (!manifest.ok) failWith(manifest.error);
+  const edited = setManifestString({
+    text: manifest.value.text,
+    path: ["version"],
+    value: newVersion,
+  });
+  if (!edited.ok)
+    failWith(`cannot edit ${manifest.value.path}: ${edited.error}`);
+  await Deno.writeTextFile(manifest.value.path, edited.value);
   console.log(JSON.stringify({ ok: true }));
 }
 
@@ -179,62 +158,30 @@ async function runUpdateDependency(): Promise<void> {
     console.error("DV_PACKAGE_PATH is required");
     Deno.exit(1);
   }
-  // update-dependency is the one op that receives a stdin payload
-  // (the dependency name + new version). The plugin runner sets
-  // stdin to "null" for ops without a payload, so reading stdin
-  // here would return EOF immediately — we only read it on the
-  // op that actually expects content.
-  const stdinText = await new Response(Deno.stdin.readable).text();
-  let payload: {
-    package?: unknown;
-    package_path?: unknown;
-    dependency?: unknown;
-    new_version?: unknown;
-  };
-  try {
-    payload = JSON.parse(stdinText);
-  } catch (caughtError) {
-    const reason =
-      caughtError instanceof Error ? caughtError.message : String(caughtError);
-    console.log(
-      JSON.stringify({ ok: false, error: `stdin not valid JSON: ${reason}` }),
-    );
-    Deno.exit(1);
+  // update-dependency receives a stdin payload (the dependency name
+  // + new version). The plugin runner sets stdin to "null" for ops
+  // without a payload, so we only read stdin on ops that expect it.
+  const payload = await readStdinJson();
+  if (!payload.ok) failWith(payload.error);
+  const dependencyName = isRecord(payload.value)
+    ? payload.value.dependency
+    : undefined;
+  const newVersion = isRecord(payload.value)
+    ? payload.value.new_version
+    : undefined;
+  if (typeof dependencyName !== "string" || typeof newVersion !== "string") {
+    failWith("stdin payload missing `dependency` or `new_version`");
   }
-  const dependencyName =
-    typeof payload.dependency === "string" ? payload.dependency : "";
-  const newVersion =
-    typeof payload.new_version === "string" ? payload.new_version : "";
-  if (!dependencyName || !newVersion) {
-    console.log(
-      JSON.stringify({
-        ok: false,
-        error: "stdin payload missing `dependency` or `new_version`",
-      }),
-    );
-    Deno.exit(1);
-  }
-  const manifestPath = join(packagePath, "deno.json");
-  let parsed: { imports?: Record<string, string> };
-  try {
-    parsed = JSON.parse(await Deno.readTextFile(manifestPath));
-  } catch (caughtError) {
-    const reason =
-      caughtError instanceof Error ? caughtError.message : String(caughtError);
-    console.log(
-      JSON.stringify({ ok: false, error: `cannot read deno.json: ${reason}` }),
-    );
-    Deno.exit(1);
-  }
-  const importsMap = parsed.imports;
-  const originalSpecifier =
-    importsMap !== undefined && typeof importsMap[dependencyName] === "string"
-      ? importsMap[dependencyName]
-      : undefined;
-  if (originalSpecifier === undefined) {
+  const manifest = await readManifest(packagePath);
+  if (!manifest.ok) failWith(manifest.error);
+  const importsMap = manifest.value.parsed.imports;
+  const originalSpecifier = isRecord(importsMap)
+    ? importsMap[dependencyName]
+    : undefined;
+  if (typeof originalSpecifier !== "string") {
     // No-op path of the cascade: this dependent doesn't import the
-    // bumped package. dv's plan-builder reports the cross product;
-    // the plugin filters here.
+    // bumped package through its import map. dv's plan-builder
+    // reports the cross product; the plugin filters here.
     console.log(JSON.stringify({ ok: true, changed: false }));
     return;
   }
@@ -246,12 +193,14 @@ async function runUpdateDependency(): Promise<void> {
     console.log(JSON.stringify({ ok: true, changed: false }));
     return;
   }
-  // Type guard: importsMap is defined because originalSpecifier was.
-  (importsMap as Record<string, string>)[dependencyName] = rewrittenSpecifier;
-  await Deno.writeTextFile(
-    manifestPath,
-    `${JSON.stringify(parsed, null, 2)}\n`,
-  );
+  const edited = setManifestString({
+    text: manifest.value.text,
+    path: ["imports", dependencyName],
+    value: rewrittenSpecifier,
+  });
+  if (!edited.ok)
+    failWith(`cannot edit ${manifest.value.path}: ${edited.error}`);
+  await Deno.writeTextFile(manifest.value.path, edited.value);
   console.log(JSON.stringify({ ok: true, changed: true }));
 }
 
@@ -298,7 +247,7 @@ function rewriteSpecifierVersion({
 // `dv release` can publish dependencies before their dependents
 // (JSR rejects publishes that reference unpublished imports).
 //
-// Implementation: walk the deno.json `imports` map. Each entry's
+// Implementation: walk the manifest's `imports` map. Each entry's
 // key is the bare specifier the package imports under — for Deno
 // workspaces this is typically the package name itself (e.g.
 // `"@scope/clipc": "jsr:@scope/clipc@^0.3.0"`). Match keys against
@@ -318,53 +267,26 @@ async function runGetDependencies(): Promise<void> {
   // can scope its match without re-running discovery. dv passes
   // every OTHER discovered package's name; we return the subset
   // present in this package's manifest.
-  const stdinText = await new Response(Deno.stdin.readable).text();
-  let payload: { candidates?: unknown };
-  try {
-    payload = JSON.parse(stdinText);
-  } catch (caughtError) {
-    const reason =
-      caughtError instanceof Error ? caughtError.message : String(caughtError);
-    console.log(
-      JSON.stringify({ ok: false, error: `stdin not valid JSON: ${reason}` }),
-    );
-    Deno.exit(1);
-  }
-  if (!Array.isArray(payload.candidates)) {
-    console.log(
-      JSON.stringify({
-        ok: false,
-        error: "stdin payload missing `candidates` array",
-      }),
-    );
-    Deno.exit(1);
+  const payload = await readStdinJson();
+  if (!payload.ok) failWith(payload.error);
+  const candidates = isRecord(payload.value)
+    ? payload.value.candidates
+    : undefined;
+  if (!Array.isArray(candidates)) {
+    failWith("stdin payload missing `candidates` array");
   }
   const candidateSet = new Set<string>(
-    payload.candidates.filter(
+    candidates.filter(
       (candidate): candidate is string => typeof candidate === "string",
     ),
   );
 
-  const manifestPath = join(packagePath, "deno.json");
-  let parsed: { imports?: Record<string, string> };
-  try {
-    parsed = JSON.parse(await Deno.readTextFile(manifestPath));
-  } catch (caughtError) {
-    const reason =
-      caughtError instanceof Error ? caughtError.message : String(caughtError);
-    console.log(
-      JSON.stringify({ ok: false, error: `cannot read deno.json: ${reason}` }),
-    );
-    Deno.exit(1);
-  }
-  const importsMap = parsed.imports ?? {};
-  const dependencies: string[] = [];
-  for (const importKey of Object.keys(importsMap)) {
-    if (candidateSet.has(importKey)) {
-      dependencies.push(importKey);
-    }
-  }
-  dependencies.sort();
+  const manifest = await readManifest(packagePath);
+  if (!manifest.ok) failWith(manifest.error);
+  const importsMap = manifest.value.parsed.imports;
+  const dependencies = Object.keys(isRecord(importsMap) ? importsMap : {})
+    .filter((importKey) => candidateSet.has(importKey))
+    .sort();
   console.log(JSON.stringify({ ok: true, dependencies }));
 }
 
@@ -520,4 +442,278 @@ async function readFileOrUndefined(path: string): Promise<string | undefined> {
     if (caughtError instanceof Deno.errors.NotFound) return undefined;
     throw caughtError;
   }
+}
+
+// === shared helpers ============================================
+
+// Errors are values: fallible helpers return a Result instead of
+// throwing, and the op handlers turn an error into the contract's
+// `{ ok: false, error }` response.
+type Result<Value> = { ok: true; value: Value } | { ok: false; error: string };
+
+// Reports a contract error response and exits non-zero.
+function failWith(error: string): never {
+  console.log(JSON.stringify({ ok: false, error }));
+  Deno.exit(1);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function describeError(caughtError: unknown): string {
+  if (caughtError instanceof Error) return caughtError.message;
+  return String(caughtError);
+}
+
+async function readStdinJson(): Promise<Result<unknown>> {
+  const stdinText = await new Response(Deno.stdin.readable).text();
+  try {
+    return { ok: true, value: JSON.parse(stdinText) };
+  } catch (caughtError) {
+    return {
+      ok: false,
+      error: `stdin not valid JSON: ${describeError(caughtError)}`,
+    };
+  }
+}
+
+// A package manifest: Deno reads `deno.json` first, then
+// `deno.jsonc`. `text` is kept so edits can splice into it.
+interface Manifest {
+  path: string;
+  text: string;
+  parsed: Record<string, unknown>;
+}
+
+async function readManifest(packageDir: string): Promise<Result<Manifest>> {
+  for (const fileName of ["deno.json", "deno.jsonc"]) {
+    const path = join(packageDir, fileName);
+    const text = await readFileOrUndefined(path);
+    if (text === undefined) continue;
+    const parsed = parseManifestText(text);
+    if (!parsed.ok) {
+      return { ok: false, error: `cannot parse ${path}: ${parsed.error}` };
+    }
+    return { ok: true, value: { path, text, parsed: parsed.value } };
+  }
+  return {
+    ok: false,
+    error: `no deno.json or deno.jsonc in ${packageDir}`,
+  };
+}
+
+// deno.json is parsed as JSONC too — Deno itself accepts comments
+// and trailing commas in both file names.
+function parseManifestText(text: string): Result<Record<string, unknown>> {
+  let parsed: unknown;
+  try {
+    parsed = parseJsonc(text);
+  } catch (caughtError) {
+    return { ok: false, error: describeError(caughtError) };
+  }
+  if (!isRecord(parsed)) {
+    return { ok: false, error: "top level is not an object" };
+  }
+  return { ok: true, value: parsed };
+}
+
+// === surgical manifest edits ===================================
+
+// Sets the string at `path` (e.g. ["version"] or ["imports", "@a/b"])
+// by splicing a new JSON string literal over the old one in `text`.
+// Everything else stays byte-identical. A missing final key is
+// inserted next to its siblings, copying their indentation. The
+// result is re-parsed to prove the edit is valid and landed.
+function setManifestString({
+  text,
+  path,
+  value,
+}: {
+  text: string;
+  path: string[];
+  value: string;
+}): Result<string> {
+  const root = scanJsonc(text);
+  if (root.kind !== "object") {
+    return { ok: false, error: "top level is not an object" };
+  }
+  let container = root;
+  for (const key of path.slice(0, -1)) {
+    const child = container.members.find((member) => member.key === key);
+    if (child === undefined || child.value.kind !== "object") {
+      return { ok: false, error: `\`${key}\` is not an object` };
+    }
+    container = child.value;
+  }
+  const finalKey = path[path.length - 1];
+  if (finalKey === undefined) {
+    return { ok: false, error: "empty manifest path" };
+  }
+  const literal = JSON.stringify(value);
+  const existing = container.members.find((member) => member.key === finalKey);
+  let edited: string;
+  if (existing === undefined) {
+    edited = insertMember({ text, container, key: finalKey, literal });
+  } else if (existing.value.kind !== "string") {
+    return { ok: false, error: `\`${path.join(".")}\` is not a string` };
+  } else {
+    const { start, end } = existing.value.span;
+    edited = text.slice(0, start) + literal + text.slice(end);
+  }
+  return verifyEdit({ edited, path, value });
+}
+
+// Inserts `"key": literal` after the `name` member (where `version`
+// conventionally sits) or else after the last member, reusing the
+// whitespace that precedes that member's key as the separator.
+function insertMember({
+  text,
+  container,
+  key,
+  literal,
+}: {
+  text: string;
+  container: JsoncObject;
+  key: string;
+  literal: string;
+}): string {
+  const member = `${JSON.stringify(key)}: ${literal}`;
+  const anchor =
+    container.members.find((candidate) => candidate.key === "name") ??
+    container.members[container.members.length - 1];
+  if (anchor === undefined) {
+    const openingBrace = container.span.start + 1;
+    return `${text.slice(0, openingBrace)} ${member} ${text.slice(container.span.end - 1)}`;
+  }
+  let separatorStart = anchor.keySpan.start;
+  while (separatorStart > 0 && /\s/.test(text.charAt(separatorStart - 1))) {
+    separatorStart -= 1;
+  }
+  const separator = text.slice(separatorStart, anchor.keySpan.start) || " ";
+  const insertAt = anchor.value.span.end;
+  return `${text.slice(0, insertAt)},${separator}${member}${text.slice(insertAt)}`;
+}
+
+function verifyEdit({
+  edited,
+  path,
+  value,
+}: {
+  edited: string;
+  path: string[];
+  value: string;
+}): Result<string> {
+  const reparsed = parseManifestText(edited);
+  if (!reparsed.ok) {
+    return {
+      ok: false,
+      error: `edit produced invalid JSON: ${reparsed.error}`,
+    };
+  }
+  let cursor: unknown = reparsed.value;
+  for (const key of path) {
+    cursor = isRecord(cursor) ? cursor[key] : undefined;
+  }
+  if (cursor !== value) {
+    return { ok: false, error: `edit did not set \`${path.join(".")}\`` };
+  }
+  return { ok: true, value: edited };
+}
+
+// A minimal JSONC scanner that records where each value sits in the
+// source text. It only runs on text that already parsed, so a
+// malformed token here is a bug in the scanner, not user input.
+interface Span {
+  start: number;
+  end: number;
+}
+interface JsoncMember {
+  key: string;
+  keySpan: Span;
+  value: JsoncNode;
+}
+interface JsoncObject {
+  kind: "object";
+  span: Span;
+  members: JsoncMember[];
+}
+type JsoncNode =
+  | JsoncObject
+  | { kind: "array"; span: Span }
+  | { kind: "string"; span: Span }
+  | { kind: "literal"; span: Span };
+
+function scanJsonc(text: string): JsoncNode {
+  let position = 0;
+
+  const skipTrivia = (): void => {
+    while (position < text.length) {
+      const char = text.charAt(position);
+      if (/\s/.test(char)) {
+        position += 1;
+      } else if (text.startsWith("//", position)) {
+        const lineEnd = text.indexOf("\n", position);
+        position = lineEnd === -1 ? text.length : lineEnd;
+      } else if (text.startsWith("/*", position)) {
+        const commentEnd = text.indexOf("*/", position + 2);
+        position = commentEnd === -1 ? text.length : commentEnd + 2;
+      } else {
+        return;
+      }
+    }
+  };
+
+  const scanString = (): Span => {
+    const start = position;
+    position += 1; // opening quote
+    while (text.charAt(position) !== '"') {
+      if (position >= text.length) throw new Error("unterminated string");
+      position += text.charAt(position) === "\\" ? 2 : 1;
+    }
+    position += 1; // closing quote
+    return { start, end: position };
+  };
+
+  const scanValue = (): JsoncNode => {
+    skipTrivia();
+    const start = position;
+    const char = text.charAt(position);
+    if (char === '"') return { kind: "string", span: scanString() };
+    if (char === "{" || char === "[") {
+      const closing = char === "{" ? "}" : "]";
+      const members: JsoncMember[] = [];
+      position += 1;
+      skipTrivia();
+      while (text.charAt(position) !== closing) {
+        if (char === "{") {
+          const keySpan = scanString();
+          const key: unknown = JSON.parse(
+            text.slice(keySpan.start, keySpan.end),
+          );
+          if (typeof key !== "string") throw new Error("non-string key");
+          skipTrivia();
+          position += 1; // colon
+          members.push({ key, keySpan, value: scanValue() });
+        } else {
+          scanValue();
+        }
+        skipTrivia();
+        if (text.charAt(position) === ",") position += 1;
+        skipTrivia();
+        if (position >= text.length) throw new Error(`unclosed ${char}`);
+      }
+      position += 1;
+      const span = { start, end: position };
+      if (char === "{") return { kind: "object", span, members };
+      return { kind: "array", span };
+    }
+    while (position < text.length && /[^\s,\]}/]/.test(text.charAt(position))) {
+      position += 1;
+    }
+    if (position === start) throw new Error(`unexpected '${char}'`);
+    return { kind: "literal", span: { start, end: position } };
+  };
+
+  return scanValue();
 }
