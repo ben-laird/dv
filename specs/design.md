@@ -759,7 +759,9 @@ The minor rule rests on one obligation for consumers of dv's output:
 **ignore properties you don't recognize.** Each published schema sets
 `additionalProperties: false` to describe exactly what that dv release
 emits, so a consumer that validates output strictly should validate it
-against the schema of the release that produced it. Exact pinning is
+against the schema of the release that produced it. Payloads don't carry
+the producing dv version, so that consumer pins the schema of the dv it
+runs (`dv --version`). Exact pinning is
 always available: every release publishes its schemas at an immutable
 per-version URL, `https://jsr.io/@dv-cli/dv/<version>/schemas/<name>.json`
 (see `specs/schemas/README.md`). The URN says which contract a payload

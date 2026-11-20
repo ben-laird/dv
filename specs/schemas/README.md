@@ -87,8 +87,10 @@ dv extends in minor releases are open.
 
 Consumers must ignore properties they don't recognize. A published schema
 sets `additionalProperties: false` for the exact release that emits it, so
-strict validators should use that release's schema. Exact pinning is
-always available through the per-version JSR URLs above.
+strict validators should use that release's schema. Payloads don't carry
+the producing dv version, so pin the schema of the dv you run
+(`dv --version`); exact pinning is always available through the
+per-version JSR URLs above.
 
 `dv plugin verify` checks Plugins against the
 `plugin-responses` schema; `--json` consumers pin the `plan` and `config`
