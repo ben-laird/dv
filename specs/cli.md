@@ -292,13 +292,25 @@ step in the [config-migrations subtool](../apps/cli/src/subtools/config-migratio
 this command walks every registered step against the file. Idempotent
 — running on an already-migrated config is a friendly no-op.
 
-The v1 release ships one step, `use-key-discriminated`, which
+The first step, `use-key-discriminated`,
 rewrites the pre-1.0 string form of `use:` (and `publishing.plugin`,
 `overrides[].plugin-use`) into the tagged reference shape documented
 in [config-format.md § Plugin resolution](config-format.md#plugin-resolution).
 The migrator preserves the legacy resolver's exact shape heuristic
 so a migrated config behaves identically: path-shaped strings become
 `path:`, everything else becomes `builtin:`.
+
+A second step, `schema-pointer-current`, keeps the config's schema
+pointers in step with the running dv. When the first-line
+`# yaml-language-server: $schema=` modeline or the top-level `$schema`
+key names dv's published config schema for an **older** dv release
+(`https://jsr.io/@dv-cli/dv/<older>/schemas/config.json`), the step
+rewrites that URL to the running version's. Each pointer is checked on
+its own. Any other URL — a local path, another package, a custom host,
+or a newer dv release — is left untouched. Changes report `path` as
+`# yaml-language-server` or `$schema`, `kind` as `schema-url`, `before`
+as the old URL and `value` as the new one. See
+[config-format.md § `$schema`](config-format.md#schema).
 
 | Flag        | Meaning                                                                                         |
 | ----------- | ----------------------------------------------------------------------------------------------- |

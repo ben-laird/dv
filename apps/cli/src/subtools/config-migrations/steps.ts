@@ -1,3 +1,5 @@
+import { DV_VERSION } from "../../dv-version.ts";
+import { createSchemaPointerStep } from "./step-schema-pointer.ts";
 import type { ConfigMigrationStep } from "./step-types.ts";
 import { useKeyStep } from "./step-use-key.ts";
 
@@ -22,4 +24,7 @@ export type { ConfigMigrationStep } from "./step-types.ts";
 //   4. Update specs/config-format.md § Migration with the
 //      before/after for the new shape.
 
-export const CONFIG_MIGRATION_STEPS: ConfigMigrationStep[] = [useKeyStep];
+export const CONFIG_MIGRATION_STEPS: ConfigMigrationStep[] = [
+  useKeyStep,
+  createSchemaPointerStep({ runningVersion: DV_VERSION }),
+];

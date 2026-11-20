@@ -74,7 +74,12 @@ $schema: https://jsr.io/@dv-cli/dv/<version>/schemas/config.json
 - The **`$schema` key** keeps the pointer in the config's data, where any
   tool that reads the parsed YAML can find it. dv accepts and ignores it.
 
-Both carry the same URL; keep them in step when you upgrade dv. The
+Both carry the same URL; keep them in step when you upgrade dv.
+`dv migrate config` does this for you: when either pointer names dv's
+config schema for an older dv release, it rewrites that pointer to the
+running version's URL. Pointers at anything else (a local path, a custom
+URL, a newer dv) stay as written. See
+[cli.md § `dv migrate config`](cli.md#dv-migrate-config). The
 schemas for records (`record.json`), the rename ledger
 (`rename-ledger.json`) and every `--json` contract are published alongside
 it under the same `schemas/` path.

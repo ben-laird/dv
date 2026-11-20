@@ -1,4 +1,6 @@
 import { assertEquals } from "@std/assert";
+import { publishedSchemaUrl } from "../../domain/published-schema.ts";
+import { DV_VERSION } from "../../dv-version.ts";
 import { runConfigMigrations } from "./mod.ts";
 
 // Tests for the runner. The per-step logic is covered by each
@@ -74,4 +76,25 @@ Deno.test("runConfigMigrations is idempotent: a second run on the rewritten text
   // remembering whether they've run it before.
   assertEquals(secondPass.stepResults, []);
   assertEquals(secondPass.rewrittenText, firstPass.rewrittenText);
+});
+
+Deno.test("runConfigMigrations moves an older dv schema pointer to the running release", () => {
+  // Given a config whose $schema key names a dv release older than any
+  // that can be running
+  const olderUrl = publishedSchemaUrl({ version: "0.0.1", schema: "config" });
+  const text = `$schema: ${olderUrl}\n`;
+
+  // When the runner walks every registered step
+  const result = runConfigMigrations({ originalText: text });
+
+  // Then the schema-pointer step reports it and the key names DV_VERSION
+  const currentUrl = publishedSchemaUrl({
+    version: DV_VERSION,
+    schema: "config",
+  });
+  assertEquals(
+    result.stepResults.map((stepResult) => stepResult.stepId),
+    ["schema-pointer-current"],
+  );
+  assertEquals(result.rewrittenText, `$schema: ${currentUrl}\n`);
 });
