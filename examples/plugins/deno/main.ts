@@ -418,6 +418,9 @@ async function localModulesOf({
   if (infoRun.kind === "spawn-failed") {
     return denoInfoBroken(`cannot run deno info: ${infoRun.reason}`);
   }
+  if (infoRun.kind === "read-failed") {
+    return denoInfoBroken(`cannot read deno info's output: ${infoRun.reason}`);
+  }
   // deno info reports missing or broken modules as per-module errors
   // and still exits 0; a non-zero exit means the setup itself is
   // broken (a malformed deno.json, an unsupported flag, a crash).
@@ -478,7 +481,8 @@ function denoInfoBroken(reason: string): Result<never, GraphFailure> {
 type DenoRun =
   | { kind: "exited"; code: number; stdout: string; stderr: string }
   | { kind: "timed-out" }
-  | { kind: "spawn-failed"; reason: string };
+  | { kind: "spawn-failed"; reason: string }
+  | { kind: "read-failed"; reason: string };
 // {}
 
 // Runs `deno <args>` and returns its output, unless `deadline` fires
@@ -511,35 +515,46 @@ async function runDenoBefore({
   }
   const stdoutReader = child.stdout.getReader();
   const stderrReader = child.stderr.getReader();
+  // Settles to a DenoRun either way, so a pipe read error becomes a
+  // value instead of an uncaught rejection.
   const finished = Promise.all([
     child.status,
     readAllText(stdoutReader),
     readAllText(stderrReader),
-  ]);
+  ]).then(
+    ([status, stdout, stderr]): DenoRun => {
+      return { kind: "exited", code: status.code, stdout, stderr };
+    },
+    (caughtError: unknown): DenoRun => {
+      return { kind: "read-failed", reason: describeError(caughtError) };
+    },
+  );
   let onAbort = (): void => {};
-  const timedOut = new Promise<"timed-out">((resolve) => {
-    onAbort = () => resolve("timed-out");
+  const timedOut = new Promise<DenoRun>((resolve) => {
+    onAbort = () => resolve({ kind: "timed-out" });
     deadline.addEventListener("abort", onAbort, { once: true });
   });
-  const winner = await Promise.race([finished, timedOut]);
-  // A listener keeps the deadline's timer alive; drop it so the plugin
-  // can exit as soon as the op is done.
-  deadline.removeEventListener("abort", onAbort);
-  if (winner === "timed-out") {
+  let outcome: DenoRun;
+  try {
+    outcome = await Promise.race([finished, timedOut]);
+  } finally {
+    // A listener keeps the deadline's timer alive; drop it so the
+    // plugin can exit as soon as the op is done.
+    deadline.removeEventListener("abort", onAbort);
+  }
+  if (outcome.kind !== "exited") {
     try {
       child.kill("SIGKILL");
     } catch {
-      // The child exited between the deadline and the kill.
+      // The child had already exited.
     }
     await Promise.allSettled([
       stdoutReader.cancel(),
       stderrReader.cancel(),
       child.status,
     ]);
-    return { kind: "timed-out" };
   }
-  const [status, stdout, stderr] = winner;
-  return { kind: "exited", code: status.code, stdout, stderr };
+  return outcome;
 }
 
 async function readAllText(
