@@ -76,6 +76,26 @@ const TAB_INDENTED_MANIFEST = `{
 }
 `;
 
+Deno.test("a failing op writes its error to stderr as well as stdout", async () => {
+  await withTempDir(async (packageDir) => {
+    // Given: a directory with no manifest
+
+    // When: dv asks for its version
+    const { outcome, stderr } = await runOpCapturingStderr({
+      op: "read-version",
+      env: { DV_PACKAGE_PATH: packageDir },
+    });
+
+    // Then: the op exits non-zero with the error on both streams, so
+    // dv (which reports stderr) can show the user why
+    assertEquals(outcome.exitCode, 1);
+    const response = isRecord(outcome.response) ? outcome.response : {};
+    assertEquals(response.ok, false);
+    assertStringIncludes(String(response.error), "no deno.json or deno.jsonc");
+    assertStringIncludes(stderr, "error: no deno.json or deno.jsonc");
+  });
+});
+
 Deno.test("write-version on a tab-indented deno.json changes only the version", async () => {
   await withTempDir(async (packageDir) => {
     // Given: a tab-indented manifest with blank-line grouping

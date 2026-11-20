@@ -813,8 +813,11 @@ type Result<Value, Failure = string> =
   | { ok: false; error: Failure };
 // {}
 
-// Reports a contract error response and exits non-zero.
+// Reports a failure the way the contract asks: a human-readable error
+// on stderr (what dv shows the user), the structured `{ ok: false,
+// error }` on stdout, and a non-zero exit.
 function failWith(error: string): never {
+  console.error(`error: ${error}`);
   console.log(JSON.stringify({ ok: false, error }));
   Deno.exit(1);
 }
