@@ -81,6 +81,10 @@ follow SemVer with only the major in the URN (full policy:
   tolerate.
 - **Patch — same namespace.** Description-only changes.
 
+Every plain-string discriminator in an output contract (a `code`, `kind`,
+or step/check/Op id) is marked open or closed in its description; those
+dv extends in minor releases are open.
+
 Consumers must ignore properties they don't recognize. A published schema
 sets `additionalProperties: false` for the exact release that emits it, so
 strict validators should use that release's schema. Exact pinning is

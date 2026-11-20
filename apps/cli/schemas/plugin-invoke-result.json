@@ -12,7 +12,8 @@
       "type": "string"
     },
     "opName": {
-      "type": "string"
+      "type": "string",
+      "description": "Open enumeration: consumers must tolerate Op names they don't recognize."
     },
     "environmentVariables": {
       "type": "object",

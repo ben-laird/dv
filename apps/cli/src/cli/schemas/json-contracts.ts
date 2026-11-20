@@ -19,15 +19,21 @@ import { rawPlanSchema } from "../../subtools/versioning/plan-schema.ts";
 const schemaUrnLiteral = (urn: string) =>
   z.literal(urn).describe("Versioned schema URN identifying this payload.");
 
+// A plain-string discriminator dv may extend in a minor release
+// (specs/design.md § Contract versioning). `noun` names its values.
+const openEnumeration = (noun: string): z.ZodString => {
+  return z
+    .string()
+    .describe(
+      `Open enumeration: consumers must tolerate ${noun} they don't recognize.`,
+    );
+};
+
 // === validate =====================================================
 
 const validationProblemSchema = z
   .object({
-    code: z
-      .string()
-      .describe(
-        "Open enumeration: consumers must tolerate codes they don't recognize.",
-      ),
+    code: openEnumeration("codes"),
     message: z.string(),
     source: z.string().optional(),
   })
@@ -35,11 +41,7 @@ const validationProblemSchema = z
 
 const validationWarningSchema = z
   .object({
-    code: z
-      .string()
-      .describe(
-        "Open enumeration: consumers must tolerate codes they don't recognize.",
-      ),
+    code: openEnumeration("codes"),
     message: z.string(),
     source: z.string().optional(),
     hint: z.string().describe("What to do about the warning."),
@@ -124,14 +126,14 @@ const migrationChangeSchema = z
   .object({
     path: z.string(),
     before: z.string(),
-    kind: z.string(),
+    kind: openEnumeration("kinds"),
     value: z.string(),
   })
   .strict();
 
 const configMigrationStepResultSchema = z
   .object({
-    stepId: z.string(),
+    stepId: openEnumeration("step ids"),
     description: z.string(),
     changes: z.array(migrationChangeSchema),
   })
@@ -190,9 +192,9 @@ const pluginListEntrySchema = z
     matchGlobs: z.array(z.string()),
     status: z.enum(["ok", "resolve-failed", "discover-failed"]),
     resolvedPluginPath: z.string().nullable(),
-    resolvedPluginKind: z.string().nullable(),
+    resolvedPluginKind: openEnumeration("plugin kinds").nullable(),
     packages: z.array(pluginListPackageSchema),
-    errorCode: z.string().nullable(),
+    errorCode: openEnumeration("codes").nullable(),
     errorMessage: z.string().nullable(),
   })
   .strict();
@@ -215,7 +217,7 @@ export const rawPluginListResultSchema = z
 
 const checkReportSchema = z
   .object({
-    name: z.string(),
+    name: openEnumeration("check names"),
     outcome: z.enum(["pass", "fail", "skipped"]),
     detail: z.string(),
   })
@@ -247,7 +249,7 @@ export const rawPluginInvokeResultSchema = z
   .object({
     schema: schemaUrnLiteral(SCHEMA_URNS.pluginInvokeResult),
     pluginPath: z.string(),
-    opName: z.string(),
+    opName: openEnumeration("Op names"),
     environmentVariables: z.record(z.string(), z.string()),
     stdinPayload: z.string().nullable(),
     rawStdout: z.string(),

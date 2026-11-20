@@ -749,6 +749,12 @@ Open versus closed is decided per field, in the spec, up front:
   Consumers must handle values they don't recognize (treat them
   generically: show the message, count it), so new values are minor.
 
+Every plain-string discriminator in an output contract (a `code`, a
+`kind`, an id naming a step, check or Op) must say explicitly in its
+schema description whether it is open or closed; an unmarked one is a
+spec bug. dv's practice is to add error codes, migration steps and
+checks in minor releases, so these are open.
+
 The minor rule rests on one obligation for consumers of dv's output:
 **ignore properties you don't recognize.** Each published schema sets
 `additionalProperties: false` to describe exactly what that dv release
