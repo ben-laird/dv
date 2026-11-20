@@ -796,8 +796,8 @@ Deno.test("the module-graph walk returns at its deadline even if deno's pipes st
       `#!/bin/sh\nsleep 30 &\necho $! > '${grandchildPidPath}'\nwait\n`,
     );
     await Deno.chmod(slowDenoPath, 0o755);
-    const originalPath = Deno.env.get("PATH") ?? "";
-    Deno.env.set("PATH", `${binDir}:${originalPath}`);
+    const originalPath = Deno.env.get("PATH");
+    Deno.env.set("PATH", `${binDir}:${originalPath ?? ""}`);
 
     // When: the walk runs with a 500ms budget
     const startedAt = performance.now();
@@ -809,11 +809,12 @@ Deno.test("the module-graph walk returns at its deadline even if deno's pipes st
         budgetMs: 500,
       });
     } finally {
-      Deno.env.set("PATH", originalPath);
-      const grandchildPid = Number(
-        (await Deno.readTextFile(grandchildPidPath)).trim(),
-      );
-      Deno.kill(grandchildPid, "SIGKILL");
+      if (originalPath === undefined) {
+        Deno.env.delete("PATH");
+      } else {
+        Deno.env.set("PATH", originalPath);
+      }
+      await killRecordedProcess(grandchildPidPath);
     }
     const elapsedMs = performance.now() - startedAt;
 
@@ -827,6 +828,27 @@ Deno.test("the module-graph walk returns at its deadline even if deno's pipes st
     }
   });
 });
+
+// Kills the process whose pid the slow wrapper recorded. The wrapper
+// may never have run (or the process may already be gone), so both
+// the missing file and a dead pid are tolerated.
+async function killRecordedProcess(pidPath: string): Promise<void> {
+  let pidText: string;
+  try {
+    pidText = await Deno.readTextFile(pidPath);
+  } catch (caughtError) {
+    if (caughtError instanceof Deno.errors.NotFound) return;
+    throw caughtError;
+  }
+  const pid = Number(pidText.trim());
+  if (!Number.isInteger(pid) || pid <= 0) return;
+  try {
+    Deno.kill(pid, "SIGKILL");
+  } catch (caughtError) {
+    if (caughtError instanceof Deno.errors.NotFound) return;
+    throw caughtError;
+  }
+}
 
 // Runs get-dependencies for member a with `deno` on PATH replaced by
 // `fakeDenoScript` (or with no `deno` at all when it is undefined).
