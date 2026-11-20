@@ -1,4 +1,5 @@
 import { assertEquals, assertStringIncludes } from "@std/assert";
+import { z } from "zod";
 import { main } from "./main.ts";
 
 // End-to-end tests for the binary's error-reporting boundary. They
@@ -129,4 +130,50 @@ Deno.test("main() in --json mode suppresses ANSI color escapes regardless of the
       assertEquals(captured.stderr.includes("\x1b["), false);
     },
   });
+});
+
+Deno.test("main() reports the version declared in the package's deno.json for --version", async () => {
+  // Given the version apps/cli/deno.json declares (read from disk, so the
+  // expectation is independent of how dv-version.ts derives its value)
+  const manifestText = await Deno.readTextFile(
+    new URL("../deno.json", import.meta.url),
+  );
+  const { version: manifestVersion } = z
+    .object({ version: z.string() })
+    .parse(JSON.parse(manifestText));
+
+  // When main runs with --version
+  const { result, captured } = await captureConsole(() => main(["--version"]));
+
+  // Then it exits 0 and prints exactly that version
+  assertEquals(result, 0);
+  assertEquals(captured.stdout.trim(), manifestVersion);
+});
+
+Deno.test("the package's default export runs the CLI when executed as a program", async () => {
+  // Given the module the package's "." export points at (what
+  // `deno install jsr:@dv-cli/dv` and `deno run jsr:@dv-cli/dv` execute)
+  const manifestUrl = new URL("../deno.json", import.meta.url);
+  const manifest = z
+    .object({
+      version: z.string(),
+      exports: z.object({ ".": z.string() }),
+    })
+    .parse(JSON.parse(await Deno.readTextFile(manifestUrl)));
+  const entryPointUrl = new URL(manifest.exports["."], manifestUrl);
+
+  // When that module runs as a program with --version
+  const output = await new Deno.Command(Deno.execPath(), {
+    args: ["run", "-A", entryPointUrl.href, "--version"],
+    stdout: "piped",
+    stderr: "piped",
+    signal: AbortSignal.timeout(30_000),
+  }).output();
+
+  // Then it exits 0 and prints the version, rather than exiting silently
+  assertEquals(output.code, 0);
+  assertEquals(
+    new TextDecoder().decode(output.stdout).trim(),
+    manifest.version,
+  );
 });
