@@ -167,11 +167,14 @@ and only when the config loads:
 
 | Code                               | When                                                                                                    | Hint                                                                                         |
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `config-schema-version-mismatch`   | The modeline or the `$schema` key names dv's published config schema for a version other than the running dv (one warning per pointer). | Older: run `dv migrate config`. Newer: upgrade dv, or point it at the running version's URL. |
+| `config-schema-version-mismatch`   | The modeline or the `$schema` key names dv's published config schema for a version other than the running dv (one warning per pointer). | Older: run `dv migrate config` (or, for a key form migrate doesn't rewrite, edit it by hand). Newer: upgrade dv, or point it at the running version's URL. |
 | `config-schema-pointer-incomplete` | Exactly one of the two pointers is present. A config with neither has opted out and gets no warning.   | Add the missing pointer with the same URL.                                                   |
 
 Pointers at anything other than dv's published config schema (a local
-path, a custom URL) are never version-checked.
+path, a custom URL) are never version-checked. The `$schema` key is read
+from the parsed YAML, so any spelling of it counts (`"$schema":`,
+`$schema :`, a flow mapping); the modeline is read from the leading
+comment block.
 
 | Flag     | Meaning                                                                                                                                              |
 | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -340,7 +343,10 @@ key names dv's published config schema for an **older** dv release
 (`https://jsr.io/@dv-cli/dv/<older>/schemas/config.json`), the step
 rewrites that URL to the running version's. Each pointer is checked on
 its own. Any other URL — a local path, another package, a custom host,
-or a newer dv release — is left untouched. Changes report `path` as
+or a newer dv release — is left untouched. The step rewrites only the block form of the key, `$schema: <url>` at
+the start of a line (the URL may be quoted); a quoted key
+(`"$schema": …`), `$schema :` or a flow mapping is left as written, and
+`dv validate`'s hint says to change it by hand. Changes report `path` as
 `# yaml-language-server` or `$schema`, `kind` as `schema-url`, `before`
 as the old URL and `value` as the new one. See
 [config-format.md § `$schema`](config-format.md#schema).

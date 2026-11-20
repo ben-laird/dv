@@ -245,10 +245,12 @@ Deno.test("schemaPointerWarning suggests dv migrate config only for an older poi
   const olderHint = schemaPointerWarning({
     finding: findingFor("older"),
     source: ".dv/config.yaml",
+    keyMigratable: true,
   }).hint;
   const newerHint = schemaPointerWarning({
     finding: findingFor("newer"),
     source: ".dv/config.yaml",
+    keyMigratable: true,
   }).hint;
 
   // Then only the older one sends the user to `dv migrate config`,
@@ -256,6 +258,54 @@ Deno.test("schemaPointerWarning suggests dv migrate config only for an older poi
   assertStringIncludes(olderHint, "dv migrate config");
   assertEquals(newerHint.includes("dv migrate config"), false);
   assertStringIncludes(newerHint, "upgrade dv to 9.9.9");
+});
+
+Deno.test("runValidate reads a quoted $schema key and says migrate can't rewrite it", async () => {
+  // Given a modeline and a quoted-key `"$schema":` both at an older release
+  const olderUrl = publishedSchemaUrl({ version: "0.0.1", schema: "config" });
+  const repo = await setUpRepoForValidate({
+    pluginDiscoverScript: HAPPY_DISCOVER_SCRIPT,
+    configPreamble: `# yaml-language-server: $schema=${olderUrl}\n"$schema": ${olderUrl}\n`,
+  });
+  try {
+    // When runValidate runs
+    const validateResult = await runValidate(NOOP_VALIDATE_OPTIONS);
+
+    // Then the key is seen (no "incomplete" warning), the modeline's hint
+    // is `dv migrate config`, and the key's hint says to edit it by hand
+    const hints = validateResult.report.warnings.map((warning) => {
+      return warning.hint;
+    });
+    assertEquals(
+      validateResult.report.warnings.map((warning) => warning.code),
+      ["config-schema-version-mismatch", "config-schema-version-mismatch"],
+    );
+    assertStringIncludes(hints[0] ?? "", "run `dv migrate config`");
+    assertStringIncludes(hints[1] ?? "", "by hand");
+  } finally {
+    await repo.cleanup();
+  }
+});
+
+Deno.test("runValidate sees a $schema key written with a space before the colon", async () => {
+  // Given the running release's modeline, and the key written `$schema :`
+  const currentUrl = publishedSchemaUrl({
+    version: DV_VERSION,
+    schema: "config",
+  });
+  const repo = await setUpRepoForValidate({
+    pluginDiscoverScript: HAPPY_DISCOVER_SCRIPT,
+    configPreamble: `# yaml-language-server: $schema=${currentUrl}\n$schema : ${currentUrl}\n`,
+  });
+  try {
+    // When runValidate runs
+    const validateResult = await runValidate(NOOP_VALIDATE_OPTIONS);
+
+    // Then both pointers are present and current
+    assertEquals(validateResult.report.warnings, []);
+  } finally {
+    await repo.cleanup();
+  }
 });
 
 Deno.test("runValidate flags an unresolved-reference for an unknown package", async () => {

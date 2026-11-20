@@ -1,4 +1,5 @@
 import { relative } from "@std/path";
+import { parse as parseYaml } from "@std/yaml";
 import { DvError } from "../domain/errors.ts";
 import { publishedSchemaUrl } from "../domain/published-schema.ts";
 import { SCHEMA_URNS, type SchemaUrns } from "../domain/schema-urns.ts";
@@ -209,20 +210,51 @@ interface ReadSchemaPointerWarningsArgs {
   repoRootPath: string;
 }
 
-// Runs only after the config loaded, so the file exists and is readable.
+type ConfigDocumentRead =
+  | { ok: true; text: string; data: unknown }
+  | { ok: false };
+
+async function readConfigDocument(
+  configFilePath: string,
+): Promise<ConfigDocumentRead> {
+  try {
+    const text = await Deno.readTextFile(configFilePath);
+    return { ok: true, text, data: parseYaml(text) };
+  } catch {
+    return { ok: false };
+  }
+}
+
+function topLevelSchemaKey(data: unknown): string | undefined {
+  if (typeof data !== "object" || data === null || !("$schema" in data)) {
+    return undefined;
+  }
+  return typeof data.$schema === "string" ? data.$schema : undefined;
+}
+
 async function readSchemaPointerWarnings(
   args: ReadSchemaPointerWarningsArgs,
 ): Promise<ValidationWarning[]> {
   const configFilePath = configPath(args.repoRootPath);
-  const configText = await Deno.readTextFile(configFilePath);
+  const configDocument = await readConfigDocument(configFilePath);
+  if (!configDocument.ok) {
+    // The config loaded moments ago; anything wrong with it now is
+    // loadConfig's to report, not a schema-pointer finding.
+    return [];
+  }
+  // The key comes from the parsed YAML so every spelling counts; the raw
+  // text tells whether it is the block form `dv migrate config` rewrites.
+  const rawPointers = readSchemaPointers(configDocument.text);
+  const keyUrl = topLevelSchemaKey(configDocument.data);
   const findings = diagnoseSchemaPointers({
-    pointers: readSchemaPointers(configText),
+    pointers: { modeline: rawPointers.modeline, key: keyUrl },
     runningVersion: DV_VERSION,
   });
   return findings.map((finding) => {
     return schemaPointerWarning({
       finding,
       source: relative(args.repoRootPath, configFilePath),
+      keyMigratable: keyUrl !== undefined && rawPointers.key === keyUrl,
     });
   });
 }
@@ -235,6 +267,11 @@ const POINTER_NAMES: Record<SchemaPointerKind, string> = {
 interface SchemaPointerWarningArgs {
   finding: SchemaPointerFinding;
   source: string;
+  /**
+   * Whether the `$schema` key is in the block form `$schema: <url>` that
+   * `dv migrate config` rewrites (quoted-key or flow forms are not).
+   */
+  keyMigratable: boolean;
 }
 
 /** Turns a schema-pointer finding into a `dv validate` warning. */
@@ -264,6 +301,7 @@ export function schemaPointerWarning(
       direction: finding.direction,
       pointedVersion: finding.pointedVersion,
       currentUrl,
+      migratable: finding.pointer === "modeline" || args.keyMigratable,
     }),
   };
 }
@@ -272,12 +310,17 @@ interface VersionMismatchHintArgs {
   direction: SchemaVersionDirection;
   pointedVersion: string;
   currentUrl: string;
+  migratable: boolean;
 }
 
-// Only an older pointer is something `dv migrate config` rewrites.
+// `dv migrate config` only moves an older pointer forward, and only the
+// modeline or a block-form `$schema: <url>` key.
 function versionMismatchHint(args: VersionMismatchHintArgs): string {
-  if (args.direction === "older") {
+  if (args.direction === "older" && args.migratable) {
     return "run `dv migrate config` to point it at this dv release";
+  }
+  if (args.direction === "older") {
+    return `\`dv migrate config\` only rewrites the block form \`$schema: <url>\`; change this one to ${args.currentUrl} by hand`;
   }
   if (args.direction === "newer") {
     return `upgrade dv to ${args.pointedVersion} or later, or point it at ${args.currentUrl}`;
