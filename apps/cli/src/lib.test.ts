@@ -1,7 +1,7 @@
 import { assertEquals } from "@std/assert";
 import { join } from "@std/path";
-// Import through the package's public library entry (deno.json `exports`),
-// not the internal `./cli/status.ts` — the point of this test is to prove
+// Import through the package's public library entry (the deno.json `./lib`
+// export), not the internal `./cli/status.ts` — the point of this test is to prove
 // that wiring, so a regression that drops the re-export fails here.
 import { type Plan, runStatus } from "./lib.ts";
 
