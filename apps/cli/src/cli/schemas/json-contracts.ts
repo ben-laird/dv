@@ -23,7 +23,11 @@ const schemaUrnLiteral = (urn: string) =>
 
 const validationProblemSchema = z
   .object({
-    code: z.string(),
+    code: z
+      .string()
+      .describe(
+        "Open enumeration: consumers must tolerate codes they don't recognize.",
+      ),
     message: z.string(),
     source: z.string().optional(),
   })

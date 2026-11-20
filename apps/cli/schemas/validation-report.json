@@ -23,7 +23,8 @@
         "type": "object",
         "properties": {
           "code": {
-            "type": "string"
+            "type": "string",
+            "description": "Open enumeration: consumers must tolerate codes they don't recognize."
           },
           "message": {
             "type": "string"
