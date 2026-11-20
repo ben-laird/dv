@@ -243,8 +243,8 @@ the workspace:
 ```
 
 `candidates` is the full set of discovered Package names *other than*
-this one. The plugin returns the subset that appear as dependencies
-in this Package's manifest.
+this one. The plugin returns the subset that this Package declares
+or imports.
 
 **Output:**
 
@@ -253,16 +253,18 @@ in this Package's manifest.
 ```
 
 `dependencies` is the subset of `candidates` that this Package
-declares as a dependency in any form (runtime, dev, peer, optional —
-the plugin's call which fields count). External dependencies that
+declares or imports as a dependency in any form: a manifest field
+(runtime, dev, peer, optional), or an import that the ecosystem resolves
+without a manifest entry (e.g. Deno workspace members importing each
+other by name). The plugin decides which sources count. External dependencies that
 aren't in `candidates` (npm packages from the registry, std-lib,
 etc.) MUST be omitted — the topological sort only considers
 *intra-workspace* edges.
 
-The op SHOULD be a pure read of the manifest. No I/O outside reading
-the package's own manifest file is expected; dv may invoke this op
-repeatedly across a workspace and ordering depends on consistent
-results.
+The op SHOULD be read-only: it may read the manifest and the
+package's sources (or ask the ecosystem's own tooling to), but it must
+not write anything. dv may invoke this op repeatedly across a workspace,
+and ordering depends on consistent results.
 
 `{ ok: false, error: "..." }` is a hard error and aborts the
 release pre-tag. The plugin should reserve this for genuine read

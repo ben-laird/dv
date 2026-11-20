@@ -108,7 +108,7 @@
     },
     "get-dependencies": {
       "title": "get-dependencies response",
-      "description": "Intra-workspace dependencies of this Package. Optional op (declared via info.supportedOps). dv uses the result to topologically order `dv release`'s work list so dependent packages publish *after* the packages they depend on. The returned `dependencies` array is the subset of the `candidates` provided on stdin that this package depends on in any of its manifest fields (runtime, dev, peer — the plugin's call). External deps from public registries are omitted. Plugins that don't implement this op leave it off supportedOps; dv falls back to alphabetical-by-path ordering.",
+      "description": "Intra-workspace dependencies of this Package. Optional op (declared via info.supportedOps). dv uses the result to topologically order `dv release`'s work list so dependent packages publish *after* the packages they depend on. The returned `dependencies` array is the subset of the `candidates` provided on stdin that this package declares or imports (manifest fields such as runtime, dev, peer, or imports the ecosystem resolves without a manifest entry — the plugin's call). External deps from public registries are omitted. Plugins that don't implement this op leave it off supportedOps; dv falls back to alphabetical-by-path ordering.",
       "type": "object",
       "required": ["ok", "dependencies"],
       "properties": {
