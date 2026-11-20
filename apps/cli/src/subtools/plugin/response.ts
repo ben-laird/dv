@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { DvError } from "../../domain/errors.ts";
+import { publishedSchemaUrl } from "../../domain/published-schema.ts";
+import { DV_VERSION } from "../../dv-version.ts";
 
 // Zod schemas for plugin Op responses, per apps/cli/schemas/plugin-responses.json.
 // One schema per Op; the runner pipes raw stdout through the matching
@@ -372,7 +374,7 @@ export function parsePluginResponse<T>(args: ParsePluginResponseArgs<T>): T {
     throw new DvError({
       code: "plugin-bad-response",
       message: `${opName} response @ ${issueLocation}: ${issueMessage}`,
-      hint: `compare the plugin's output to apps/cli/schemas/plugin-responses.json (op: ${opName})`,
+      hint: `compare the plugin's output to ${publishedSchemaUrl({ version: DV_VERSION, schema: "plugin-responses" })} (op: ${opName})`,
       context: { pluginPath, opName },
     });
   }
