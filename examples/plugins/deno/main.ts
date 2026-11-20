@@ -329,18 +329,20 @@ async function runGetDependencies(): Promise<void> {
 }
 
 // Names of the packages owning every local module reachable from
-// the package's export entry points.
-async function packagesInModuleGraph({
+// the package's export entry points. Exported (with an injectable
+// budget) so the tests can exercise the deadline quickly.
+export async function packagesInModuleGraph({
   packageDir,
   exports,
+  budgetMs = MODULE_GRAPH_BUDGET_MS,
 }: {
   packageDir: string;
   exports: unknown;
+  budgetMs?: number;
 }): Promise<Result<Set<string>>> {
-  // One deadline for the whole walk, well inside dv's 60s fast-op
-  // timeout, however many entry points the package exports. Aborting
-  // the signal kills any `deno info` child still running.
-  const budgetMs = 45_000;
+  // One deadline for the whole walk, however many entry points the
+  // package exports. When it fires, any `deno info` still running is
+  // killed.
   const deadline = AbortSignal.timeout(budgetMs);
   const ownerNames = new Set<string>();
   const ownerNameByDir = new Map<string, string | undefined>();
@@ -362,6 +364,10 @@ async function packagesInModuleGraph({
   }
   return { ok: true, value: ownerNames };
 }
+
+// The whole module-graph walk must finish inside dv's 60s fast-op
+// timeout, with room left for the rest of the op.
+const MODULE_GRAPH_BUDGET_MS = 45_000;
 
 // `exports` is either one path or a map of subpath → path.
 function exportEntryPoints(exports: unknown): string[] {
@@ -386,46 +392,36 @@ async function localModulesOf({
   deadline: AbortSignal;
   budgetMs: number;
 }): Promise<Result<string[]>> {
-  const timedOut: Result<string[]> = {
-    ok: false,
-    error: `deno info ${entryPoint} ran past the ${budgetMs}ms budget`,
-  };
-  if (deadline.aborted) return timedOut;
-  let infoOutput: Deno.CommandOutput;
-  try {
-    infoOutput = await new Deno.Command("deno", {
-      args: [
-        "info",
-        "--json",
-        "--no-remote",
-        "--no-npm",
-        "--no-lock",
-        entryPoint,
-      ],
-      cwd: packageDir,
-      // Plain-text errors: they end up in our error/warning messages.
-      env: { NO_COLOR: "1" },
-      stdout: "piped",
-      stderr: "piped",
-      signal: deadline,
-    }).output();
-  } catch (caughtError) {
+  const infoRun = await runDenoBefore({
+    args: [
+      "info",
+      "--json",
+      "--no-remote",
+      "--no-npm",
+      "--no-lock",
+      entryPoint,
+    ],
+    cwd: packageDir,
+    deadline,
+  });
+  if (infoRun.kind === "timed-out") {
     return {
       ok: false,
-      error: `cannot run deno info: ${describeError(caughtError)}`,
+      error: `deno info ${entryPoint} ran past the ${budgetMs}ms budget`,
     };
   }
-  if (deadline.aborted) return timedOut;
-  if (!infoOutput.success) {
-    const stderrText = new TextDecoder().decode(infoOutput.stderr).trim();
+  if (infoRun.kind === "spawn-failed") {
+    return { ok: false, error: `cannot run deno info: ${infoRun.reason}` };
+  }
+  if (infoRun.code !== 0) {
     return {
       ok: false,
-      error: `deno info ${entryPoint} failed (exit ${infoOutput.code}): ${stderrText || "<no stderr>"}`,
+      error: `deno info ${entryPoint} failed (exit ${infoRun.code}): ${infoRun.stderr.trim() || "<no stderr>"}`,
     };
   }
   let graph: unknown;
   try {
-    graph = JSON.parse(new TextDecoder().decode(infoOutput.stdout));
+    graph = JSON.parse(infoRun.stdout);
   } catch (caughtError) {
     return {
       ok: false,
@@ -452,6 +448,85 @@ async function localModulesOf({
     if (typeof local === "string") localPaths.push(local);
   }
   return { ok: true, value: localPaths };
+}
+
+type DenoRun =
+  | { kind: "exited"; code: number; stdout: string; stderr: string }
+  | { kind: "timed-out" }
+  | { kind: "spawn-failed"; reason: string };
+// {}
+
+// Runs `deno <args>` and returns its output, unless `deadline` fires
+// first. Then the child is SIGKILLed and its pipes abandoned rather
+// than drained: a wrapper script standing in for `deno` that doesn't
+// exec can leave a grandchild holding them open long after the kill.
+async function runDenoBefore({
+  args,
+  cwd,
+  deadline,
+}: {
+  args: string[];
+  cwd: string;
+  deadline: AbortSignal;
+}): Promise<DenoRun> {
+  if (deadline.aborted) return { kind: "timed-out" };
+  let child: Deno.ChildProcess;
+  try {
+    child = new Deno.Command("deno", {
+      args,
+      cwd,
+      // Plain-text errors: they end up in our error/warning messages.
+      env: { NO_COLOR: "1" },
+      stdin: "null",
+      stdout: "piped",
+      stderr: "piped",
+    }).spawn();
+  } catch (caughtError) {
+    return { kind: "spawn-failed", reason: describeError(caughtError) };
+  }
+  const stdoutReader = child.stdout.getReader();
+  const stderrReader = child.stderr.getReader();
+  const finished = Promise.all([
+    child.status,
+    readAllText(stdoutReader),
+    readAllText(stderrReader),
+  ]);
+  let onAbort = (): void => {};
+  const timedOut = new Promise<"timed-out">((resolve) => {
+    onAbort = () => resolve("timed-out");
+    deadline.addEventListener("abort", onAbort, { once: true });
+  });
+  const winner = await Promise.race([finished, timedOut]);
+  // A listener keeps the deadline's timer alive; drop it so the plugin
+  // can exit as soon as the op is done.
+  deadline.removeEventListener("abort", onAbort);
+  if (winner === "timed-out") {
+    try {
+      child.kill("SIGKILL");
+    } catch {
+      // The child exited between the deadline and the kill.
+    }
+    await Promise.allSettled([
+      stdoutReader.cancel(),
+      stderrReader.cancel(),
+      child.status,
+    ]);
+    return { kind: "timed-out" };
+  }
+  const [status, stdout, stderr] = winner;
+  return { kind: "exited", code: status.code, stdout, stderr };
+}
+
+async function readAllText(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+): Promise<string> {
+  const decoder = new TextDecoder();
+  let text = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) return text + decoder.decode();
+    text += decoder.decode(value, { stream: true });
+  }
 }
 
 // The `name` of the nearest NAMED manifest at or above the module's

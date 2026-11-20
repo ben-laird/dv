@@ -1,9 +1,11 @@
 import { assertEquals, assertStringIncludes } from "@std/assert";
 import { fromFileUrl, join } from "@std/path";
+import { packagesInModuleGraph } from "./main.ts";
 
 // Black-box tests for the example Deno plugin: each test runs the
 // plugin the way dv does (an Op name in argv, env vars, optional
 // JSON on stdin) and checks the JSON response plus any file edits.
+// The deadline test imports one helper directly to pass a short budget.
 
 const pluginEntryPath = fromFileUrl(import.meta.resolve("./main.ts"));
 
@@ -760,6 +762,48 @@ function releaseEnv({
     DV_GIT_TAG: `${packageName}@1.0.0`,
   };
 }
+
+Deno.test("the module-graph walk returns at its deadline even if deno's pipes stay open", async () => {
+  await withTempDir(async (rootDir) => {
+    // Given: a `deno` wrapper on PATH that never execs: it backgrounds
+    // a long-lived grandchild that inherits stdout/stderr, then waits
+    const binDir = join(rootDir, "slow-bin");
+    await Deno.mkdir(binDir);
+    const grandchildPidPath = join(rootDir, "grandchild.pid");
+    const slowDenoPath = join(binDir, "deno");
+    await Deno.writeTextFile(
+      slowDenoPath,
+      `#!/bin/sh\nsleep 30 &\necho $! > '${grandchildPidPath}'\nwait\n`,
+    );
+    await Deno.chmod(slowDenoPath, 0o755);
+    const originalPath = Deno.env.get("PATH") ?? "";
+    Deno.env.set("PATH", `${binDir}:${originalPath}`);
+
+    // When: the walk runs with a 500ms budget
+    const startedAt = performance.now();
+    let result: Awaited<ReturnType<typeof packagesInModuleGraph>>;
+    try {
+      result = await packagesInModuleGraph({
+        packageDir: rootDir,
+        exports: "./mod.ts",
+        budgetMs: 500,
+      });
+    } finally {
+      Deno.env.set("PATH", originalPath);
+      const grandchildPid = Number(
+        (await Deno.readTextFile(grandchildPidPath)).trim(),
+      );
+      Deno.kill(grandchildPid, "SIGKILL");
+    }
+    const elapsedMs = performance.now() - startedAt;
+
+    // Then: it gives up promptly with a budget error instead of
+    // waiting for the grandchild to release the pipes
+    assertEquals(elapsedMs < 5_000, true, `took ${elapsedMs}ms`);
+    assertEquals(result.ok, false);
+    if (!result.ok) assertStringIncludes(result.error, "500ms budget");
+  });
+});
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
