@@ -9,7 +9,7 @@ themselves have one home.
 
 ## Published URLs
 
-From the first release after 0.11.0 onward, every release of
+From 0.13.0 onward, every release of
 `@dv-cli/dv` publishes the schemas with it, and JSR serves each published
 file at an immutable, versioned URL:
 
@@ -17,7 +17,8 @@ file at an immutable, versioned URL:
 https://jsr.io/@dv-cli/dv/<version>/schemas/<name>.json
 ```
 
-0.11.0 and earlier shipped without schemas, so no URL exists for them.
+0.12.0 and earlier shipped without them, so no URL exists for those
+versions.
 Point a file at the schema of the dv version that *reads* it, so the
 schema matches the parser exactly, and update the pointer when you
 upgrade dv. `dv init` writes this URL for the running version into the

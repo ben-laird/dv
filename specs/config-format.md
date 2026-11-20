@@ -49,9 +49,9 @@ user-configurable in v1, so it has no config section.
 ## `$schema`
 
 Recommended for editor support. Points at the JSON Schema for the config,
-which every dv release from the first release after 0.11.0 onward
-publishes to JSR at an immutable, versioned URL (0.11.0 and earlier
-shipped without schemas, so no URL exists for them):
+which every dv release from 0.13.0 onward publishes to JSR at an
+immutable, versioned URL (0.12.0 and earlier shipped without them, so no
+URL exists for those versions):
 
 ```text
 https://jsr.io/@dv-cli/dv/<version>/schemas/config.json
