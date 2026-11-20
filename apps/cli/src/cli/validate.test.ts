@@ -165,6 +165,42 @@ Deno.test("runValidate warns when only one schema pointer is present", async () 
   }
 });
 
+Deno.test("runValidate with both problems and warnings fails on the problems and still lists the warnings", async () => {
+  // Given a Record naming an unknown package, and a config with only a
+  // $schema key
+  const repo = await setUpRepoForValidate({
+    pluginDiscoverScript: HAPPY_DISCOVER_SCRIPT,
+    configPreamble: "$schema: ./custom-schema.json\n",
+    recordFiles: {
+      "stray-record.md": `---
+type: fix
+packages: [ghost]
+---
+
+Refers to a package that doesn't exist.
+`,
+    },
+  });
+  try {
+    // When runValidate runs
+    const validateResult = await runValidate(NOOP_VALIDATE_OPTIONS);
+
+    // Then the problem makes the run fail, and the warning is still there
+    assertEquals(validateResult.report.ok, false);
+    assertEquals(validateResult.exitCode, 1);
+    assertEquals(
+      validateResult.report.problems.map((problem) => problem.code),
+      ["unresolved-reference"],
+    );
+    assertEquals(
+      validateResult.report.warnings.map((warning) => warning.code),
+      ["config-schema-pointer-incomplete"],
+    );
+  } finally {
+    await repo.cleanup();
+  }
+});
+
 Deno.test("runValidate sees both schema pointers in a CRLF config", async () => {
   // Given CRLF pointer lines at the running release's config schema
   const currentUrl = publishedSchemaUrl({
