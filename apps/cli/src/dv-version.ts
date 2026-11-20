@@ -1,13 +1,15 @@
 // dv's own version string. Single source of truth for both the
 // `--version` output (main.ts) and the status banner (cli/status.ts).
-// Kept in code rather than read from deno.json at runtime so the
-// constant is statically inlined and the install-shim doesn't need
-// extra file IO at startup. It IS hand-maintained alongside
-// apps/cli/deno.json's "version" field; the schemas:check-style
-// drift problem could in principle be handled by a future
-// `deno task version:check` gate but isn't worth it for one literal.
+// Derived from apps/cli/deno.json, which `dv version` bumps on release,
+// so the reported version can never drift from the published one.
 
-export const DV_VERSION = "0.1.0";
+import { z } from "zod";
+import denoJson from "../deno.json" with { type: "json" };
+
+const PackageManifestSchema = z.object({ version: z.string().min(1) });
+
+/** The version of the running `dv`, read from the package manifest. */
+export const DV_VERSION: string = PackageManifestSchema.parse(denoJson).version;
 
 // Short product tagline used in the banner. Kept terse — anything
 // longer overflows narrow terminals.

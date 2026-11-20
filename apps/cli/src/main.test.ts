@@ -1,4 +1,5 @@
 import { assertEquals, assertStringIncludes } from "@std/assert";
+import { z } from "zod";
 import { main } from "./main.ts";
 
 // End-to-end tests for the binary's error-reporting boundary. They
@@ -129,4 +130,22 @@ Deno.test("main() in --json mode suppresses ANSI color escapes regardless of the
       assertEquals(captured.stderr.includes("\x1b["), false);
     },
   });
+});
+
+Deno.test("main() reports the version declared in the package's deno.json for --version", async () => {
+  // Given the version apps/cli/deno.json declares (read from disk, so the
+  // expectation is independent of how dv-version.ts derives its value)
+  const manifestText = await Deno.readTextFile(
+    new URL("../deno.json", import.meta.url),
+  );
+  const { version: manifestVersion } = z
+    .object({ version: z.string() })
+    .parse(JSON.parse(manifestText));
+
+  // When main runs with --version
+  const { result, captured } = await captureConsole(() => main(["--version"]));
+
+  // Then it exits 0 and prints exactly that version
+  assertEquals(result, 0);
+  assertEquals(captured.stdout.trim(), manifestVersion);
 });
