@@ -25,7 +25,8 @@ export interface InvokeOpArgs {
   tracingHooks?: TracingHooks;
   // Receives a successful Op's stderr, which the contract says is
   // passed through to the user. Default: dv's own stderr, each line
-  // prefixed with the plugin + op. Skipped under tracing (`--debug`
+  // prefixed with the op (and the Package, for per-Package ops; the
+  // plugin's display name isn't known here). Skipped under tracing (`--debug`
   // already prints it); `plugin invoke` passes a no-op because it
   // renders stderr itself. Never stdout, so `--json` stays clean.
   forwardStderr?: (args: { prefix: string; rawStderr: string }) => void;
@@ -204,7 +205,9 @@ export async function invokeOp(args: InvokeOpArgs): Promise<InvokeOpResult> {
   });
   if (args.tracingHooks === undefined && rawStderr.trim() !== "") {
     const forwardStderr = args.forwardStderr ?? writePrefixedToStderr;
-    forwardStderr({ prefix: `[${resolvedPlugin.path} ${opName}]`, rawStderr });
+    const packageName = childEnvironment.DV_PACKAGE_NAME;
+    const prefix = packageName ? `[${opName} ${packageName}]` : `[${opName}]`;
+    forwardStderr({ prefix, rawStderr });
   }
   return { rawStdout, rawStderr };
 }
@@ -217,5 +220,10 @@ function writePrefixedToStderr({
   rawStderr: string;
 }): void {
   const lines = rawStderr.trimEnd().split("\n");
-  console.error(lines.map((line) => `${prefix} ${line}`).join("\n"));
+  // Blank lines get the bare prefix, with no trailing space.
+  const prefixedLines = lines.map((line) => {
+    if (line === "") return prefix;
+    return `${prefix} ${line}`;
+  });
+  console.error(prefixedLines.join("\n"));
 }

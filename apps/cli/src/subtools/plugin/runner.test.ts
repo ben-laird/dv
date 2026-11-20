@@ -120,7 +120,7 @@ async function withStderrLoggingPlugin(
       const scriptPath = join(binDirectory, "log-to-stderr.ts");
       await Deno.writeTextFile(
         scriptPath,
-        `console.error("warning: first line\\nsecond line");\nconsole.log(JSON.stringify({ ok: true }));\n`,
+        `console.error("warning: first line\\n\\nsecond line");\nconsole.log(JSON.stringify({ ok: true }));\n`,
       );
       await testBody({
         kind: "invocation",
@@ -132,7 +132,7 @@ async function withStderrLoggingPlugin(
   });
 }
 
-Deno.test("invokeOp forwards a successful op's stderr, prefixed with plugin and op", async () => {
+Deno.test("invokeOp forwards a successful op's stderr, prefixed with op and package", async () => {
   await withStderrLoggingPlugin(async (resolvedPlugin) => {
     // Given: a plugin that logs to stderr and exits 0
     const forwarded: { prefix: string; rawStderr: string }[] = [];
@@ -141,17 +141,18 @@ Deno.test("invokeOp forwards a successful op's stderr, prefixed with plugin and 
     const { rawStdout } = await invokeOp({
       resolvedPlugin,
       opName: "get-dependencies",
+      environmentVariables: { DV_PACKAGE_NAME: "@fixture/core" },
       forwardStderr: (forwardedStderr) => {
         forwarded.push(forwardedStderr);
       },
     });
 
-    // Then: the stderr is forwarded once, attributed to plugin + op,
+    // Then: the stderr is forwarded once, attributed to op + package,
     // and stdout is untouched
     assertEquals(forwarded, [
       {
-        prefix: "[fixture-plugin get-dependencies]",
-        rawStderr: "warning: first line\nsecond line\n",
+        prefix: "[get-dependencies @fixture/core]",
+        rawStderr: "warning: first line\n\nsecond line\n",
       },
     ]);
     assertEquals(rawStdout.trim(), `{"ok":true}`);
@@ -180,9 +181,10 @@ Deno.test("invokeOp writes forwarded stderr to dv's stderr only, one prefix per 
       console.log = originalLog;
     }
 
-    // Then: every stderr line is prefixed, and nothing reaches stdout
+    // Then: every stderr line is prefixed (a blank line with no
+    // trailing space), and nothing reaches stdout
     assertEquals(stderrWrites, [
-      "[fixture-plugin discover] warning: first line\n[fixture-plugin discover] second line",
+      "[discover] warning: first line\n[discover]\n[discover] second line",
     ]);
     assertEquals(stdoutWrites, []);
   });
@@ -211,7 +213,7 @@ Deno.test("invokeOp does not forward stderr under tracing, which already prints 
     });
 
     // Then: the tracer saw the stderr and the forwarder did not
-    assertEquals(tracedStderr, ["warning: first line\nsecond line\n"]);
+    assertEquals(tracedStderr, ["warning: first line\n\nsecond line\n"]);
     assertEquals(forwarded, []);
   });
 });
