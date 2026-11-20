@@ -21,7 +21,11 @@ const cliErrorSeveritySchema = z.enum(["error", "warning"]);
  * an explicit `z.ZodType<...>` annotation that closes the `z.lazy` loop.
  */
 export interface RawCliErrorPayload {
-  /** Stable error code (e.g. `"dirty-tree"`) that consumers branch on. */
+  /**
+   * Stable error code (e.g. `"dirty-tree"`) that consumers branch on. Open
+   * enumeration: new codes may be added in minor releases; consumers must
+   * tolerate unknown values.
+   */
   code: string;
   /** Human-readable summary of the failure. */
   message: string;
@@ -46,7 +50,11 @@ export interface RawCliErrorPayload {
  */
 export const rawCliErrorPayloadSchema: z.ZodType<RawCliErrorPayload> = z
   .object({
-    code: z.string().describe("Stable error code (e.g. 'dirty-tree')."),
+    code: z
+      .string()
+      .describe(
+        "Stable error code. Open enumeration: new codes may be added in minor releases; consumers must tolerate unknown values.",
+      ),
     message: z.string().describe("Human-readable summary."),
     hint: z
       .string()
