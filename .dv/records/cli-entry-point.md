@@ -13,10 +13,16 @@ so `deno install jsr:@dv-cli/dv` produced a binary that exited 0 and did
 nothing. The default export is now the CLI entry point, so the documented
 install command yields a working `dv`.
 
-**Breaking:** the library surface (`main`, the `run*` command runners and the
-`Plan` contract types) moves to the `./lib` export. Update imports from
-`@dv-cli/dv` to `@dv-cli/dv/lib`:
+**Breaking:** everything else the bare specifier used to export moves to the
+`./lib` export: the `run*` command runners, the `PLUGIN_OP_NAMES`,
+`CHANGE_TYPES`, `SCHEMA_URNS` and `SCHEMA_URN_MAJOR` constants, and all the
+exported types (runner options and results, the `Plan` contract types, and the
+domain types they reference). Update those imports from `@dv-cli/dv` to
+`@dv-cli/dv/lib`:
 
 ```ts
 import { runStatus, type Plan } from "@dv-cli/dv/lib";
 ```
+
+`main` is unaffected: it is still exported from `@dv-cli/dv`, and also from
+`@dv-cli/dv/lib`.
