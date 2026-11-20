@@ -263,16 +263,18 @@ etc.) MUST be omitted — the topological sort only considers
 
 The op SHOULD NOT modify the repository. It MAY read the manifest and
 the package's sources, and MAY run the ecosystem's own tooling to do so
-(the reference Deno plugin runs `deno info`). That tooling may write
+(the reference Deno plugin runs `deno info`); that tooling MAY write
 outside the repository, e.g. to its own cache. dv may invoke this op
 repeatedly across a workspace, and ordering depends on consistent
-results, so the answer SHOULD depend only on the repository's contents.
+results, so the result SHOULD be determined by the repository's contents,
+even though computing it MAY need the ecosystem's caches or network
+access.
 
-Because it may run ecosystem tooling, the op can be slower than a
-manifest read, and it may need that ecosystem's caches or network
-access. Plugin authors should keep it within the fast-op timeout and
-prefer offline modes; dv operators running in a sandbox or offline CI
-should expect it to need the same environment as the ecosystem's build.
+Because it MAY run ecosystem tooling, the op can be slower than a
+manifest read. Plugin authors SHOULD keep it well inside its timeout
+(see **Timeouts** under [Errors](#errors)) and SHOULD prefer offline
+modes; operators running dv in a sandbox or offline CI should expect it
+to need the same environment as the ecosystem's build.
 
 `{ ok: false, error: "..." }` is a hard error and aborts the
 release pre-tag. The plugin should reserve this for genuine read
@@ -348,7 +350,9 @@ package as context.
 **Timeouts** are a failure mode too. Fast ops (`discover`, `read-version`,
 `write-version`, `update-dependency`) are bounded by the assignment's
 `timeout` (default 60s); the `release` op is bounded by `publishing.timeout`
-(default none). Exceeding the limit terminates the op and is treated as a
+(default none). `get-dependencies` is currently bounded by a fixed 60s in
+`dv release`, which no config option changes yet (issue #55 tracks making it
+configurable). Exceeding the limit terminates the op and is treated as a
 failure — surfaced with the same plugin/op/package context, no auto-retry.
 
 ## Minimal example: a bash plugin for a hand-rolled VERSION file

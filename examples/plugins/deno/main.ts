@@ -369,10 +369,10 @@ export async function packagesInModuleGraph({
   return { ok: true, value: ownerNames };
 }
 
-// dv kills get-dependencies after 60s (a fixed timeout in dv
-// release), and that limit covers the whole plugin process: Deno
-// startup, reading stdin and the manifest, then this walk. 45s for
-// the walk leaves the rest of the op 15s of headroom.
+// dv release kills get-dependencies after a fixed 60s (not yet
+// configurable; dv issue #55), and that limit covers the whole plugin
+// process: Deno startup, reading stdin and the manifest, then this
+// walk. 45s for the walk leaves the rest of the op 15s of headroom.
 const MODULE_GRAPH_BUDGET_MS = 45_000;
 
 // `exports` is either one path or a map of subpath → path.
