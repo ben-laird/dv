@@ -4,6 +4,12 @@ All notable changes to this Package are documented in this file. The
 format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this Package adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.12.1] - 2026-11-20
+
+### Fixed
+
+- Run plugins from the repo root, whatever directory dv runs from ([link](https://github.com/ben-laird/dv/issues/52))
+
 ## [0.12.0] - 2026-11-20
 
 ### Changed

@@ -1,6 +1,6 @@
 {
   "name": "@dv-cli/dv",
-  "version": "0.12.0",
+  "version": "0.12.1",
   "exports": {
     ".": "./src/main.ts",
     "./lib": "./src/lib.ts"
