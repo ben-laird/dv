@@ -48,11 +48,12 @@ dv release    # tag + publish
 
 ## Library API
 
-`dv` ships its command runners as an importable library so other Deno programs
-can drive it in-process instead of shelling out:
+`dv` ships its command runners as an importable library, under the
+`@dv-cli/dv/lib` export, so other Deno programs can drive it in-process instead
+of shelling out (the bare `@dv-cli/dv` specifier is the CLI itself):
 
 ```typescript
-import { runStatus, runVersion } from "@dv-cli/dv";
+import { runStatus, runVersion } from "@dv-cli/dv/lib";
 ```
 
 The surface mirrors the CLI — `runStatus`, `runVersion`, `runRelease`,

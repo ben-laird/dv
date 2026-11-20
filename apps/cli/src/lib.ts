@@ -10,7 +10,7 @@
  *    when you want the exact CLI behavior, exit code included.
  *
  *    ```ts
- *    import { main } from "@dv-cli/dv";
+ *    import { main } from "@dv-cli/dv/lib";
  *    const code = await main(["status", "--json"]);
  *    ```
  *
@@ -24,7 +24,7 @@
  *    Use these to bypass argv parsing and consume `dv`'s output as typed data.
  *
  *    ```ts
- *    import { runStatus, type Plan } from "@dv-cli/dv";
+ *    import { runStatus, type Plan } from "@dv-cli/dv/lib";
  *    const { plan } = await runStatus({ emitJson: false, colorEnabled: false });
  *    // `plan` is the typed Plan contract.
  *    ```
@@ -40,9 +40,10 @@
  *    `dv version`, `dv v1`, and `dv release --json` serialize. Re-exported so
  *    consumers can type their own handling of the runner results.
  *
- * Consumers should import from this module (the package's `exports` entry),
- * not from `./cli/*.ts` or `./subtools/*.ts` directly — those paths aren't
- * part of the stable surface.
+ * Consumers should import from this module (the package's `./lib` export,
+ * `@dv-cli/dv/lib`), not from `./cli/*.ts` or `./subtools/*.ts` directly —
+ * those paths aren't part of the stable surface. The bare `@dv-cli/dv`
+ * specifier is the CLI entry point (what `deno install` runs), not a library.
  *
  * @module
  */

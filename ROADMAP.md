@@ -322,7 +322,8 @@ later](specs/v1-scope.md#deferred-to-later). Highlights:
   contract is proven stable.
 
   *Precursor shipped (0.8).* `@dv-cli/dv` now exposes a public **library
-  surface** (`apps/cli/src/lib.ts`, the package `exports` entry): the
+  surface** (`apps/cli/src/lib.ts`, the package's `./lib` export,
+  `@dv-cli/dv/lib`; the bare specifier is the CLI entry point): the
   in-process command runners (`runStatus`, `runVersion`, `runRelease`, …)
   plus their Options/Result types and the `Plan` contract types, all
   re-exported with module-level JSDoc. Embedders can drive `dv` in-process
