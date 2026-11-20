@@ -749,6 +749,59 @@ Deno.test("runRelease records an ok:false release response as a failure even whe
   }
 });
 
+Deno.test("runRelease's summary counts published:false outcomes as not published", async () => {
+  // Given: the default fixture, whose packages are `publish: false`, so
+  // the release op succeeds with published:false for both
+  const fixture = await setUpReleaseFixture({});
+
+  try {
+    // When: dv release runs
+    const { result, capturedStdout } = await captureStdout(() =>
+      runRelease({
+        force: false,
+        yes: true,
+        emitJson: false,
+        colorEnabled: false,
+      }),
+    );
+
+    // Then: neither package counts as published in the human summary
+    assertEquals(
+      result.releaseOpOutcomes.map((outcome) => outcome.published),
+      [false, false],
+    );
+    assertStringIncludes(capturedStdout, "published 0");
+    assertStringIncludes(capturedStdout, "2 not published");
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+Deno.test("runRelease's summary counts a release op that omits published as published", async () => {
+  // Given: a release op answering with the contract's minimal `{ ok: true }`
+  const fixture = await setUpReleaseFixture({
+    releaseScriptOverride: `console.log(JSON.stringify({ ok: true }));\n`,
+  });
+
+  try {
+    // When: dv release runs
+    const { capturedStdout } = await captureStdout(() =>
+      runRelease({
+        force: false,
+        yes: true,
+        emitJson: false,
+        colorEnabled: false,
+      }),
+    );
+
+    // Then: both packages count as published
+    assertStringIncludes(capturedStdout, "published 2");
+    assertEquals(capturedStdout.includes("not published"), false);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
 Deno.test("runRelease does NOT throw release-partial-failure when every package publishes successfully", async () => {
   // Given the default fixture (publishes succeed)
   const fixture = await setUpReleaseFixture({});

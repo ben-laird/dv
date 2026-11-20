@@ -806,15 +806,26 @@ interface RenderHumanSummaryArgs {
 
 function renderHumanSummary(args: RenderHumanSummaryArgs): void {
   const styler = makeStyler(args.colorEnabled);
-  const publishedCount = args.releaseOpOutcomes.filter(
+  // A successful op only counts as a publish when the plugin didn't say
+  // otherwise: `published: false` (e.g. a `publish: false` package) or
+  // `skipped: true` (already published) succeed without publishing. A
+  // bare `{ ok: true }` — the contract's minimal response — counts.
+  const succeededOutcomes = args.releaseOpOutcomes.filter(
     (outcome) => outcome.ok,
+  );
+  const publishedCount = succeededOutcomes.filter(
+    (outcome) => outcome.published !== false && outcome.skipped !== true,
   ).length;
-  const failedCount = args.releaseOpOutcomes.length - publishedCount;
+  const notPublishedCount = succeededOutcomes.length - publishedCount;
+  const failedCount = args.releaseOpOutcomes.length - succeededOutcomes.length;
   const segments: string[] = [`tagged ${args.mintedTagNames.length}`];
   if (args.reusedTagNames.length > 0) {
     segments.push(`reused ${args.reusedTagNames.length}`);
   }
   segments.push(`published ${publishedCount}`);
+  if (notPublishedCount > 0) {
+    segments.push(`${notPublishedCount} not published`);
+  }
   if (failedCount > 0) {
     segments.push(`${failedCount} failed`);
   }
