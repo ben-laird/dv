@@ -28,7 +28,7 @@ async function runOpCapturingStderr({
   env,
   stdin,
 }: RunOpArgs): Promise<{ outcome: OpOutcome; stderr: string }> {
-  const child = new Deno.Command("deno", {
+  const child = new Deno.Command(Deno.execPath(), {
     args: ["run", "-A", pluginEntryPath, op],
     env: { ...env, DV_OPERATION: op },
     stdin: "piped",
@@ -574,24 +574,99 @@ Deno.test("get-dependencies falls back to import-map deps with a warning when th
   });
 });
 
+// A fake `deno` on PATH that intercepts only `deno publish`: it records
+// its argv and succeeds or fails on cue, colouring its error unless
+// NO_COLOR is set (as real Deno does). Every other subcommand execs the
+// real deno. runOp starts the plugin via Deno.execPath(), so only the
+// plugin's own `deno publish` call can reach the fake.
+interface FakeDeno {
+  env: Record<string, string>;
+  argvLogPath: string;
+}
+
+async function installFakeDeno({
+  rootDir,
+  publishOutcome,
+}: {
+  rootDir: string;
+  publishOutcome: "succeed" | "fail";
+}): Promise<FakeDeno> {
+  const binDir = join(rootDir, "fake-bin");
+  await Deno.mkdir(binDir);
+  const argvLogPath = join(rootDir, "publish-argv.log");
+  const publishBehavior = fakePublishBehavior(publishOutcome);
+  const fakeDenoPath = join(binDir, "deno");
+  await Deno.writeTextFile(
+    fakeDenoPath,
+    [
+      "#!/bin/sh",
+      'if [ "$1" = "publish" ]; then',
+      `  printf '%s\\n' "$@" > '${argvLogPath}'`,
+      publishBehavior,
+      "fi",
+      `exec '${Deno.execPath()}' "$@"`,
+      "",
+    ].join("\n"),
+  );
+  await Deno.chmod(fakeDenoPath, 0o755);
+  return {
+    env: { PATH: `${binDir}:${Deno.env.get("PATH") ?? ""}` },
+    argvLogPath,
+  };
+}
+
+function fakePublishBehavior(publishOutcome: "succeed" | "fail"): string {
+  if (publishOutcome === "succeed") return "  exit 0";
+  return [
+    '  if [ -z "$NO_COLOR" ]; then',
+    "    printf '\\033[31merror\\033[0m: simulated publish failure\\n' >&2",
+    "  else",
+    "    printf 'error: simulated publish failure\\n' >&2",
+    "  fi",
+    "  exit 1",
+  ].join("\n");
+}
+
+async function readPublishArgv(
+  argvLogPath: string,
+): Promise<string[] | undefined> {
+  try {
+    return (await Deno.readTextFile(argvLogPath)).trimEnd().split("\n");
+  } catch (caughtError) {
+    if (caughtError instanceof Deno.errors.NotFound) return undefined;
+    throw caughtError;
+  }
+}
+
+async function writePublishableManifest(packageDir: string): Promise<void> {
+  await Deno.writeTextFile(
+    join(packageDir, "deno.json"),
+    `{\n\t"name": "@fixture/lib",\n\t"version": "1.0.0"\n}\n`,
+  );
+}
+
 Deno.test("release skips publishing a package marked publish: false", async () => {
   await withTempDir(async (packageDir) => {
-    // Given: a publish: false member, and a publish command that would fail
+    // Given: a publish: false member, and a deno publish that would fail
     await Deno.writeTextFile(
       join(packageDir, "deno.json"),
       `{\n\t"name": "@fixture/app",\n\t"version": "1.0.0",\n\t"publish": false\n}\n`,
     );
+    const fakeDeno = await installFakeDeno({
+      rootDir: packageDir,
+      publishOutcome: "fail",
+    });
 
     // When: dv fires the release op after tagging it
     const outcome = await runOp({
       op: "release",
       env: {
         ...releaseEnv({ packageDir, packageName: "@fixture/app" }),
-        DENO_PLUGIN_PUBLISH_COMMAND: JSON.stringify(FAILING_PUBLISH_COMMAND),
+        ...fakeDeno.env,
       },
     });
 
-    // Then: the op succeeds because the publish command never ran
+    // Then: the op succeeds and deno publish was never run
     assertEquals(outcome, {
       exitCode: 0,
       response: {
@@ -600,75 +675,34 @@ Deno.test("release skips publishing a package marked publish: false", async () =
         message: `@fixture/app@1.0.0 not published: "publish": false in ${join(packageDir, "deno.json")}`,
       },
     });
+    assertEquals(await readPublishArgv(fakeDeno.argvLogPath), undefined);
   });
 });
 
-Deno.test("release reports a failed publish as data, not a crash", async () => {
+Deno.test("release runs deno publish --allow-dirty --quiet and reports success", async () => {
   await withTempDir(async (packageDir) => {
-    // Given: a publishable member whose publish command fails
-    await Deno.writeTextFile(
-      join(packageDir, "deno.json"),
-      `{\n\t"name": "@fixture/lib",\n\t"version": "1.0.0"\n}\n`,
-    );
+    // Given: a publishable member and a deno publish that succeeds
+    await writePublishableManifest(packageDir);
+    const fakeDeno = await installFakeDeno({
+      rootDir: packageDir,
+      publishOutcome: "succeed",
+    });
 
     // When: dv fires the release op
     const outcome = await runOp({
       op: "release",
       env: {
         ...releaseEnv({ packageDir, packageName: "@fixture/lib" }),
-        DENO_PLUGIN_PUBLISH_COMMAND: JSON.stringify(FAILING_PUBLISH_COMMAND),
+        ...fakeDeno.env,
       },
     });
 
-    // Then: the op exits 0 with ok:false and the command's stderr
-    assertEquals(outcome.exitCode, 0);
-    const response = isRecord(outcome.response) ? outcome.response : {};
-    assertEquals(response.ok, false);
-    assertStringIncludes(String(response.message), "simulated publish failure");
-  });
-});
-
-Deno.test("release failure messages carry no ANSI escape codes", async () => {
-  await withTempDir(async (packageDir) => {
-    // Given: a publish command whose stderr Deno would colour
-    await Deno.writeTextFile(
-      join(packageDir, "deno.json"),
-      `{\n\t"name": "@fixture/lib",\n\t"version": "1.0.0"\n}\n`,
-    );
-
-    // When: dv fires the release op and the command fails
-    const outcome = await runOp({
-      op: "release",
-      env: {
-        ...releaseEnv({ packageDir, packageName: "@fixture/lib" }),
-        DENO_PLUGIN_PUBLISH_COMMAND: JSON.stringify(FAILING_PUBLISH_COMMAND),
-      },
-    });
-
-    // Then: the message dv records (and prints in --json) is plain text
-    const response = isRecord(outcome.response) ? outcome.response : {};
-    assertEquals(String(response.message).includes("\u001b"), false);
-  });
-});
-
-Deno.test("release reports a successful publish as published", async () => {
-  await withTempDir(async (packageDir) => {
-    // Given: a publishable member whose publish command succeeds
-    await Deno.writeTextFile(
-      join(packageDir, "deno.json"),
-      `{\n\t"name": "@fixture/lib",\n\t"version": "1.0.0"\n}\n`,
-    );
-
-    // When: dv fires the release op
-    const outcome = await runOp({
-      op: "release",
-      env: {
-        ...releaseEnv({ packageDir, packageName: "@fixture/lib" }),
-        DENO_PLUGIN_PUBLISH_COMMAND: JSON.stringify(["deno", "eval", ""]),
-      },
-    });
-
-    // Then: the op reports the package as published
+    // Then: the real default argv ran and the package reads as published
+    assertEquals(await readPublishArgv(fakeDeno.argvLogPath), [
+      "publish",
+      "--allow-dirty",
+      "--quiet",
+    ]);
     assertEquals(outcome, {
       exitCode: 0,
       response: {
@@ -680,13 +714,37 @@ Deno.test("release reports a successful publish as published", async () => {
   });
 });
 
-// Stands in for a `deno publish` the registry rejects. An uncaught
-// error makes Deno print a coloured "error:" line unless NO_COLOR.
-const FAILING_PUBLISH_COMMAND = [
-  "deno",
-  "eval",
-  "throw new Error('simulated publish failure');",
-];
+Deno.test("release reports a failed publish as plain-text data, not a crash", async () => {
+  await withTempDir(async (packageDir) => {
+    // Given: a publishable member whose deno publish fails, colouring
+    // its error unless NO_COLOR is set
+    await writePublishableManifest(packageDir);
+    const fakeDeno = await installFakeDeno({
+      rootDir: packageDir,
+      publishOutcome: "fail",
+    });
+
+    // When: dv fires the release op
+    const outcome = await runOp({
+      op: "release",
+      env: {
+        ...releaseEnv({ packageDir, packageName: "@fixture/lib" }),
+        ...fakeDeno.env,
+      },
+    });
+
+    // Then: the op exits 0 with ok:false, quoting the error with no
+    // ANSI escapes (the message lands in dv release --json)
+    assertEquals(outcome.exitCode, 0);
+    const response = isRecord(outcome.response) ? outcome.response : {};
+    assertEquals(response.ok, false);
+    assertStringIncludes(
+      String(response.message),
+      "error: simulated publish failure",
+    );
+    assertEquals(String(response.message).includes("\u001b"), false);
+  });
+});
 
 function releaseEnv({
   packageDir,
