@@ -1,6 +1,11 @@
 import { parseArgs } from "@std/cli/parse-args";
 import { type FlagSpec, type FlagsOf, lowerFlagSpec } from "./flag-spec.ts";
 import { isFlagToken } from "./flag-token.ts";
+import {
+  type FlagValueIssue,
+  type OptionalValueFlagSpec,
+  validateOptionalValue,
+} from "./optional-value.ts";
 
 /**
  * Why a leaf's argv could not be parsed against its flag map. The leaf's
@@ -12,7 +17,10 @@ export type FlagParseError =
       kind: "invalid-flag-value";
       flagName: string;
       value: string;
-      allowedValues: readonly string[];
+      /** Why the value was refused; never empty. */
+      issues: readonly [FlagValueIssue, ...FlagValueIssue[]];
+      /** The accepted set, when the flag declares a closed one. */
+      allowedValues?: readonly string[];
     };
 
 /**
@@ -150,10 +158,10 @@ const REFUSAL_MARKER_PREFIX = "--clipc refused flag=";
 function readOptionalValueFlags(
   args: ReadOptionalValueFlagsArgs,
 ): OptionalValueReading {
-  const declaredValues = new Map<string, readonly string[]>();
+  const optionalValueSpecs = new Map<string, OptionalValueFlagSpec>();
   for (const [flagName, flagSpec] of Object.entries(args.flagSpecMap)) {
     if (flagSpec.kind === "optional-value") {
-      declaredValues.set(flagName, flagSpec.values);
+      optionalValueSpecs.set(flagName, flagSpec);
     }
   }
   const values = new Map<string, boolean | string>();
@@ -165,7 +173,7 @@ function readOptionalValueFlags(
       argv.push(...args.argv.slice(index));
       break;
     }
-    const spelling = readOptionalValueSpelling({ token, declaredValues });
+    const spelling = readOptionalValueSpelling({ token, optionalValueSpecs });
     switch (spelling.kind) {
       case "other":
         argv.push(token);
@@ -187,7 +195,7 @@ function readOptionalValueFlags(
 
 interface ReadOptionalValueSpellingArgs {
   token: string;
-  declaredValues: ReadonlyMap<string, readonly string[]>;
+  optionalValueSpecs: ReadonlyMap<string, OptionalValueFlagSpec>;
 }
 
 type OptionalValueSpelling =
@@ -196,7 +204,8 @@ type OptionalValueSpelling =
   | { kind: "refused"; error: FlagParseError };
 
 // One token against the declared optional-value flags: `--x` is true,
-// `--no-x` false, `--x=<value>` that value if declared. `--no-x=<value>`
+// `--no-x` false, `--x=<value>` whatever validateOptionalValue reads it
+// as. `--no-x=<value>`
 // is refused here, since parseArgs would quietly read it as `--x=<value>`.
 function readOptionalValueSpelling(
   args: ReadOptionalValueSpellingArgs,
@@ -206,27 +215,31 @@ function readOptionalValueSpelling(
   const attached =
     attachedParts.length === 0 ? undefined : attachedParts.join("=");
 
-  const allowedValues = args.declaredValues.get(name);
-  if (allowedValues !== undefined) {
+  const spec = args.optionalValueSpecs.get(name);
+  if (spec !== undefined) {
     if (attached === undefined) {
       return { kind: "set", flagName: name, value: true };
     }
-    if (!allowedValues.includes(attached)) {
+    const validation = validateOptionalValue({ spec, raw: attached });
+    if (!validation.ok) {
       return {
         kind: "refused",
         error: {
           kind: "invalid-flag-value",
           flagName: name,
           value: attached,
-          allowedValues,
+          issues: validation.issues,
+          ...(validation.allowedValues !== undefined && {
+            allowedValues: validation.allowedValues,
+          }),
         },
       };
     }
-    return { kind: "set", flagName: name, value: attached };
+    return { kind: "set", flagName: name, value: validation.value };
   }
 
   const negatedName = name.startsWith("no-") ? name.slice(3) : undefined;
-  if (negatedName === undefined || !args.declaredValues.has(negatedName)) {
+  if (negatedName === undefined || !args.optionalValueSpecs.has(negatedName)) {
     return { kind: "other" };
   }
   if (attached !== undefined) {

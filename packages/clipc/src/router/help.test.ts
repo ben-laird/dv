@@ -77,6 +77,43 @@ Deno.test("formatCommandHelp renders an optional-value flag's declared values as
   ]);
 });
 
+Deno.test("formatCommandHelp lists the boolean spellings first when booleans is on", () => {
+  // Given maat's askOnCommit: values ["null"] plus booleans
+  const flags = {
+    askOnCommit: {
+      kind: "optional-value",
+      values: ["null"],
+      booleans: true,
+      description: "Ask before commit",
+    },
+  } satisfies Record<string, FlagSpec>;
+
+  // When the leaf's help is rendered
+  const lines = flagLines(flags);
+
+  // Then every accepted spelling is shown
+  assertEquals(lines, [
+    "  --askOnCommit[=true|false|null]    Ask before commit",
+  ]);
+});
+
+Deno.test("formatCommandHelp shows <string> for an optional value with no closed set", () => {
+  // Given free-string optional-value flags, one also reading booleans
+  const flags = {
+    label: { kind: "optional-value", description: "Label" },
+    tag: { kind: "optional-value", booleans: true, description: "Tag" },
+  } satisfies Record<string, FlagSpec>;
+
+  // When the leaf's help is rendered
+  const lines = flagLines(flags);
+
+  // Then the free value reads <string>, after any boolean spellings
+  assertEquals(lines, [
+    `  --label[=<string>]${" ".repeat(13)}Label`,
+    "  --tag[=true|false|<string>]    Tag",
+  ]);
+});
+
 Deno.test("formatCommandHelp renders an optional-value flag's valueName as an optional attachment", () => {
   // Given an optional-value flag that names its value
   const flags = {

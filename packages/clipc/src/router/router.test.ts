@@ -640,7 +640,7 @@ Deno.test("leaf returns kind:error with exit 2 for an undeclared optional value"
   assertStringIncludes(stderrText, "invalid-flag-value");
   assertStringIncludes(
     stderrText,
-    "invalid value 'foo' for '--askOnCommit' (expected one of: null)",
+    "invalid value 'foo' for '--askOnCommit': expected one of: null",
   );
   assertStringIncludes(stderrText, "run 'test-cli set --help' for usage");
 });

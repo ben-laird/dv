@@ -24,6 +24,7 @@ export {
   type DefaultCliErrorShape,
 } from "./errors.ts";
 export {
+  type AttachedValueOf,
   type FlagSpec,
   type FlagsOf,
   type LoweredFlagSpec,

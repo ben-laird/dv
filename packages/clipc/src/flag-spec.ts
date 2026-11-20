@@ -6,10 +6,9 @@
 //                                 string | undefined.
 //   { kind: "collect" }         — repeatable scalar (`--pkg a --pkg b`);
 //                                 runner sees string[] | undefined.
-//   { kind: "optional-value" }  — a switch that may carry one declared
-//                                 value, attached (`--x`, `--no-x`,
-//                                 `--x=null`); runner sees
-//                                 boolean | <declared value> | undefined.
+//   { kind: "optional-value" }  — a switch that may carry an attached
+//                                 value (`--x`, `--no-x`, `--x=null`);
+//                                 runner sees boolean | <value> | undefined.
 //
 // Aliases are short letter forms (`alias: "p"` → `-p`). `description`
 // feeds the auto-generated help renderer, and a value-carrying flag's
@@ -21,20 +20,31 @@
  * `boolean | undefined`), `"string"` (value-carrying scalar →
  * `string | undefined`), `"collect"` (repeatable scalar like
  * `--pkg a --pkg b` → `string[] | undefined`), or `"optional-value"` (a switch
- * that may carry one of its declared `values` →
- * `boolean | <one of values> | undefined`). An optional `alias` is the short
- * letter form (`alias: "p"` → `-p`); `description` feeds the auto-generated
- * help renderer. A value-carrying flag may set `valueName` to say what its
- * value is in usage: `{ kind: "string", valueName: "path" }` renders
- * `--out <path>` instead of the default `--out <string>`.
+ * that may carry an attached value → `boolean | <value> | undefined`). An
+ * optional `alias` is the short letter form (`alias: "p"` → `-p`);
+ * `description` feeds the auto-generated help renderer. A value-carrying flag
+ * may set `valueName` to say what its value is in usage:
+ * `{ kind: "string", valueName: "path" }` renders `--out <path>` instead of
+ * the default `--out <string>`.
  *
  * An `"optional-value"` flag is written three ways: `--x` (`true`), `--no-x`
- * (`false`), or `--x=<value>` with a value from `values`. The value must be
- * attached with `=`: in `--x null` the flag is `true` and `null` stays a
- * positional word. A value outside `values` is refused as an
- * `invalid-flag-value` error. Usage renders `--x[=null]` (the declared values,
- * `|`-separated), or `--x[=<valueName>]` when `valueName` is set. It takes no
- * `alias`: a short letter has no attached-value spelling.
+ * (`false`), or `--x=<value>`. The value must be attached with `=`: in
+ * `--x null` the flag is `true` and `null` stays a positional word. What
+ * `<value>` may be is a small vocabulary:
+ *
+ * - `values` (optional) closes the set: `--x=<value>` must be one of them,
+ *   and the runner sees those literals. Without it, any attached string is
+ *   accepted and the runner sees `string`.
+ * - `booleans: true` also reads `--x=true` / `--x=false` as the booleans,
+ *   the way a boolean flag reads `--json=false`.
+ *
+ * A value outside a declared set is refused as an `invalid-flag-value`
+ * error. Usage lists every accepted spelling, `--x[=true|false|null]`, with
+ * `<string>` for a free value (`--x[=<string>]`). A `valueName` replaces that
+ * list with `--x[=<valueName>]`, which hides a closed set, so leave it unset
+ * when the set is short. The flag takes no `alias`: a short letter has no
+ * attached-value spelling. Declaring a separate `no-x` flag beside it is
+ * refused, since `--no-x` already means `false`.
  *
  * @example
  * ```ts
@@ -42,10 +52,11 @@
  *   askOnCommit: {
  *     kind: "optional-value",
  *     values: ["null"],
+ *     booleans: true,
  *     description: "Ask before each commit; =null resets to the default",
  *   },
- * } satisfies Record<string, FlagSpec>;
- * // --help:  --askOnCommit[=null]
+ * } as const satisfies Record<string, FlagSpec>;
+ * // --help:  --askOnCommit[=true|false|null]
  * // runner:  flags.askOnCommit is boolean | "null" | undefined
  * ```
  */
@@ -65,7 +76,10 @@ export type FlagSpec =
     }
   | {
       kind: "optional-value";
-      values: readonly [string, ...string[]];
+      /** The closed set an attached value must come from; omit for any string. */
+      values?: readonly [string, ...string[]];
+      /** Read `--x=true` / `--x=false` as the booleans. */
+      booleans?: true;
       alias?: never;
       description?: string;
       valueName?: string;
@@ -74,9 +88,9 @@ export type FlagSpec =
 /**
  * Maps a flag-name → {@link FlagSpec} map to the runner's typed flag object,
  * resolving each flag's `kind` to its runtime value type. An
- * `"optional-value"` flag resolves to `boolean` or one of its declared
- * `values` literals. Every property is `| undefined` because an omitted flag
- * may be `undefined` regardless of kind.
+ * `"optional-value"` flag resolves to `boolean` or its attached value (see
+ * {@link AttachedValueOf}). Every property is `| undefined` because an
+ * omitted flag may be `undefined` regardless of kind.
  *
  * @typeParam TFlagMap - The command's flag map keyed by flag name.
  */
@@ -85,13 +99,22 @@ export type FlagsOf<TFlagMap extends Record<string, FlagSpec>> = {
     ? boolean | undefined
     : TFlagMap[Key]["kind"] extends "string"
       ? string | undefined
-      : TFlagMap[Key] extends {
-            kind: "optional-value";
-            values: readonly (infer TValue)[];
-          }
-        ? boolean | TValue | undefined
+      : TFlagMap[Key] extends { kind: "optional-value" }
+        ? boolean | AttachedValueOf<TFlagMap[Key]> | undefined
         : string[] | undefined;
 };
+
+/**
+ * The type of an `"optional-value"` flag's attached value: the union of its
+ * declared `values` literals, or `string` when it declares none.
+ *
+ * @typeParam TSpec - One flag's spec.
+ */
+export type AttachedValueOf<TSpec> = TSpec extends {
+  values: readonly (infer TValue)[];
+}
+  ? TValue
+  : string;
 
 /**
  * The lowered, `parseArgs`-shaped form of a flag map: parallel name arrays by
@@ -176,13 +199,21 @@ export function lowerFlagSpec(
  * Why a flag map can't be declared as written. Each case is a bug in the
  * CLI's own declaration, not in what a user typed.
  */
-export type FlagSpecError = {
-  kind: "negation-collision";
-  /** The `"optional-value"` flag that already reads `--no-<name>` as false. */
-  flagName: string;
-  /** The separately declared `no-<name>` flag it would shadow. */
-  negatedFlagName: string;
-};
+export type FlagSpecError =
+  | {
+      kind: "negation-collision";
+      /** The `"optional-value"` flag that already reads `--no-<name>` as false. */
+      flagName: string;
+      /** The separately declared `no-<name>` flag it would shadow. */
+      negatedFlagName: string;
+    }
+  | {
+      kind: "boolean-spelling-in-values";
+      /** The `"optional-value"` flag with `booleans: true`. */
+      flagName: string;
+      /** The declared value `booleans` already reads as a boolean. */
+      value: "true" | "false";
+    };
 
 /** The outcome of {@link checkFlagSpecMap}. */
 export type FlagSpecCheck = { ok: true } | { ok: false; error: FlagSpecError };
@@ -190,7 +221,9 @@ export type FlagSpecCheck = { ok: true } | { ok: false; error: FlagSpecError };
 /**
  * Checks a flag map for declarations that can't all be honored. An
  * `"optional-value"` flag `x` reads `--no-x` as `false`, so a separately
- * declared `no-x` flag would never be set.
+ * declared `no-x` flag would never be set; and with `booleans: true` it
+ * reads `=true` / `=false` as booleans, so declaring either in `values`
+ * would never yield that string.
  *
  * @param flagSpecMap - The command's flag map keyed by flag name.
  * @returns `{ ok: true }`, or the first {@link FlagSpecError} found.
@@ -199,15 +232,22 @@ export function checkFlagSpecMap(
   flagSpecMap: Record<string, FlagSpec>,
 ): FlagSpecCheck {
   for (const [flagName, flagSpec] of Object.entries(flagSpecMap)) {
+    if (flagSpec.kind !== "optional-value") continue;
     const negatedFlagName = `no-${flagName}`;
-    if (
-      flagSpec.kind === "optional-value" &&
-      Object.hasOwn(flagSpecMap, negatedFlagName)
-    ) {
+    if (Object.hasOwn(flagSpecMap, negatedFlagName)) {
       return {
         ok: false,
         error: { kind: "negation-collision", flagName, negatedFlagName },
       };
+    }
+    if (flagSpec.booleans !== true) continue;
+    for (const value of ["true", "false"] as const) {
+      if (flagSpec.values?.includes(value)) {
+        return {
+          ok: false,
+          error: { kind: "boolean-spelling-in-values", flagName, value },
+        };
+      }
     }
   }
   return { ok: true };
@@ -223,5 +263,7 @@ export function describeFlagSpecError(error: FlagSpecError): string {
   switch (error.kind) {
     case "negation-collision":
       return `flag '${error.negatedFlagName}' collides with optional-value flag '${error.flagName}', which already reads '--${error.negatedFlagName}' as false; drop the separate '${error.negatedFlagName}' flag`;
+    case "boolean-spelling-in-values":
+      return `optional-value flag '${error.flagName}' declares '${error.value}' in values, but booleans: true already reads '--${error.flagName}=${error.value}' as a boolean; drop '${error.value}' from values`;
   }
 }

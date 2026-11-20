@@ -206,13 +206,21 @@ function flagParseCliError(args: FlagParseCliErrorArgs): CliError {
         exitCode: 2,
       });
     case "invalid-flag-value": {
-      const { flagName, value, allowedValues } = args.flagParseError;
+      const { flagName, value, issues, allowedValues } = args.flagParseError;
+      const reasons = issues.map((issue) => issue.message).join("; ");
       return new CliError({
         code: "invalid-flag-value",
-        message: `invalid value '${value}' for '--${flagName}' (expected one of: ${allowedValues.join(", ")})`,
+        message: `invalid value '${value}' for '--${flagName}': ${reasons}`,
         hint,
         exitCode: 2,
-        context: { flagName, value, allowedValues: [...allowedValues] },
+        context: {
+          flagName,
+          value,
+          issues: issues.map((issue) => ({ message: issue.message })),
+          ...(allowedValues !== undefined && {
+            allowedValues: [...allowedValues],
+          }),
+        },
       });
     }
   }

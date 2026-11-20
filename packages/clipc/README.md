@@ -94,28 +94,40 @@ hands the leaf `"-"`, and `--title -` sets `title` to `"-"`, as `-t -` and
 `--title=-` do.
 
 **Switches with an optional value.** An `optional-value` flag is a switch that
-may also carry one of a few declared values, attached with `=`:
+may also carry a value, attached with `=`:
 
 ```typescript
 flags: {
   askOnCommit: {
     kind: "optional-value",
     values: ["null"],
+    booleans: true,
     description: "Ask before each commit (=null resets to the default)",
   },
 }
-// --askOnCommit       → true
-// --no-askOnCommit    → false
-// --askOnCommit=null  → "null"
-// (absent)            → undefined
+// --askOnCommit        → true
+// --no-askOnCommit     → false
+// --askOnCommit=true   → true
+// --askOnCommit=false  → false
+// --askOnCommit=null   → "null"
+// (absent)             → undefined
 ```
 
-`flags.askOnCommit` is typed `boolean | "null" | undefined`. The value must be
-attached: `--askOnCommit null` switches the flag on and leaves `null` as a
-positional word. An undeclared value (`--askOnCommit=foo`) is refused with an
-`invalid-flag-value` error and exit 2. `--help` shows it as
-`--askOnCommit[=null]` (several values read `--color[=always|never]`, and a
-`valueName` reads `--color[=<when>]`). It takes no short `alias`.
+What may follow `=` is a small vocabulary. `values` closes the set to those
+literals, and `flags.askOnCommit` is typed `boolean | "null" | undefined`;
+leave it out and any attached string is accepted, typed `string`.
+`booleans: true` also reads `=true` / `=false` as booleans, the way a boolean
+flag reads `--json=false`. The value must be attached: `--askOnCommit null`
+switches the flag on and leaves `null` as a positional word. A value outside
+the declared set (`--askOnCommit=foo`) is refused with an `invalid-flag-value`
+error and exit 2.
+
+`--help` lists every accepted spelling: `--askOnCommit[=true|false|null]`, or
+`--label[=<string>]` for a free value. A `valueName` replaces the list
+(`--askOnCommit[=<setting>]`), which hides a closed set, so leave it unset when
+the set is short. The flag takes no short `alias`, and declaring a separate
+`no-askOnCommit` flag beside it is refused when the command is built, since
+`--no-askOnCommit` already means `false`.
 
 ## A larger example
 

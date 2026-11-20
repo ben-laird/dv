@@ -368,10 +368,110 @@ Deno.test("parseSubcommandArgv refuses an undeclared attached value", () => {
         kind: "invalid-flag-value",
         flagName: "askOnCommit",
         value,
+        issues: [{ message: "expected one of: null" }],
         allowedValues: ["null"],
       },
     });
   }
+});
+
+// maat's real case: a switch that also takes `=true`, `=false`, or `=null`.
+const maatAskOnCommitFlags = {
+  askOnCommit: { kind: "optional-value", values: ["null"], booleans: true },
+} as const satisfies Record<string, FlagSpec>;
+
+Deno.test("parseSubcommandArgv reads maat's askOnCommit in all five spellings", () => {
+  // Given an optional-value flag with `values: ["null"]` and `booleans: true`
+  const flagSpecMap = maatAskOnCommitFlags;
+
+  // When each spelling is parsed
+  const read = (spelling: string) => {
+    const parsed = parseOk({ flagSpecMap, subcommandArgv: [spelling] });
+    return parsed.flags.askOnCommit;
+  };
+
+  // Then switches and boolean words become booleans, and `null` stays text
+  assertEquals(read("--askOnCommit"), true);
+  assertEquals(read("--no-askOnCommit"), false);
+  assertEquals(read("--askOnCommit=true"), true);
+  assertEquals(read("--askOnCommit=false"), false);
+  assertEquals(read("--askOnCommit=null"), "null");
+});
+
+Deno.test("FlagsOf types maat's askOnCommit as boolean or null-literal", () => {
+  // Given maat's flag declaration
+  const flagSpecMap = maatAskOnCommitFlags;
+
+  // When parsed
+  const parsed = parseOk({
+    flagSpecMap,
+    subcommandArgv: ["--askOnCommit=false"],
+  });
+
+  // Then the type is exactly boolean | "null" | undefined: it fits that
+  // union, it is wider than boolean, and an arbitrary string doesn't fit it
+  type AskOnCommit = typeof parsed.flags.askOnCommit;
+  const askOnCommit: boolean | "null" | undefined = parsed.flags.askOnCommit;
+  // @ts-expect-error: the "null" literal is in the type, so boolean is too narrow
+  const switchOnly: boolean | undefined = parsed.flags.askOnCommit;
+  const arbitraryText: string = "other";
+  // @ts-expect-error: a free string is not one of the declared values
+  const freeText: AskOnCommit = arbitraryText;
+  assertEquals([askOnCommit, switchOnly, freeText], [false, false, "other"]);
+});
+
+Deno.test("parseSubcommandArgv lists the boolean spellings among the accepted values", () => {
+  // Given maat's flag declaration
+  const flagSpecMap = maatAskOnCommitFlags;
+
+  // When an undeclared value is attached
+  const outcome = parseSubcommandArgv({
+    flagSpecMap,
+    subcommandArgv: ["--askOnCommit=maybe"],
+  });
+
+  // Then the one issue and the allowed set include true and false
+  assertEquals(outcome, {
+    ok: false,
+    error: {
+      kind: "invalid-flag-value",
+      flagName: "askOnCommit",
+      value: "maybe",
+      issues: [{ message: "expected one of: true|false|null" }],
+      allowedValues: ["true", "false", "null"],
+    },
+  });
+});
+
+Deno.test("parseSubcommandArgv accepts any attached string when no values are declared", () => {
+  // Given an optional-value flag with no closed set
+  const flagSpecMap = {
+    label: { kind: "optional-value" },
+  } as const satisfies Record<string, FlagSpec>;
+
+  // When it is given arbitrary text, including `true`
+  const text = parseOk({ flagSpecMap, subcommandArgv: ["--label=v1.2"] });
+  const trueText = parseOk({ flagSpecMap, subcommandArgv: ["--label=true"] });
+
+  // Then the text arrives as written, typed string, since booleans is off
+  const label: boolean | string | undefined = text.flags.label;
+  assertEquals(label, "v1.2");
+  assertEquals(trueText.flags.label, "true");
+});
+
+Deno.test("parseSubcommandArgv reads booleans on a free-string optional-value flag", () => {
+  // Given an optional-value flag with booleans and no closed set
+  const flagSpecMap = {
+    label: { kind: "optional-value", booleans: true },
+  } as const satisfies Record<string, FlagSpec>;
+
+  // When it is given `false` and other text
+  const falseWord = parseOk({ flagSpecMap, subcommandArgv: ["--label=false"] });
+  const text = parseOk({ flagSpecMap, subcommandArgv: ["--label=nope"] });
+
+  // Then `false` is the boolean and other text is kept
+  assertEquals(falseWord.flags.label, false);
+  assertEquals(text.flags.label, "nope");
 });
 
 Deno.test("parseSubcommandArgv refuses a value attached to the negated spelling", () => {
@@ -431,6 +531,7 @@ Deno.test("parseSubcommandArgv reports flag errors in the order they were typed"
       kind: "invalid-flag-value",
       flagName: "askOnCommit",
       value: "bad",
+      issues: [{ message: "expected one of: null" }],
       allowedValues: ["null"],
     },
   });

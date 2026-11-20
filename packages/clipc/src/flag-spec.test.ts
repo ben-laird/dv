@@ -33,6 +33,32 @@ Deno.test("checkFlagSpecMap refuses an optional-value flag beside its no- twin",
   }
 });
 
+Deno.test("checkFlagSpecMap refuses a boolean spelling declared in values beside booleans", () => {
+  // Given an optional-value flag that reads booleans and also lists "false"
+  const flagSpecMap: Record<string, FlagSpec> = {
+    ask: { kind: "optional-value", values: ["null", "false"], booleans: true },
+  };
+
+  // When the map is checked
+  const check = checkFlagSpecMap(flagSpecMap);
+
+  // Then the unreachable "false" literal is an error value
+  assertEquals(check, {
+    ok: false,
+    error: {
+      kind: "boolean-spelling-in-values",
+      flagName: "ask",
+      value: "false",
+    },
+  });
+  if (!check.ok) {
+    assertEquals(
+      describeFlagSpecError(check.error),
+      "optional-value flag 'ask' declares 'false' in values, but booleans: true already reads '--ask=false' as a boolean; drop 'false' from values",
+    );
+  }
+});
+
 Deno.test("checkFlagSpecMap accepts no- flags that shadow nothing", () => {
   // Given a no- boolean beside a plain boolean of the same stem, and an
   // optional-value flag whose own name starts with no-
