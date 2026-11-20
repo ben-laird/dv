@@ -1,6 +1,21 @@
-import { assertEquals, assertThrows } from "@std/assert";
+import { assertEquals, fail } from "@std/assert";
 import type { FlagSpec } from "./flag-spec.ts";
-import { parseSubcommandArgv, UnknownFlagError } from "./parse-subcommand.ts";
+import {
+  type ParseSubcommandArgvArgs,
+  type ParsedSubcommandArgv,
+  parseSubcommandArgv,
+} from "./parse-subcommand.ts";
+
+// Unwraps an outcome the test expects to succeed, failing loudly otherwise.
+function parseOk<TFlagMap extends Record<string, FlagSpec>>(
+  args: ParseSubcommandArgvArgs<TFlagMap>,
+): ParsedSubcommandArgv<TFlagMap> {
+  const outcome = parseSubcommandArgv(args);
+  if (!outcome.ok) {
+    fail(`expected a parse, got ${JSON.stringify(outcome.error)}`);
+  }
+  return outcome.value;
+}
 
 Deno.test("parseSubcommandArgv routes declared flags into the typed flags object", () => {
   // Given a flag map with one string, one boolean, and one collect flag
@@ -11,7 +26,7 @@ Deno.test("parseSubcommandArgv routes declared flags into the typed flags object
   } satisfies Record<string, FlagSpec>;
 
   // When argv exercises all three
-  const parsed = parseSubcommandArgv({
+  const parsed = parseOk({
     flagSpecMap,
     subcommandArgv: [
       "--message",
@@ -38,7 +53,7 @@ Deno.test("parseSubcommandArgv keeps positional tokens in argv", () => {
   } satisfies Record<string, FlagSpec>;
 
   // When argv mixes flags and positionals
-  const parsed = parseSubcommandArgv({
+  const parsed = parseOk({
     flagSpecMap,
     subcommandArgv: ["old-name", "--yes", "new-name"],
   });
@@ -54,7 +69,7 @@ Deno.test("parseSubcommandArgv keeps positionals that look like numbers as the e
   const numberLikeWords = ["007", "01234567", "1e3", "0x10", "Infinity"];
 
   // When they arrive as positionals, before and after `--` (where `-5` must go)
-  const parsed = parseSubcommandArgv({
+  const parsed = parseOk({
     flagSpecMap,
     subcommandArgv: [...numberLikeWords, "--", "-5", "007"],
   });
@@ -70,11 +85,11 @@ Deno.test("parseSubcommandArgv keeps a string flag's number-like value as typed"
   } satisfies Record<string, FlagSpec>;
 
   // When its value looks like a number, spaced and joined with `=`
-  const spaced = parseSubcommandArgv({
+  const spaced = parseOk({
     flagSpecMap,
     subcommandArgv: ["--id", "007"],
   });
-  const joined = parseSubcommandArgv({
+  const joined = parseOk({
     flagSpecMap,
     subcommandArgv: ["--id=01234567"],
   });
@@ -89,7 +104,7 @@ Deno.test("parseSubcommandArgv passes --help and -h after `--` through as words"
   const flagSpecMap = {} satisfies Record<string, FlagSpec>;
 
   // When help tokens follow `--`
-  const parsed = parseSubcommandArgv({
+  const parsed = parseOk({
     flagSpecMap,
     subcommandArgv: ["--", "--help", "-h"],
   });
@@ -105,8 +120,8 @@ Deno.test("parseSubcommandArgv keeps a bare `-` as a positional word", () => {
   } satisfies Record<string, FlagSpec>;
 
   // When `-` comes alone, before the switch, after it, and between words
-  const alone = parseSubcommandArgv({ flagSpecMap, subcommandArgv: ["-"] });
-  const mixed = parseSubcommandArgv({
+  const alone = parseOk({ flagSpecMap, subcommandArgv: ["-"] });
+  const mixed = parseOk({
     flagSpecMap,
     subcommandArgv: ["-", "--json", "a", "-", "b"],
   });
@@ -132,9 +147,9 @@ Deno.test("parseSubcommandArgv gives a value flag `-` as its value, spaced or jo
     ["--title=-", "word"],
   ];
   const parsedTitles = spellings.map((subcommandArgv) =>
-    parseSubcommandArgv({ flagSpecMap, subcommandArgv }),
+    parseOk({ flagSpecMap, subcommandArgv }),
   );
-  const parsedPackages = parseSubcommandArgv({
+  const parsedPackages = parseOk({
     flagSpecMap,
     subcommandArgv: ["--packages", "-", "--packages", "a"],
   });
@@ -155,7 +170,7 @@ Deno.test("parseSubcommandArgv leaves `--title -` after `--` as words", () => {
   } satisfies Record<string, FlagSpec>;
 
   // When the flag and `-` follow `--`
-  const parsed = parseSubcommandArgv({
+  const parsed = parseOk({
     flagSpecMap,
     subcommandArgv: ["--", "--title", "-"],
   });
@@ -171,12 +186,16 @@ Deno.test("parseSubcommandArgv still refuses -x, --x and -5 beside a bare `-`", 
 
   for (const token of ["-x", "--x", "-5"]) {
     // When it follows a bare `-`
-    // Then UnknownFlagError names that token, not `-`
-    const caught = assertThrows(
-      () => parseSubcommandArgv({ flagSpecMap, subcommandArgv: ["-", token] }),
-      UnknownFlagError,
-    );
-    assertEquals(caught.flagToken, token);
+    const outcome = parseSubcommandArgv({
+      flagSpecMap,
+      subcommandArgv: ["-", token],
+    });
+
+    // Then the unknown-flag error names that token, not `-`
+    assertEquals(outcome, {
+      ok: false,
+      error: { kind: "unknown-flag", flagToken: token },
+    });
   }
 });
 
@@ -187,7 +206,7 @@ Deno.test("parseSubcommandArgv resolves aliases without leaking the short key in
   } satisfies Record<string, FlagSpec>;
 
   // When -h is passed
-  const parsed = parseSubcommandArgv({
+  const parsed = parseOk({
     flagSpecMap,
     subcommandArgv: ["-h"],
   });
@@ -198,21 +217,38 @@ Deno.test("parseSubcommandArgv resolves aliases without leaking the short key in
   assertEquals("h" in parsed.flags, false);
 });
 
-Deno.test("parseSubcommandArgv throws UnknownFlagError when an undeclared flag appears", () => {
+Deno.test("parseSubcommandArgv returns an unknown-flag error when an undeclared flag appears", () => {
   // Given a flag map with no declared --whatever
   const flagSpecMap = {
     yes: { kind: "boolean" },
   } satisfies Record<string, FlagSpec>;
 
   // When argv carries an unknown flag
-  // Then UnknownFlagError surfaces carrying the offending token
-  const caught = assertThrows(
-    () =>
-      parseSubcommandArgv({
-        flagSpecMap,
-        subcommandArgv: ["--whatever"],
-      }),
-    UnknownFlagError,
-  );
-  assertEquals(caught.flagToken, "--whatever");
+  const outcome = parseSubcommandArgv({
+    flagSpecMap,
+    subcommandArgv: ["--whatever"],
+  });
+
+  // Then the error value carries the offending token
+  assertEquals(outcome, {
+    ok: false,
+    error: { kind: "unknown-flag", flagToken: "--whatever" },
+  });
+});
+
+Deno.test("parseSubcommandArgv names the first of several unknown flags", () => {
+  // Given a leaf that declares no flags
+  const flagSpecMap = {} satisfies Record<string, FlagSpec>;
+
+  // When argv carries two unknown flags
+  const outcome = parseSubcommandArgv({
+    flagSpecMap,
+    subcommandArgv: ["word", "--first", "--second"],
+  });
+
+  // Then the error names the first one typed
+  assertEquals(outcome, {
+    ok: false,
+    error: { kind: "unknown-flag", flagToken: "--first" },
+  });
 });

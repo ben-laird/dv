@@ -2,19 +2,21 @@ import { parseArgs } from "@std/cli/parse-args";
 import { type FlagSpec, type FlagsOf, lowerFlagSpec } from "./flag-spec.ts";
 import { isFlagToken } from "./flag-token.ts";
 
-// Internal sentinel: an unknown flag (a flag token, per isFlagToken, that
-// isn't declared) becomes this throw, caught by defineCli's dispatch
-// and converted to "unknown flag '--foo'" + exit 2. Throwing through
-// parseArgs' synchronous `unknown` callback is the structural trick
-// that makes the dispatcher testable — previously the equivalent code
-// called Deno.exit(2) inline, which is unmockable.
+/**
+ * Why a leaf's argv could not be parsed against its flag map. The leaf's
+ * handler turns each case into a typed `CliError` with exit 2.
+ */
+export type FlagParseError = { kind: "unknown-flag"; flagToken: string };
 
-export class UnknownFlagError extends Error {
-  constructor(public readonly flagToken: string) {
-    super(`unknown flag '${flagToken}'`);
-    this.name = "UnknownFlagError";
-  }
-}
+/**
+ * The outcome of {@link parseSubcommandArgv}: the parsed flags and positionals,
+ * or the first {@link FlagParseError} found.
+ */
+export type ParseSubcommandArgvOutcome<
+  TFlagMap extends Record<string, FlagSpec>,
+> =
+  | { ok: true; value: ParsedSubcommandArgv<TFlagMap> }
+  | { ok: false; error: FlagParseError };
 
 export interface ParseSubcommandArgvArgs<
   TFlagMap extends Record<string, FlagSpec>,
@@ -23,7 +25,7 @@ export interface ParseSubcommandArgvArgs<
   subcommandArgv: string[];
 }
 
-export interface ParseSubcommandArgvResult<
+export interface ParsedSubcommandArgv<
   TFlagMap extends Record<string, FlagSpec>,
 > {
   flags: FlagsOf<TFlagMap>;
@@ -32,12 +34,13 @@ export interface ParseSubcommandArgvResult<
 
 export function parseSubcommandArgv<TFlagMap extends Record<string, FlagSpec>>(
   args: ParseSubcommandArgvArgs<TFlagMap>,
-): ParseSubcommandArgvResult<TFlagMap> {
+): ParseSubcommandArgvOutcome<TFlagMap> {
   const lowered = lowerFlagSpec(args.flagSpecMap);
   const subcommandArgv = joinDashValues({
     argv: args.subcommandArgv,
     valueFlags: new Set(lowered.string),
   });
+  const unknownFlagTokens: string[] = [];
   const parsed = parseArgs(subcommandArgv, {
     // `_` keeps every positional a string: parseArgs would otherwise turn
     // `007` into 7. The leaf knows its own types, so numbers are its call.
@@ -48,17 +51,24 @@ export function parseSubcommandArgv<TFlagMap extends Record<string, FlagSpec>>(
     unknown: (token) => {
       // parseArgs calls this for positionals too, and a lone `-` is one.
       if (isFlagToken(token)) {
-        throw new UnknownFlagError(token);
+        unknownFlagTokens.push(token);
+        return false;
       }
       return true;
     },
   });
+  const firstUnknownFlagToken = unknownFlagTokens[0];
+  if (firstUnknownFlagToken !== undefined) {
+    return {
+      ok: false,
+      error: { kind: "unknown-flag", flagToken: firstUnknownFlagToken },
+    };
+  }
 
   // parseArgs collects positionals into `_` and the rest of the keys
   // are declared flags. `_` is typed `(string|number)[]`, but listing it
   // under `string` above means every element is already a string.
-  const positionalsRaw = parsed._;
-  const argv = positionalsRaw.map((token) => String(token));
+  const argv = parsed._.map((token) => String(token));
 
   // Strip `_` and any aliased single-char keys so `flags` only carries
   // the declared full-name keys.
@@ -70,9 +80,17 @@ export function parseSubcommandArgv<TFlagMap extends Record<string, FlagSpec>>(
     flagsObject[key] = value;
   }
   return {
-    flags: flagsObject as FlagsOf<TFlagMap>,
-    argv,
+    ok: true,
+    value: { flags: asFlagsOf<TFlagMap>(flagsObject), argv },
   };
+}
+
+// The one unchecked step: parseArgs returns an untyped record, and each
+// key's value was produced by the parser for that flag's declared kind.
+function asFlagsOf<TFlagMap extends Record<string, FlagSpec>>(
+  flagsObject: Record<string, unknown>,
+): FlagsOf<TFlagMap> {
+  return flagsObject as FlagsOf<TFlagMap>;
 }
 
 interface JoinDashValuesArgs {

@@ -1,6 +1,9 @@
 import { CliError } from "../errors.ts";
 import type { FlagSpec, FlagsOf } from "../flag-spec.ts";
-import { parseSubcommandArgv, UnknownFlagError } from "../parse-subcommand.ts";
+import {
+  type FlagParseError,
+  parseSubcommandArgv,
+} from "../parse-subcommand.ts";
 import { formatCommandHelp } from "./help.ts";
 import { requestsHelp } from "./help-request.ts";
 import { type CliHandler, type CliRequest, done } from "./types.ts";
@@ -139,35 +142,22 @@ export function command<
         }),
       });
     }
-    let parsed: ReturnType<typeof parseSubcommandArgv>;
-    try {
-      parsed = parseSubcommandArgv({
-        flagSpecMap: spec.flags,
-        subcommandArgv: request.argv,
+    const parsed = parseSubcommandArgv({
+      flagSpecMap: spec.flags,
+      subcommandArgv: request.argv,
+    });
+    if (!parsed.ok) {
+      return done({
+        kind: "error",
+        error: flagParseCliError({
+          flagParseError: parsed.error,
+          path: request.path,
+        }),
       });
-    } catch (caughtError) {
-      if (caughtError instanceof UnknownFlagError) {
-        // Typed-error path: the user passed an undeclared flag.
-        // Returning `kind: "error"` keeps the trampoline driver
-        // out of its degraded-throw branch — this is an expected
-        // failure shape the framework knows how to render. Exit 2
-        // is a property of the error code (POSIX "command-line
-        // usage error"), so it lives on the CliError itself.
-        return done({
-          kind: "error",
-          error: new CliError({
-            code: "unknown-flag",
-            message: `unknown flag '${caughtError.flagToken}'`,
-            hint: `run '${request.path.join(" ")} --help' for usage`,
-            exitCode: 2,
-          }),
-        });
-      }
-      throw caughtError;
     }
     const result = await spec.run({
-      flags: parsed.flags as FlagsOf<TFlags>,
-      argv: parsed.argv,
+      flags: parsed.value.flags,
+      argv: parsed.value.argv,
       ctx: request.ctx,
       path: request.path,
     });
@@ -180,4 +170,25 @@ export function command<
     handler,
     flags: spec.flags,
   };
+}
+
+interface FlagParseCliErrorArgs {
+  flagParseError: FlagParseError;
+  path: string[];
+}
+
+// A flag-parse failure is the user's typing, not a bug, so it is a typed
+// error, not a throw. Exit 2 (POSIX "command-line usage error") is a
+// property of what failed, so it lives on the CliError itself.
+function flagParseCliError(args: FlagParseCliErrorArgs): CliError {
+  const hint = `run '${args.path.join(" ")} --help' for usage`;
+  switch (args.flagParseError.kind) {
+    case "unknown-flag":
+      return new CliError({
+        code: "unknown-flag",
+        message: `unknown flag '${args.flagParseError.flagToken}'`,
+        hint,
+        exitCode: 2,
+      });
+  }
 }
