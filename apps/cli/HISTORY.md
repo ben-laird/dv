@@ -5,6 +5,14 @@ one h3 subsection per Record consumed during that release, with the
 Record's body prose verbatim. For terse one-line bullets, see
 CHANGELOG.md.
 
+## [0.13.0] - 2026-11-20
+
+### dv migrate config now moves the config schema pointers (the `# yaml-language-server` modeline and the `$schema` key) forward to the running dv release when they name an older one, and leaves any other URL alone.
+
+### Publish dv's JSON Schemas with each release at `https://jsr.io/@dv-cli/dv/<version>/schemas/<name>.json`, and have dv init point the new config at the config schema for the running version (a yaml-language-server modeline plus a `$schema` key).
+
+### dv validate now reports non-fatal warnings (a `warnings` array in `--json`, `⚠` lines and a count in the summary) that never change the exit code. The first ones flag a config schema pointer that names a different dv release, or a config with only one of the two pointers.
+
 ## [0.12.1] - 2026-11-20
 
 ### Run plugins from the repo root, whatever directory dv runs from
