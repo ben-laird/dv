@@ -13,4 +13,6 @@ a `run:` reference (`deno run -A ./tools/my-plugin/main.ts`) failed with
 "Module not found" when dv ran from a subdirectory. dv now always starts the
 plugin process in the repo root, so `dv status` and the other plugin-driving
 commands work from anywhere in the repository. The plugin contract now states
-this.
+this. Without `--repo-root`, `dv plugin invoke` and `dv plugin verify` now use
+the git repo root containing the current directory, or the current directory
+itself outside a git repo.
