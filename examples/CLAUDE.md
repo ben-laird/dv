@@ -10,7 +10,7 @@ promoting an example to a supported builtin is a separate, future decision.
 - Each plugin conforms to `specs/plugin-contract.md`: an executable speaking
   JSON-over-stdio, implementing the Ops it declares (`discover`,
   `read-version`, `write-version`, `update-dependency`, `release`).
-- Responses must validate against `specs/schemas/plugin-responses.json`.
+- Responses must validate against `apps/cli/schemas/plugin-responses.json`.
 - Verify with `dv plugin verify <plugin>`; iterate on single Ops with
   `dv plugin invoke <plugin> <op>`.
 - Keep them **minimal and readable** — they teach the contract. Clarity over

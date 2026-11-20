@@ -480,7 +480,7 @@ async function owningPackageName({
 // that JSR trusts, `deno publish` picks up OIDC credentials on its
 // own; elsewhere, set up auth the way `deno publish` documents.
 //
-// Return shape (specs/schemas/plugin-responses.json):
+// Return shape (apps/cli/schemas/plugin-responses.json):
 //   { ok, published?, skipped?, message? }
 //
 // Per specs/plugin-contract.md, a release-op failure does NOT roll
@@ -567,7 +567,7 @@ async function runRelease(): Promise<void> {
 //                             entries for packages this plugin
 //                             governs that bumped this run
 //
-// Return shape (specs/schemas/plugin-responses.json):
+// Return shape (apps/cli/schemas/plugin-responses.json):
 //   { ok, unsupported?, additionalChangedFiles?, message? }
 
 async function runFinalize(): Promise<void> {
