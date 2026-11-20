@@ -17,7 +17,7 @@ export type FlagParseError =
 
 /**
  * The outcome of {@link parseSubcommandArgv}: the parsed flags and positionals,
- * or the first {@link FlagParseError} found.
+ * or the {@link FlagParseError} for the first bad flag in argv order.
  */
 export type ParseSubcommandArgvOutcome<
   TFlagMap extends Record<string, FlagSpec>,
@@ -50,9 +50,11 @@ export function parseSubcommandArgv<TFlagMap extends Record<string, FlagSpec>>(
     }),
     flagSpecMap: args.flagSpecMap,
   });
-  if (!optionalValues.ok) return optionalValues;
-  const unknownFlagTokens: string[] = [];
-  const parsed = parseArgs(optionalValues.value.argv, {
+  // parseArgs reports unknown flags in argv order, and each refused
+  // optional-value spelling sits in argv as an unknown marker token, so
+  // `flagParseErrors` lists every failure in the order it was typed.
+  const flagParseErrors: FlagParseError[] = [];
+  const parsed = parseArgs(optionalValues.argv, {
     // `_` keeps every positional a string: parseArgs would otherwise turn
     // `007` into 7. The leaf knows its own types, so numbers are its call.
     // Optional-value flags arrive as a name-free placeholder (see
@@ -64,18 +66,20 @@ export function parseSubcommandArgv<TFlagMap extends Record<string, FlagSpec>>(
     unknown: (token) => {
       // parseArgs calls this for positionals too, and a lone `-` is one.
       if (isFlagToken(token)) {
-        unknownFlagTokens.push(token);
+        flagParseErrors.push(
+          optionalValues.refusals.get(token) ?? {
+            kind: "unknown-flag",
+            flagToken: token,
+          },
+        );
         return false;
       }
       return true;
     },
   });
-  const firstUnknownFlagToken = unknownFlagTokens[0];
-  if (firstUnknownFlagToken !== undefined) {
-    return {
-      ok: false,
-      error: { kind: "unknown-flag", flagToken: firstUnknownFlagToken },
-    };
+  const firstFlagParseError = flagParseErrors[0];
+  if (firstFlagParseError !== undefined) {
+    return { ok: false, error: firstFlagParseError };
   }
 
   // parseArgs collects positionals into `_` and the rest of the keys
@@ -93,7 +97,7 @@ export function parseSubcommandArgv<TFlagMap extends Record<string, FlagSpec>>(
     if (aliasedKeys.has(key)) continue;
     flagsObject[key] = value;
   }
-  for (const [flagName, value] of optionalValues.value.values) {
+  for (const [flagName, value] of optionalValues.values) {
     flagsObject[flagName] = value;
   }
   return {
@@ -116,15 +120,16 @@ interface ReadOptionalValueFlagsArgs {
 }
 
 interface OptionalValueReading {
-  /** argv with each optional-value spelling replaced by the placeholder. */
+  /**
+   * argv with each optional-value spelling replaced by the placeholder,
+   * and each refused spelling by its refusal marker.
+   */
   argv: string[];
   /** Each optional-value flag's last-written value. */
   values: Map<string, boolean | string>;
+  /** Refusal marker token → the error it stands for. */
+  refusals: Map<string, FlagParseError>;
 }
-
-type ReadOptionalValueFlagsOutcome =
-  | { ok: true; value: OptionalValueReading }
-  | { ok: false; error: FlagParseError };
 
 // The key parseArgs sees in place of every optional-value spelling. It
 // carries no flag name, so a name with a `no-` prefix or a dot can't be
@@ -132,15 +137,19 @@ type ReadOptionalValueFlagsOutcome =
 // name a CLI would declare.
 const OPTIONAL_VALUE_PLACEHOLDER_KEY = "clipc optional value";
 const OPTIONAL_VALUE_PLACEHOLDER = `--${OPTIONAL_VALUE_PLACEHOLDER_KEY}=`;
+// An undeclared key, so parseArgs hands each marker to `unknown` at its
+// place in argv; the attached index keeps markers distinct.
+const REFUSAL_MARKER_PREFIX = "--clipc refused flag=";
 
 // parseArgs has no optional attached value: told the flag is a string it
 // takes the next word, told it's a boolean it takes a next `true`/`false`.
 // So clipc reads `--x`, `--no-x` and `--x=<value>` itself. Each becomes a
 // placeholder rather than vanishing, so a preceding `--title` still sees
-// a flag next and doesn't swallow the word after it.
+// a flag next and doesn't swallow the word after it. A refused spelling
+// becomes a marker parseArgs reports as unknown, in argv order.
 function readOptionalValueFlags(
   args: ReadOptionalValueFlagsArgs,
-): ReadOptionalValueFlagsOutcome {
+): OptionalValueReading {
   const declaredValues = new Map<string, readonly string[]>();
   for (const [flagName, flagSpec] of Object.entries(args.flagSpecMap)) {
     if (flagSpec.kind === "optional-value") {
@@ -148,6 +157,7 @@ function readOptionalValueFlags(
     }
   }
   const values = new Map<string, boolean | string>();
+  const refusals = new Map<string, FlagParseError>();
   const argv: string[] = [];
   for (let index = 0; index < args.argv.length; index++) {
     const token = args.argv[index] ?? "";
@@ -160,15 +170,19 @@ function readOptionalValueFlags(
       case "other":
         argv.push(token);
         break;
-      case "refused":
-        return { ok: false, error: spelling.error };
+      case "refused": {
+        const marker = `${REFUSAL_MARKER_PREFIX}${refusals.size}`;
+        refusals.set(marker, spelling.error);
+        argv.push(marker);
+        break;
+      }
       case "set":
         values.set(spelling.flagName, spelling.value);
         argv.push(OPTIONAL_VALUE_PLACEHOLDER);
         break;
     }
   }
-  return { ok: true, value: { argv, values } };
+  return { argv, values, refusals };
 }
 
 interface ReadOptionalValueSpellingArgs {

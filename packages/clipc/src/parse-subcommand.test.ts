@@ -406,6 +406,53 @@ Deno.test("parseSubcommandArgv leaves optional-value spellings after `--` as wor
   assertEquals(parsed.flags.askOnCommit, undefined);
 });
 
+Deno.test("parseSubcommandArgv reports flag errors in the order they were typed", () => {
+  // Given an optional-value flag declaring only `null`
+  const flagSpecMap = askOnCommitFlags;
+
+  // When an unknown flag and an undeclared value come in either order
+  const unknownFirst = parseSubcommandArgv({
+    flagSpecMap,
+    subcommandArgv: ["--bogus", "--askOnCommit=bad"],
+  });
+  const invalidFirst = parseSubcommandArgv({
+    flagSpecMap,
+    subcommandArgv: ["--askOnCommit=bad", "--bogus"],
+  });
+
+  // Then the error is whichever came first in argv
+  assertEquals(unknownFirst, {
+    ok: false,
+    error: { kind: "unknown-flag", flagToken: "--bogus" },
+  });
+  assertEquals(invalidFirst, {
+    ok: false,
+    error: {
+      kind: "invalid-flag-value",
+      flagName: "askOnCommit",
+      value: "bad",
+      allowedValues: ["null"],
+    },
+  });
+});
+
+Deno.test("parseSubcommandArgv still refuses an unknown flag between optional-value spellings", () => {
+  // Given an optional-value flag
+  const flagSpecMap = askOnCommitFlags;
+
+  // When valid spellings surround an unknown flag
+  const outcome = parseSubcommandArgv({
+    flagSpecMap,
+    subcommandArgv: ["--askOnCommit", "--bogus", "word", "--no-askOnCommit"],
+  });
+
+  // Then the unknown flag is named, as it would be without them
+  assertEquals(outcome, {
+    ok: false,
+    error: { kind: "unknown-flag", flagToken: "--bogus" },
+  });
+});
+
 Deno.test("parseSubcommandArgv reads an optional-value flag whose name starts with no-", () => {
   // Given an optional-value flag named like a negation
   const flagSpecMap = {
