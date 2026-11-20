@@ -1,7 +1,7 @@
 import { relative } from "@std/path";
 import { DvError } from "../domain/errors.ts";
-import { SCHEMA_URNS, type SchemaUrns } from "../domain/schema-urns.ts";
 import { publishedSchemaUrl } from "../domain/published-schema.ts";
+import { SCHEMA_URNS, type SchemaUrns } from "../domain/schema-urns.ts";
 import { DV_VERSION } from "../dv-version.ts";
 import { configPath, loadConfig, recordsPath } from "../subtools/config/mod.ts";
 import {
