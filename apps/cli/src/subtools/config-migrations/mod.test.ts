@@ -10,7 +10,7 @@ import { runConfigMigrations } from "./mod.ts";
 // step matched" shape.
 
 Deno.test("runConfigMigrations returns the input unchanged when no step matched", () => {
-  // Given a config in the current shape — nothing legacy for any
+  // Given an up-to-date config — nothing legacy or outdated for any
   // registered step to recognize
   const text = `discovery:
   plugins:
@@ -71,7 +71,7 @@ Deno.test("runConfigMigrations is idempotent: a second run on the rewritten text
   });
 
   // Then the second pass produces zero changes (the output of
-  // the first pass is already in the current shape). This is
+  // the first pass is already up to date). This is
   // the canonical "safe to re-run" property — important because
   // users might run `dv migrate config` defensively without
   // remembering whether they've run it before.

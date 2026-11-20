@@ -13,8 +13,8 @@ export interface ConfigMigrationStep {
   /** One-line human description, used by the CLI's summary. */
   description: string;
   /**
-   * Pure function: text in, text + change-list out. A step that doesn't
-   * detect its legacy shape returns `changes: []` and the text unchanged.
+   * Pure function: text in, text + change-list out. A step with nothing
+   * to rewrite returns `changes: []` and the text unchanged.
    */
   apply(args: ConfigMigrationStepApplyArgs): ConfigMigrationStepApplyResult;
 }
@@ -45,9 +45,11 @@ export interface ConfigMigrationStepApplyResult {
  */
 export interface MigrationChange {
   /**
-   * Dotted breadcrumb identifying the location within the config, e.g.
-   * `"discovery.plugins[0].use"` or `"publishing.plugin"`. Stays stable
-   * across migration releases for the same logical field.
+   * Where in the config the change happened. Usually a dotted key
+   * breadcrumb (`"discovery.plugins[0].use"`, `"publishing.plugin"`,
+   * `"$schema"`); a location that is not a key, such as the
+   * `"# yaml-language-server"` modeline comment, gets a descriptive
+   * label. Stays stable across releases for the same location.
    */
   path: string;
   /** The original string value (or short summary) the user had. */

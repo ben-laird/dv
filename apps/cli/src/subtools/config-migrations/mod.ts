@@ -42,8 +42,8 @@ export interface RunConfigMigrationsResult {
   // case).
   rewrittenText: string;
   // Per-step records of what the step changed. Steps that didn't
-  // match are omitted entirely — empty `changes` always means
-  // "config is already in the current shape."
+  // match are omitted entirely — an empty list always means
+  // "config is already up to date."
   stepResults: ConfigMigrationStepResult[];
 }
 
@@ -59,10 +59,10 @@ export interface ConfigMigrationStepResult {
 
 // Runs every registered migration step against `originalText` in
 // order. Each step decides whether it applies (by detecting the
-// legacy shape it knows about) and rewrites if so; the runner
-// pipes each step's output into the next step's input. Idempotent
-// by construction: a step that doesn't detect its legacy shape
-// returns `changes: []` and the text unchanged, so repeatedly
+// legacy shape or outdated value it knows about) and rewrites if so;
+// the runner pipes each step's output into the next step's input.
+// Idempotent by construction: a step with nothing to rewrite returns
+// `changes: []` and the text unchanged, so repeatedly
 // running migrations on an up-to-date config is a no-op.
 export function runConfigMigrations(
   args: RunConfigMigrationsArgs,

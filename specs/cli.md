@@ -161,7 +161,11 @@ $ dv validate
 ```
 
 Warning codes are an open set; consumers of `--json` must tolerate codes
-they don't recognize. The current codes check the config's schema
+they don't recognize. These are findings *about the repo* that a
+successful run reports, which is why they live in the report's
+`warnings` array; the `severity: "warning"` entries of the `cli-error`
+envelope are a different thing, diagnostics attached to a command that
+failed. The current codes check the config's schema
 pointers (see [config-format.md § `$schema`](config-format.md#schema)),
 and only when the config loads:
 
