@@ -57,9 +57,9 @@ covers the four arms and when to pick which.
   file that has a `name`. Nameless manifests on the way up, such as a
   nested tool config, are skipped. The walk runs with `--no-remote --no-npm --no-lock`, so it is
   offline and never writes `deno.lock`. The whole walk shares one
-  45-second budget across every entry point (inside dv's 60-second
-  fast-op timeout), and a `deno info` still running when it expires is
-  killed. If the package's graph can't be built (`deno info` exits
+  45-second budget across every entry point, which leaves headroom
+  inside the fixed 60-second timeout dv release gives the whole op. A
+  `deno info` still running when the budget expires is killed. If the package's graph can't be built (`deno info` exits
   non-zero, for example on a missing or gitignored generated entry
   point; a local module won't load; or the budget runs out), the op
   still succeeds with the import-map dependencies alone and writes a

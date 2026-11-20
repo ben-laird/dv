@@ -369,8 +369,10 @@ export async function packagesInModuleGraph({
   return { ok: true, value: ownerNames };
 }
 
-// The whole module-graph walk must finish inside dv's 60s fast-op
-// timeout, with room left for the rest of the op.
+// dv kills get-dependencies after 60s (a fixed timeout in dv
+// release), and that limit covers the whole plugin process: Deno
+// startup, reading stdin and the manifest, then this walk. 45s for
+// the walk leaves the rest of the op 15s of headroom.
 const MODULE_GRAPH_BUDGET_MS = 45_000;
 
 // `exports` is either one path or a map of subpath → path.
@@ -571,6 +573,10 @@ async function owningPackageName({
     }
     visitedDirs.push(currentDir);
     const manifest = await readManifest(currentDir);
+    // Deliberately lenient: an unparseable manifest here can't name an
+    // owner, so it is climbed past like a nameless one. Ownership only
+    // decides publish order, and the member's own ops report the parse
+    // error where it matters.
     const name = manifest.ok ? manifest.value.parsed.name : undefined;
     if (typeof name === "string" && name.length > 0) {
       ownerName = name;
