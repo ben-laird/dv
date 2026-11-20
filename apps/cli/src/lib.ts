@@ -120,6 +120,7 @@ export {
   runValidate,
   type ValidationProblem,
   type ValidationReport,
+  type ValidationWarning,
 } from "./cli/validate.ts";
 // --- version ---------------------------------------------------------------
 // `CascadedUpdate` / `FinalizedFile` exist in both version.ts and v1.ts with

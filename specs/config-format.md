@@ -79,7 +79,10 @@ Both carry the same URL; keep them in step when you upgrade dv.
 config schema for an older dv release, it rewrites that pointer to the
 running version's URL. Pointers at anything else (a local path, a custom
 URL, a newer dv) stay as written. See
-[cli.md § `dv migrate config`](cli.md#dv-migrate-config). The
+[cli.md § `dv migrate config`](cli.md#dv-migrate-config). `dv validate`
+warns (without failing) when a pointer names a different dv release or
+only one of the two pointers is present; see
+[cli.md § `dv validate`](cli.md#dv-validate). The
 schemas for records (`record.json`), the rename ledger
 (`rename-ledger.json`) and every `--json` contract are published alongside
 it under the same `schemas/` path.

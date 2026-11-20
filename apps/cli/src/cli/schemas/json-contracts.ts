@@ -29,17 +29,39 @@ const validationProblemSchema = z
   })
   .strict();
 
+const validationWarningSchema = z
+  .object({
+    code: z
+      .string()
+      .describe(
+        "Open enumeration: consumers must tolerate codes they don't recognize.",
+      ),
+    message: z.string(),
+    source: z.string().optional(),
+    hint: z.string().describe("What to do about the warning."),
+  })
+  .strict();
+
 export const rawValidationReportSchema = z
   .object({
     schema: schemaUrnLiteral(SCHEMA_URNS.validationReport),
-    ok: z.boolean(),
+    ok: z
+      .boolean()
+      .describe("True iff `problems` is empty. Warnings never affect it."),
     recordsChecked: z.number().int(),
     problems: z.array(validationProblemSchema),
+    warnings: z
+      .array(validationWarningSchema)
+      .optional()
+      .describe(
+        "Non-fatal findings. Never affect `ok` or the exit code. Added in a minor revision of v1; absent in reports from older dv releases.",
+      ),
   })
   .strict()
   .meta({
     title: "Validation report",
-    description: "The `dv validate --json` report: ok flag + problems.",
+    description:
+      "The `dv validate --json` report: ok flag, problems, and non-fatal warnings.",
   });
 
 // === release ======================================================

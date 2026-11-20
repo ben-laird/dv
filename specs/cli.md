@@ -148,6 +148,35 @@ $ dv validate
 ✓ 3 records, 0 problems
 ```
 
+**Warnings.** Some findings are worth reporting but don't make anything
+malformed. They are listed as warnings, which **never** affect the exit
+code or the report's `ok` flag. The summary line adds a count when there
+are any, and each warning prints with a `⚠` and a hint:
+
+```
+$ dv validate
+✓ 3 records, 0 problems, 1 warning
+  ⚠ config-schema-version-mismatch: the `$schema` key names the config schema for dv 0.12.0, but this is dv 0.14.0 .dv/config.yaml
+    hint: run `dv migrate config` to point it at this dv release
+```
+
+Warning codes are an open set; consumers of `--json` must tolerate codes
+they don't recognize. The current codes check the config's schema
+pointers (see [config-format.md § `$schema`](config-format.md#schema)),
+and only when the config loads:
+
+| Code                               | When                                                                                                    | Hint                                                                                         |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `config-schema-version-mismatch`   | The modeline or the `$schema` key names dv's published config schema for a version other than the running dv (one warning per pointer). | Older: run `dv migrate config`. Newer: upgrade dv, or point it at the running version's URL. |
+| `config-schema-pointer-incomplete` | Exactly one of the two pointers is present. A config with neither has opted out and gets no warning.   | Add the missing pointer with the same URL.                                                   |
+
+Pointers at anything other than dv's published config schema (a local
+path, a custom URL) are never version-checked.
+
+| Flag     | Meaning                                                                                                                                              |
+| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--json` | Emit the `urn:dv:schema:v1:validation-report` envelope: `ok`, `recordsChecked`, `problems`, and `warnings` (each `{code, message, source?, hint}`). |
+
 ---
 
 ## `dv version`

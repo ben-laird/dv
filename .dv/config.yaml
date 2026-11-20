@@ -15,6 +15,9 @@
 # `release` op is a stub for teaching; tools/dv-release runs a real
 # `deno publish`. The other ops are identical.
 
+# Local path, so dogfooding follows the working tree's schema.
+$schema: ../apps/cli/schemas/config.json
+
 discovery:
   plugins:
     - match:
