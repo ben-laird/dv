@@ -1,3 +1,4 @@
+import type { FlagSpec } from "../flag-spec.ts";
 import type { CommandNode } from "./command.ts";
 import type { RouterChild, RouterNode } from "./router.ts";
 
@@ -130,8 +131,8 @@ function describeChild<Ctx>(child: RouterChild<Ctx>): string {
 // before parseSubcommandArgv would; this helper produces the text.
 /**
  * Arguments to {@link formatCommandHelp}: the breadcrumb `path`, an
- * optional `description`, the leaf's `flags` map (each entry's `kind`,
- * `description`, and `alias` feed the flag listing), and an optional
+ * optional `description`, the leaf's `flags` map (each entry's
+ * {@link FlagSpec} feeds the flag listing), and an optional
  * `colorEnabled` flag (defaults to `false`).
  */
 export interface FormatCommandHelpArgs {
@@ -139,8 +140,8 @@ export interface FormatCommandHelpArgs {
   path: string[];
   /** Optional command description shown beneath the usage line. */
   description?: string;
-  /** The leaf's flags; each entry's `kind`, `description`, and `alias` feed the listing. */
-  flags: Record<string, { kind: string; description?: string; alias?: string }>;
+  /** The leaf's flags; each entry's spec drives its usage label, description, and alias. */
+  flags: Record<string, FlagSpec>;
   /** Whether to bold labels and dim descriptions with ANSI color (default `false`). */
   colorEnabled?: boolean;
 }
@@ -148,10 +149,11 @@ export interface FormatCommandHelpArgs {
 /**
  * Renders a leaf command's help text: a `Usage:` line, the optional
  * description, and an alphabetically sorted flag list (showing each
- * flag's kind marker and `-x` alias). Non-boolean flags display a
- * `<kind>` value marker; a command with no flags shows
- * `(no flags declared)`. When `colorEnabled` is set, labels are
- * bolded and descriptions dimmed.
+ * flag's usage label and `-x` alias). A boolean flag shows its bare
+ * name; a value-carrying flag shows `--name <value>`, where `<value>`
+ * is its `valueName` or, by default, its `kind`. A command with no
+ * flags shows `(no flags declared)`. When `colorEnabled` is set,
+ * labels are bolded and descriptions dimmed.
  *
  * @param args - The {@link FormatCommandHelpArgs}.
  * @returns The formatted, multi-line help string.
@@ -176,16 +178,14 @@ export function formatCommandHelp(args: FormatCommandHelpArgs): string {
   // Compute label width on the uncolored text (ANSI escapes count
   // toward string.length but render zero-width).
   const labelWidth = flagEntries.reduce((widest, [flagName, flagSpec]) => {
-    const kindMarker = flagSpec.kind === "boolean" ? "" : ` <${flagSpec.kind}>`;
-    return Math.max(widest, `--${flagName}${kindMarker}`.length);
+    return Math.max(widest, flagUsageLabel({ flagName, flagSpec }).length);
   }, 0);
   for (const [flagName, flagSpec] of flagEntries.sort(([left], [right]) =>
     left.localeCompare(right),
   )) {
     const aliasSuffix =
       flagSpec.alias !== undefined ? `  (-${flagSpec.alias})` : "";
-    const kindMarker = flagSpec.kind === "boolean" ? "" : ` <${flagSpec.kind}>`;
-    const labelText = `--${flagName}${kindMarker}`;
+    const labelText = flagUsageLabel({ flagName, flagSpec });
     const paddedLabel = labelText.padEnd(labelWidth + 4);
     lines.push(
       `  ${bold(paddedLabel, colorEnabled)}${dim(
@@ -195,6 +195,23 @@ export function formatCommandHelp(args: FormatCommandHelpArgs): string {
     );
   }
   return lines.join("\n");
+}
+
+interface FlagUsageLabelArgs {
+  flagName: string;
+  flagSpec: FlagSpec;
+}
+
+// How a flag is written in usage: `--json`, `--out <path>`.
+function flagUsageLabel(args: FlagUsageLabelArgs): string {
+  const longForm = `--${args.flagName}`;
+  switch (args.flagSpec.kind) {
+    case "boolean":
+      return longForm;
+    case "string":
+    case "collect":
+      return `${longForm} <${args.flagSpec.valueName ?? args.flagSpec.kind}>`;
+  }
 }
 
 // Re-export so consumers can pull RouterNode types via the help

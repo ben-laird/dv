@@ -65,7 +65,9 @@ clipc is five ideas. Once you have them, the whole surface follows.
 - **Flag specs** (`FlagSpec`, `lowerFlagSpec`) — flags are data, not parsing
   code. Each flag declares its `kind` (`string`, `boolean`, …) and description;
   the framework derives parsing, `--help` text, and the static `FlagsOf<…>` type
-  from one declaration. `inheritedFlags` is a typed-identity capture: declare a
+  from one declaration. A value-carrying flag can name its value for `--help`:
+  `{ kind: "string", valueName: "path" }` shows `--out <path>` instead of the
+  default `--out <string>`. `inheritedFlags` is a typed-identity capture: declare a
   shared flag map once, then spread it into each leaf's `flags` so cross-cutting
   flags keep one source of truth without drifting per-flag kinds.
 - **Errors-as-values** (`done`, `next`, `Step`) — handlers return a result

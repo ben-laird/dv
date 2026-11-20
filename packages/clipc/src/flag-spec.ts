@@ -8,7 +8,8 @@
 //                          runner sees string[] | undefined.
 //
 // Aliases are short letter forms (`alias: "p"` → `-p`). `description`
-// feeds the auto-generated help renderer.
+// feeds the auto-generated help renderer, and a value-carrying flag's
+// `valueName` names its value there (`--pkg <name>`).
 
 /**
  * The spec for a single flag on a leaf command. The `kind` selects the runtime
@@ -17,12 +18,24 @@
  * `string | undefined`), or `"collect"` (repeatable scalar like
  * `--pkg a --pkg b` → `string[] | undefined`). An optional `alias` is the short
  * letter form (`alias: "p"` → `-p`); `description` feeds the auto-generated
- * help renderer.
+ * help renderer. A value-carrying flag may set `valueName` to say what its
+ * value is in usage: `{ kind: "string", valueName: "path" }` renders
+ * `--out <path>` instead of the default `--out <string>`.
  */
 export type FlagSpec =
   | { kind: "boolean"; alias?: string; description?: string }
-  | { kind: "string"; alias?: string; description?: string }
-  | { kind: "collect"; alias?: string; description?: string };
+  | {
+      kind: "string";
+      alias?: string;
+      description?: string;
+      valueName?: string;
+    }
+  | {
+      kind: "collect";
+      alias?: string;
+      description?: string;
+      valueName?: string;
+    };
 
 /**
  * Maps a flag-name → {@link FlagSpec} map to the runner's typed flag object,
