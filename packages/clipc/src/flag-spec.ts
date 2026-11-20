@@ -171,3 +171,57 @@ export function lowerFlagSpec(
   }
   return lowered;
 }
+
+/**
+ * Why a flag map can't be declared as written. Each case is a bug in the
+ * CLI's own declaration, not in what a user typed.
+ */
+export type FlagSpecError = {
+  kind: "negation-collision";
+  /** The `"optional-value"` flag that already reads `--no-<name>` as false. */
+  flagName: string;
+  /** The separately declared `no-<name>` flag it would shadow. */
+  negatedFlagName: string;
+};
+
+/** The outcome of {@link checkFlagSpecMap}. */
+export type FlagSpecCheck = { ok: true } | { ok: false; error: FlagSpecError };
+
+/**
+ * Checks a flag map for declarations that can't all be honored. An
+ * `"optional-value"` flag `x` reads `--no-x` as `false`, so a separately
+ * declared `no-x` flag would never be set.
+ *
+ * @param flagSpecMap - The command's flag map keyed by flag name.
+ * @returns `{ ok: true }`, or the first {@link FlagSpecError} found.
+ */
+export function checkFlagSpecMap(
+  flagSpecMap: Record<string, FlagSpec>,
+): FlagSpecCheck {
+  for (const [flagName, flagSpec] of Object.entries(flagSpecMap)) {
+    const negatedFlagName = `no-${flagName}`;
+    if (
+      flagSpec.kind === "optional-value" &&
+      Object.hasOwn(flagSpecMap, negatedFlagName)
+    ) {
+      return {
+        ok: false,
+        error: { kind: "negation-collision", flagName, negatedFlagName },
+      };
+    }
+  }
+  return { ok: true };
+}
+
+/**
+ * A one-line explanation of a {@link FlagSpecError}, naming the fix.
+ *
+ * @param error - The declaration error to describe.
+ * @returns The message a CLI author reads.
+ */
+export function describeFlagSpecError(error: FlagSpecError): string {
+  switch (error.kind) {
+    case "negation-collision":
+      return `flag '${error.negatedFlagName}' collides with optional-value flag '${error.flagName}', which already reads '--${error.negatedFlagName}' as false; drop the separate '${error.negatedFlagName}' flag`;
+  }
+}

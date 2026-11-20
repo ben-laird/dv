@@ -1,4 +1,4 @@
-import { assertEquals, assertStringIncludes } from "@std/assert";
+import { assertEquals, assertStringIncludes, assertThrows } from "@std/assert";
 import { CliError } from "../errors.ts";
 import { command } from "./command.ts";
 import { defineCli, type OutputMode } from "./define-cli.ts";
@@ -597,6 +597,24 @@ Deno.test("leaf hands run an optional-value flag typed as boolean or its declare
     { askOnCommit: false },
     { askOnCommit: "null" },
   ]);
+});
+
+Deno.test("command refuses an optional-value flag declared beside its no- twin", () => {
+  // Given a flag map with `ask` as optional-value and a separate `no-ask`
+  const declare = () => {
+    return command({
+      flags: {
+        ask: { kind: "optional-value", values: ["null"] },
+        "no-ask": { kind: "boolean" },
+      },
+      run: () => done({ kind: "ok" }),
+    });
+  };
+
+  // When the leaf is built
+  // Then it panics, naming the flag to drop
+  const panic = assertThrows(declare, Error);
+  assertStringIncludes(panic.message, "drop the separate 'no-ask' flag");
 });
 
 Deno.test("leaf returns kind:error with exit 2 for an undeclared optional value", async () => {

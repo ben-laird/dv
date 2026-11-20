@@ -1,5 +1,10 @@
 import { CliError } from "../errors.ts";
-import type { FlagSpec, FlagsOf } from "../flag-spec.ts";
+import {
+  checkFlagSpecMap,
+  describeFlagSpecError,
+  type FlagSpec,
+  type FlagsOf,
+} from "../flag-spec.ts";
 import {
   type FlagParseError,
   parseSubcommandArgv,
@@ -103,6 +108,9 @@ export interface CommandNode<Ctx = unknown> {
  * breadcrumb path. An undeclared flag is returned as a typed
  * `unknown-flag` error (exit 2), and an `"optional-value"` flag given an
  * undeclared value as an `invalid-flag-value` error (exit 2), not thrown.
+ * A flag map that contradicts itself (an `"optional-value"` flag `x`
+ * beside a declared `no-x`) is a bug in the CLI, so `command` throws on
+ * it when the tree is built.
  *
  * `Ctx` is the first type parameter so callers can write
  * `command<MyCtx>({...})` and let `TFlags` infer from the literal
@@ -126,6 +134,12 @@ export function command<
   Ctx = unknown,
   const TFlags extends Record<string, FlagSpec> = Record<string, FlagSpec>,
 >(spec: CommandSpec<Ctx, TFlags>): CommandNode<Ctx> {
+  // A flag map that contradicts itself is a bug in the CLI, not in what a
+  // user typed, so it panics here, when the tree is built, not per run.
+  const flagSpecCheck = checkFlagSpecMap(spec.flags);
+  if (!flagSpecCheck.ok) {
+    throw new Error(describeFlagSpecError(flagSpecCheck.error));
+  }
   const handler: CliHandler<Ctx> = async (request: CliRequest<Ctx>) => {
     // Intercept --help/-h before flag parsing so leaves don't have
     // to declare it. The framework owns this token at every node;
