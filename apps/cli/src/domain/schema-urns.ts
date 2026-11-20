@@ -1,7 +1,7 @@
 // The single source of truth for every `--json` contract identifier dv
 // emits. Each value is a URN (urn:dv:schema:<major>:<name>) stamped into
 // the matching `--json` payload's `schema` field and used as the `$id` of
-// the committed JSON Schema under specs/schemas/.
+// the committed JSON Schema under apps/cli/schemas/.
 //
 // Freezing the contract (issue #19) means: every machine-readable output
 // carries one of these, the id is versioned, and a bump to the shape that

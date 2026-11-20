@@ -1,7 +1,9 @@
 import { z } from "zod";
 import { DvError } from "../../domain/errors.ts";
+import { publishedSchemaUrl } from "../../domain/published-schema.ts";
+import { DV_VERSION } from "../../dv-version.ts";
 
-// Zod schemas for plugin Op responses, per specs/schemas/plugin-responses.json.
+// Zod schemas for plugin Op responses, per apps/cli/schemas/plugin-responses.json.
 // One schema per Op; the runner pipes raw stdout through the matching
 // schema. The optional structured-error envelope (`{ ok: false, error: "..." }`)
 // is recognized for any Op and turned into a PluginError.
@@ -33,7 +35,7 @@ export const discoverResponseSchema = z
 
 export type DiscoverResponse = z.infer<typeof discoverResponseSchema>;
 
-// Standard SemVer pattern (matches specs/schemas/plugin-responses.json
+// Standard SemVer pattern (matches apps/cli/schemas/plugin-responses.json
 // $defs.semver). Plugin authors get a precise schema-side failure
 // message when they emit junk, not a downstream parseVersion crash.
 const SEMVER_PATTERN =
@@ -372,7 +374,7 @@ export function parsePluginResponse<T>(args: ParsePluginResponseArgs<T>): T {
     throw new DvError({
       code: "plugin-bad-response",
       message: `${opName} response @ ${issueLocation}: ${issueMessage}`,
-      hint: `compare the plugin's output to specs/schemas/plugin-responses.json (op: ${opName})`,
+      hint: `compare the plugin's output to ${publishedSchemaUrl({ version: DV_VERSION, schema: "plugin-responses" })} (op: ${opName})`,
       context: { pluginPath, opName },
     });
   }

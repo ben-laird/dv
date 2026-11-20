@@ -40,3 +40,12 @@ export async function requireRepoRoot(): Promise<string> {
   }
   return root;
 }
+
+/**
+ * The git repo root containing the cwd, or the cwd itself when dv runs
+ * outside a git repo. For the plugin-author commands (`dv plugin invoke`,
+ * `dv plugin verify`), which work without a repo.
+ */
+export async function findRepoRootOrCwd(): Promise<string> {
+  return (await findRepoRoot()) ?? Deno.cwd();
+}

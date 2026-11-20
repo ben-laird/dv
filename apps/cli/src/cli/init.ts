@@ -1,15 +1,29 @@
 import { ensureDir } from "@std/fs";
 import { dirname, join } from "@std/path";
 import { DvError } from "../domain/errors.ts";
+import { publishedSchemaUrl } from "../domain/published-schema.ts";
+import { DV_VERSION } from "../dv-version.ts";
 import { CONFIG_DIR, configPath, recordsPath } from "../subtools/config/mod.ts";
 import { requireRepoRoot } from "../subtools/git/repo-root.ts";
 
-const STARTER_CONFIG = `# dv configuration. See https://dv.dev/schema/v1.yaml for the schema.
+interface StarterConfigArgs {
+  /** Where the config schema for the running dv release is published. */
+  configSchemaUrl: string;
+}
+
+// The pointer appears twice: yaml-language-server editors read the
+// modeline, while tools that only see the parsed data read `$schema`.
+function starterConfig(args: StarterConfigArgs): string {
+  return `# yaml-language-server: $schema=${args.configSchemaUrl}
+#
+# dv configuration.
 #
 # Discovery defines which paths are Packages and which plugin owns each.
 # Uncomment and adapt once you have a plugin (see specs/plugin-contract.md
 # and the examples/ directory for copyable starting points).
-#
+
+$schema: ${args.configSchemaUrl}
+
 # discovery:
 #   plugins:
 #     - match: "packages/*"
@@ -19,6 +33,7 @@ const STARTER_CONFIG = `# dv configuration. See https://dv.dev/schema/v1.yaml fo
 # tagging:
 #   format: "{package}@{version}"
 `;
+}
 
 // A directory-local .gitignore so .dv/ stays clean even when an
 // interactive editor (e.g. VSCode) crashes mid-`dv add`, leaving a
@@ -45,8 +60,9 @@ export interface InitResult {
 
 /**
  * `dv init`: scaffolds the `.dv/` directory — a starter `config.yaml`, the
- * Records directory, and a `.gitignore` — at the git repo root. Existing
- * files are left untouched.
+ * Records directory, and a `.gitignore` — at the git repo root. The starter
+ * config points at the published config schema for the running dv release.
+ * Existing files are left untouched.
  */
 export async function runInit(): Promise<InitResult> {
   const repoRoot = await requireRepoRoot();
@@ -55,27 +71,37 @@ export async function runInit(): Promise<InitResult> {
   const gitignorePath = join(repoRoot, CONFIG_DIR, ".gitignore");
 
   await ensureDir(dirname(cfgPath));
-  const configCreated = await writeIfMissing(cfgPath, STARTER_CONFIG);
+  const configCreated = await writeIfMissing({
+    path: cfgPath,
+    contents: starterConfig({
+      configSchemaUrl: publishedSchemaUrl({
+        version: DV_VERSION,
+        schema: "config",
+      }),
+    }),
+  });
   const recordsDirCreated = await ensureDirCreated(recPath);
-  const gitignoreCreated = await writeIfMissing(
-    gitignorePath,
-    STARTER_CHANGELOG_GITIGNORE,
-  );
+  const gitignoreCreated = await writeIfMissing({
+    path: gitignorePath,
+    contents: STARTER_CHANGELOG_GITIGNORE,
+  });
 
   return { repoRoot, configCreated, recordsDirCreated, gitignoreCreated };
 }
 
-async function writeIfMissing(
-  path: string,
-  contents: string,
-): Promise<boolean> {
+interface WriteIfMissingArgs {
+  path: string;
+  contents: string;
+}
+
+async function writeIfMissing(args: WriteIfMissingArgs): Promise<boolean> {
   try {
-    await Deno.lstat(path);
+    await Deno.lstat(args.path);
     return false;
   } catch (err) {
     if (!(err instanceof Deno.errors.NotFound)) throw err;
   }
-  await Deno.writeTextFile(path, contents);
+  await Deno.writeTextFile(args.path, args.contents);
   return true;
 }
 

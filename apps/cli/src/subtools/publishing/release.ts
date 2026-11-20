@@ -73,6 +73,7 @@ export async function invokeRelease(
   });
   const { rawStdout } = await invokeOp({
     resolvedPlugin: args.resolvedPlugin,
+    repoRootPath: args.repoRootPath,
     opName: "release",
     environmentVariables: childEnvironment,
     timeoutMs: args.timeoutMs,

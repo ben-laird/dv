@@ -3,6 +3,8 @@ import { parse as parseYaml } from "@std/yaml";
 import type { z } from "zod";
 import type { Config } from "../../domain/config.ts";
 import { DvError } from "../../domain/errors.ts";
+import { publishedSchemaUrl } from "../../domain/published-schema.ts";
+import { DV_VERSION } from "../../dv-version.ts";
 import { defaults } from "./defaults.ts";
 import { CONFIG_DIR } from "./locations.ts";
 import { type ParsedConfigLayer, parsedConfigLayerSchema } from "./schema.ts";
@@ -226,7 +228,7 @@ function configErrorFromZod(args: ConfigErrorFromZodArgs): DvError {
     return new DvError({
       code: "config-unknown-key",
       message,
-      hint: "check the config schema at specs/schemas/config.json",
+      hint: `check the config schema at ${publishedSchemaUrl({ version: DV_VERSION, schema: "config" })}`,
       context: { configFilePath: args.configFilePath },
     });
   }

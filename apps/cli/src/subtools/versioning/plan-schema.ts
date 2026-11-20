@@ -100,7 +100,7 @@ export interface PlanTracked {
  * The side-effect-free structure emitted by `dv status --json` and
  * `dv version|release --dry-run --json`. A pure function of repo state —
  * the same plan-building code feeds the preview, the dry-run, and the real
- * run (specs/language.md Algebra §7; serializes to specs/schemas/plan.json).
+ * run (specs/language.md Algebra §7; serializes to apps/cli/schemas/plan.json).
  */
 export interface Plan {
   /** Schema id — always `urn:dv:schema:v1:plan`. */

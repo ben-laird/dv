@@ -51,7 +51,8 @@
           "resolvedPluginKind": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "description": "Open enumeration: consumers must tolerate plugin kinds they don't recognize."
               },
               {
                 "type": "null"
@@ -80,7 +81,8 @@
           "errorCode": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "description": "Open enumeration: consumers must tolerate codes they don't recognize."
               },
               {
                 "type": "null"

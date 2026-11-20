@@ -120,6 +120,7 @@ export async function runDiscoveryAssignment(
 
     const { rawStdout } = await invokeOp({
       resolvedPlugin,
+      repoRootPath,
       opName: "discover",
       environmentVariables: childEnvironment,
       timeoutMs: opTimeoutMs,

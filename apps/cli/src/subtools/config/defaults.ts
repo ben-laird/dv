@@ -1,6 +1,6 @@
 import type { Config } from "../../domain/config.ts";
 
-// Defaults from specs/config-format.md and specs/schemas/config.json.
+// Defaults from specs/config-format.md and apps/cli/schemas/config.json.
 // Empty `discovery.plugins` means "no packages tracked" (still valid).
 
 export function defaults(): Config {

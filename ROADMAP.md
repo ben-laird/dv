@@ -253,7 +253,7 @@ conclusion:
   indirect.
 
 Likeliest shape: a `releaseNotes` (or `notes`) string per
-`awaitingRelease` entry in the Plan schema (`specs/schemas/plan.json`,
+`awaitingRelease` entry in the Plan schema (`apps/cli/schemas/plan.json`,
 regenerated from the Zod source — never hand-edited), populated by a
 first-party CHANGELOG extractor. That makes "mint a GitHub Release with
 the right body" a clean consumer of dv's JSON instead of a CHANGELOG
@@ -322,7 +322,8 @@ later](specs/v1-scope.md#deferred-to-later). Highlights:
   contract is proven stable.
 
   *Precursor shipped (0.8).* `@dv-cli/dv` now exposes a public **library
-  surface** (`apps/cli/src/lib.ts`, the package `exports` entry): the
+  surface** (`apps/cli/src/lib.ts`, the package's `./lib` export,
+  `@dv-cli/dv/lib`; the bare specifier is the CLI entry point): the
   in-process command runners (`runStatus`, `runVersion`, `runRelease`, …)
   plus their Options/Result types and the `Plan` contract types, all
   re-exported with module-level JSDoc. Embedders can drive `dv` in-process

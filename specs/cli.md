@@ -41,6 +41,12 @@ Scaffolds a fresh repo: writes a starter `.dv/config.yaml` and
 creates the `.dv/records/` directory. Idempotent — re-running against
 an initialized repo is a no-op, not an error.
 
+The starter config points at the published config schema for the
+running dv version, both as a `# yaml-language-server: $schema=…`
+modeline on its first line and as a `$schema` key, so editors offer
+autocomplete and validation from the start. See
+[config-format.md § `$schema`](config-format.md#schema).
+
 ```
 $ dv init
 created .dv/config.yaml
@@ -141,6 +147,42 @@ for CI. Exits non-zero if anything is malformed.
 $ dv validate
 ✓ 3 records, 0 problems
 ```
+
+**Warnings.** Some findings are worth reporting but don't make anything
+malformed. They are listed as warnings, which **never** affect the exit
+code or the report's `ok` flag. The summary line adds a count when there
+are any, and each warning prints with a `⚠` and a hint:
+
+```
+$ dv validate
+✓ 3 records, 0 problems, 1 warning
+  ⚠ config-schema-version-mismatch: the `$schema` key names the config schema for dv 0.12.0, but this is dv 0.14.0 .dv/config.yaml
+    hint: run `dv migrate config` to point it at this dv release
+```
+
+Warning codes are an open set; consumers of `--json` must tolerate codes
+they don't recognize. These are findings *about the repo* that a
+successful run reports, which is why they live in the report's
+`warnings` array; the `severity: "warning"` entries of the `cli-error`
+envelope are a different thing, diagnostics attached to a command that
+failed. The current codes check the config's schema
+pointers (see [config-format.md § `$schema`](config-format.md#schema)),
+and only when the config loads:
+
+| Code                               | When                                                                                                    | Hint                                                                                         |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `config-schema-version-mismatch`   | The modeline or the `$schema` key names dv's published config schema for a version other than the running dv (one warning per pointer). | Older: run `dv migrate config` (or, for a key form migrate doesn't rewrite, edit it by hand). Newer: upgrade dv, or point it at the running version's URL. |
+| `config-schema-pointer-incomplete` | Exactly one of the two pointers is present. A config with neither has opted out and gets no warning.   | Add the missing pointer with the same URL.                                                   |
+
+Pointers at anything other than dv's published config schema (a local
+path, a custom URL) are never version-checked. The `$schema` key is read
+from the parsed YAML, so any spelling of it counts (`"$schema":`,
+`$schema :`, a flow mapping); the modeline is read from the leading
+comment block.
+
+| Flag     | Meaning                                                                                                                                              |
+| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--json` | Emit the `urn:dv:schema:v1:validation-report` envelope: `ok`, `recordsChecked`, `problems`, and `warnings` (each `{code, message, source?, hint}`). |
 
 ---
 
@@ -280,19 +322,38 @@ About to commit core to 1.0.0 — this is a stability promise. Proceed? [y/N]
 dv migrate config [--dry-run] [--json]
 ```
 
-Rewrites `.dv/config.yaml` to match the current schema shape. Each
-breaking config change between dv versions ships with one migration
-step in the [config-migrations subtool](../apps/cli/src/subtools/config-migrations/);
-this command walks every registered step against the file. Idempotent
+Rewrites `.dv/config.yaml` to match the current dv. Each breaking config
+change between dv versions ships with one migration step in the
+[config-migrations subtool](../apps/cli/src/subtools/config-migrations/),
+and so does each piece of routine upkeep a config needs as dv moves on
+(such as `schema-pointer-current` below); this command walks every
+registered step against the file. Idempotent
 — running on an already-migrated config is a friendly no-op.
 
-The v1 release ships one step, `use-key-discriminated`, which
+The first step, `use-key-discriminated`,
 rewrites the pre-1.0 string form of `use:` (and `publishing.plugin`,
 `overrides[].plugin-use`) into the tagged reference shape documented
 in [config-format.md § Plugin resolution](config-format.md#plugin-resolution).
 The migrator preserves the legacy resolver's exact shape heuristic
 so a migrated config behaves identically: path-shaped strings become
 `path:`, everything else becomes `builtin:`.
+
+A second step, `schema-pointer-current`, keeps the config's schema
+pointers in step with the running dv. When the modeline (the first
+`# yaml-language-server: $schema=` comment in the config's leading block
+of comment, blank and `---` lines, before any YAML content) or the
+top-level `$schema`
+key names dv's published config schema for an **older** dv release
+(`https://jsr.io/@dv-cli/dv/<older>/schemas/config.json`), the step
+rewrites that URL to the running version's. Each pointer is checked on
+its own. Any other URL — a local path, another package, a custom host,
+or a newer dv release — is left untouched. The step rewrites only the block form of the key, `$schema: <url>` at
+the start of a line (the URL may be quoted); a quoted key
+(`"$schema": …`), `$schema :` or a flow mapping is left as written, and
+`dv validate`'s hint says to change it by hand. Changes report `path` as
+`# yaml-language-server` or `$schema`, `kind` as `schema-url`, `before`
+as the old URL and `value` as the new one. See
+[config-format.md § `$schema`](config-format.md#schema).
 
 | Flag        | Meaning                                                                                         |
 | ----------- | ----------------------------------------------------------------------------------------------- |
@@ -375,13 +436,18 @@ Exit code: `0` when every assignment resolved and discovered cleanly,
 
 ```
 dv plugin invoke <plugin> <op> [--package <name>] [--path <dir>]
-                 [--json '<payload>']
+                 [--repo-root <dir>] [--json '<payload>']
 ```
 
 Runs a single Op against a Plugin with controlled inputs — no repo, config,
 or Records required. Sets the env vars / stdin `dv` would set, prints the
 full exchange, and conformance-checks the response. The workhorse for
 iterating on one Op. See [plugin-contract.md](plugin-contract.md).
+
+The repo root (`DV_REPO_ROOT`, the Plugin's working directory, and the base
+for a relative Plugin path) is `--repo-root` when given; otherwise the git
+repo root containing the current directory, or the current directory itself
+outside a git repo.
 
 ```
 $ dv plugin invoke ./my-plugin read-version --package core --path packages/core
@@ -395,14 +461,16 @@ $ dv plugin invoke ./my-plugin read-version --package core --path packages/core
 ## `dv plugin verify`
 
 ```
-dv plugin verify <plugin>
+dv plugin verify <plugin> [--repo-root <dir>] [--glob <glob>]
 ```
 
 Automated conformance smoke test, CI-friendly. Checks the Plugin is
 resolvable and executable, that `discover` is present, that each declared Op
 returns contract-valid JSON (against the versioned per-op response schemas),
 and that bad input produces a non-zero exit. Run it in a Plugin's own
-pipeline to guard against contract drift.
+pipeline to guard against contract drift. The repo root defaults as for
+[`dv plugin invoke`](#dv-plugin-invoke): `--repo-root`, else the enclosing git
+repo root, else the current directory.
 
 ```
 $ dv plugin verify ./my-plugin

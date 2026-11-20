@@ -34,6 +34,7 @@ export async function invokeReadVersion(
   });
   const { rawStdout } = await invokeOp({
     resolvedPlugin: args.resolvedPlugin,
+    repoRootPath: args.repoRootPath,
     opName: "read-version",
     environmentVariables: childEnvironment,
     timeoutMs: args.timeoutMs,

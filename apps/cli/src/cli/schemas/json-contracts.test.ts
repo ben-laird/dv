@@ -92,7 +92,7 @@ for (const envelope of ENVELOPES) {
     // Given the committed schema file
     const committed = JSON.parse(
       await Deno.readTextFile(
-        resolve(REPO_ROOT, "specs/schemas", envelope.file),
+        resolve(REPO_ROOT, "apps/cli/schemas", envelope.file),
       ),
     ) as { $id?: string };
 

@@ -3,7 +3,7 @@ import { z } from "zod";
 // Zod schemas for `.dv/config.yaml` — the in-code source of truth
 // for shape, used by:
 //   1. loadConfig (runtime YAML validation, in parse.ts)
-//   2. `deno task schemas:generate` (emits specs/schemas/config.json,
+//   2. `deno task schemas:generate` (emits apps/cli/schemas/config.json,
 //      which IDEs consume for autocomplete)
 //
 // **Invariant:** these schemas describe *shape only* — no `.transform()`
@@ -337,7 +337,7 @@ export const rawConfigLayerSchema = z
       .string()
       .optional()
       .describe(
-        "Pointer to the dv config schema for editor autocomplete (e.g. ./specs/schemas/config.json or a published URL).",
+        "Pointer to the dv config schema for editor autocomplete and validation, e.g. https://jsr.io/@dv-cli/dv/<version>/schemas/config.json (dv init writes it).",
       ),
     extends: z
       .union([z.string(), z.array(z.string())])
