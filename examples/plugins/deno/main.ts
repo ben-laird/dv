@@ -812,7 +812,8 @@ function parseManifestText(text: string): Result<Record<string, unknown>> {
 // by splicing a new JSON string literal over the old one in `text`.
 // Everything else stays byte-identical. A missing final key is
 // inserted next to its siblings, copying their indentation. The
-// result is re-parsed to prove the edit is valid and landed.
+// result is re-parsed to prove the edit is valid and landed. With
+// duplicate keys the LAST one is edited: it is the one parsers keep.
 function setManifestString({
   text,
   path,
@@ -828,7 +829,7 @@ function setManifestString({
   }
   let container = root;
   for (const key of path.slice(0, -1)) {
-    const child = container.members.find((member) => member.key === key);
+    const child = container.members.findLast((member) => member.key === key);
     if (child === undefined || child.value.kind !== "object") {
       return { ok: false, error: `\`${key}\` is not an object` };
     }
@@ -839,7 +840,9 @@ function setManifestString({
     return { ok: false, error: "empty manifest path" };
   }
   const literal = JSON.stringify(value);
-  const existing = container.members.find((member) => member.key === finalKey);
+  const existing = container.members.findLast(
+    (member) => member.key === finalKey,
+  );
   let edited: string;
   if (existing === undefined) {
     edited = insertMember({ text, container, key: finalKey, literal });
@@ -867,7 +870,7 @@ function insertMember({
   literal: string;
 }): string {
   const member = `${JSON.stringify(key)}: ${literal}`;
-  const nameMember = container.members.find(
+  const nameMember = container.members.findLast(
     (candidate) => candidate.key === "name",
   );
   const anchor = nameMember ?? container.members.at(-1);

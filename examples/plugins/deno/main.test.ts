@@ -151,6 +151,28 @@ Deno.test("write-version edits deno.jsonc and keeps its comments", async () => {
   });
 });
 
+Deno.test("write-version edits the last of duplicate version keys, the one parsers keep", async () => {
+  await withTempDir(async (packageDir) => {
+    // Given: a manifest that repeats `version`; JSON(C) parsing keeps the last
+    const manifestPath = join(packageDir, "deno.json");
+    const original = `{\n\t"name": "@fixture/dupe",\n\t"version": "0.0.1",\n\t"version": "1.0.0"\n}\n`;
+    await Deno.writeTextFile(manifestPath, original);
+
+    // When: dv writes a new version
+    const outcome = await runOp({
+      op: "write-version",
+      env: { DV_PACKAGE_PATH: packageDir, DV_NEW_VERSION: "1.1.0" },
+    });
+
+    // Then: the effective (last) key changes and the shadowed one is untouched
+    assertEquals(outcome, { exitCode: 0, response: { ok: true } });
+    assertEquals(
+      await Deno.readTextFile(manifestPath),
+      original.replace('"1.0.0"', '"1.1.0"'),
+    );
+  });
+});
+
 Deno.test("update-dependency on a tab-indented deno.json changes only the constraint", async () => {
   await withTempDir(async (packageDir) => {
     // Given: a tab-indented manifest importing @fixture/core
