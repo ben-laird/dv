@@ -406,6 +406,42 @@ Deno.test("parseSubcommandArgv leaves optional-value spellings after `--` as wor
   assertEquals(parsed.flags.askOnCommit, undefined);
 });
 
+Deno.test("parseSubcommandArgv reads an optional-value flag whose name starts with no-", () => {
+  // Given an optional-value flag named like a negation
+  const flagSpecMap = {
+    "no-verify": { kind: "optional-value", values: ["hooks"] },
+  } as const satisfies Record<string, FlagSpec>;
+
+  // When it is written bare, with its value, and negated
+  const bare = parseOk({ flagSpecMap, subcommandArgv: ["--no-verify"] });
+  const attached = parseOk({
+    flagSpecMap,
+    subcommandArgv: ["--no-verify=hooks"],
+  });
+  const negated = parseOk({ flagSpecMap, subcommandArgv: ["--no-no-verify"] });
+
+  // Then each reads under its own name, never as an unknown flag
+  assertEquals(bare.flags["no-verify"], true);
+  assertEquals(attached.flags["no-verify"], "hooks");
+  assertEquals(negated.flags["no-verify"], false);
+});
+
+Deno.test("parseSubcommandArgv keeps a dotted optional-value name flat", () => {
+  // Given an optional-value flag whose name has a dot
+  const flagSpecMap = {
+    "cache.mode": { kind: "optional-value", values: ["off"] },
+  } as const satisfies Record<string, FlagSpec>;
+
+  // When it is given its value
+  const parsed = parseOk({
+    flagSpecMap,
+    subcommandArgv: ["--cache.mode=off"],
+  });
+
+  // Then the flags hold exactly that key, with no nested stray
+  assertEquals(parsed.flags, { "cache.mode": "off" });
+});
+
 Deno.test("parseSubcommandArgv accepts each of several declared values", () => {
   // Given an optional-value flag with three declared values
   const flagSpecMap = {

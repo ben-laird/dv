@@ -55,9 +55,9 @@ export function parseSubcommandArgv<TFlagMap extends Record<string, FlagSpec>>(
   const parsed = parseArgs(optionalValues.value.argv, {
     // `_` keeps every positional a string: parseArgs would otherwise turn
     // `007` into 7. The leaf knows its own types, so numbers are its call.
-    // Optional-value flags arrive as `--name=` placeholders (see
+    // Optional-value flags arrive as a name-free placeholder (see
     // readOptionalValueFlags); their real values are set below.
-    string: ["_", ...lowered.string, ...lowered.optionalValue],
+    string: ["_", ...lowered.string, OPTIONAL_VALUE_PLACEHOLDER_KEY],
     boolean: lowered.boolean,
     collect: lowered.collect,
     alias: lowered.alias,
@@ -83,12 +83,13 @@ export function parseSubcommandArgv<TFlagMap extends Record<string, FlagSpec>>(
   // under `string` above means every element is already a string.
   const argv = parsed._.map((token) => String(token));
 
-  // Strip `_` and any aliased single-char keys so `flags` only carries
-  // the declared full-name keys.
+  // Strip `_`, the placeholder, and any aliased single-char keys so
+  // `flags` only carries the declared full-name keys.
   const aliasedKeys = new Set(Object.keys(lowered.alias));
   const flagsObject: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(parsed)) {
     if (key === "_") continue;
+    if (key === OPTIONAL_VALUE_PLACEHOLDER_KEY) continue;
     if (aliasedKeys.has(key)) continue;
     flagsObject[key] = value;
   }
@@ -101,8 +102,8 @@ export function parseSubcommandArgv<TFlagMap extends Record<string, FlagSpec>>(
   };
 }
 
-// The one unchecked step: parseArgs returns an untyped record, and each
-// key's value was produced by the parser for that flag's declared kind.
+// The one unchecked step: the record holds parseArgs' values for its
+// declared kinds plus readOptionalValueFlags' values, each keyed by flag name.
 function asFlagsOf<TFlagMap extends Record<string, FlagSpec>>(
   flagsObject: Record<string, unknown>,
 ): FlagsOf<TFlagMap> {
@@ -115,7 +116,7 @@ interface ReadOptionalValueFlagsArgs {
 }
 
 interface OptionalValueReading {
-  /** argv with each optional-value spelling replaced by `--name=`. */
+  /** argv with each optional-value spelling replaced by the placeholder. */
   argv: string[];
   /** Each optional-value flag's last-written value. */
   values: Map<string, boolean | string>;
@@ -125,11 +126,18 @@ type ReadOptionalValueFlagsOutcome =
   | { ok: true; value: OptionalValueReading }
   | { ok: false; error: FlagParseError };
 
+// The key parseArgs sees in place of every optional-value spelling. It
+// carries no flag name, so a name with a `no-` prefix or a dot can't be
+// misread as a negation or a nested key; the space keeps it off any
+// name a CLI would declare.
+const OPTIONAL_VALUE_PLACEHOLDER_KEY = "clipc optional value";
+const OPTIONAL_VALUE_PLACEHOLDER = `--${OPTIONAL_VALUE_PLACEHOLDER_KEY}=`;
+
 // parseArgs has no optional attached value: told the flag is a string it
 // takes the next word, told it's a boolean it takes a next `true`/`false`.
 // So clipc reads `--x`, `--no-x` and `--x=<value>` itself. Each becomes a
-// `--x=` placeholder rather than vanishing, so a preceding `--title` still
-// sees a flag next and doesn't swallow the word after it.
+// placeholder rather than vanishing, so a preceding `--title` still sees
+// a flag next and doesn't swallow the word after it.
 function readOptionalValueFlags(
   args: ReadOptionalValueFlagsArgs,
 ): ReadOptionalValueFlagsOutcome {
@@ -156,7 +164,7 @@ function readOptionalValueFlags(
         return { ok: false, error: spelling.error };
       case "set":
         values.set(spelling.flagName, spelling.value);
-        argv.push(`--${spelling.flagName}=`);
+        argv.push(OPTIONAL_VALUE_PLACEHOLDER);
         break;
     }
   }
