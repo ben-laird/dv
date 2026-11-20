@@ -10,10 +10,10 @@
 # deno.json. apps/docs is intentionally name-less and is silently
 # skipped (specs/config-format.md § Matching rules).
 #
-# We use tools/dv-release/ (a repo-local copy + specialisation of the
-# example Deno plugin) rather than the example itself. The example's
-# `release` op is a stub for teaching; tools/dv-release runs a real
-# `deno publish`. The other ops are identical.
+# We use tools/dv-release/, a repo-local copy of the example Deno plugin
+# taken before #44. Since #44 the example also runs a real `deno publish`
+# and its other ops have moved on: in-place manifest edits, deno.jsonc,
+# workspace deps from the module graph, and skipping `"publish": false`.
 
 discovery:
   plugins:
