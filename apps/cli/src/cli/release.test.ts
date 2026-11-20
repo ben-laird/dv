@@ -153,13 +153,16 @@ Deno.exit(result.code);
   await Deno.mkdir(packageBDir, { recursive: true });
   const manifestPathA = join(packageADir, "deno.json");
   const manifestPathB = join(packageBDir, "deno.json");
+  // `publish: false` makes the example plugin's release op succeed
+  // without running `deno publish`, so these tests exercise dv's
+  // release orchestration rather than a real registry upload.
   await Deno.writeTextFile(
     manifestPathA,
-    `${JSON.stringify({ name: "pkg-a", version: args.initialVersionA ?? "1.0.0" }, null, 2)}\n`,
+    `${JSON.stringify({ name: "pkg-a", version: args.initialVersionA ?? "1.0.0", publish: false }, null, 2)}\n`,
   );
   await Deno.writeTextFile(
     manifestPathB,
-    `${JSON.stringify({ name: "pkg-b", version: args.initialVersionB ?? "1.0.0" }, null, 2)}\n`,
+    `${JSON.stringify({ name: "pkg-b", version: args.initialVersionB ?? "1.0.0", publish: false }, null, 2)}\n`,
   );
 
   if (args.changelogContentA !== undefined) {
@@ -705,6 +708,40 @@ Deno.exit(1);
     // Tags are still minted — publish failures DO NOT roll back tags
     // per specs/plugin-contract.md. This is the invariant that lets
     // `dv release --force` recover a partial failure without tag churn.
+    const tagsInRepo = await listTagsInRepo(fixture.repoRootPath);
+    assertEquals(tagsInRepo.sort(), ["pkg-a@1.0.0", "pkg-b@1.0.0"]);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+Deno.test("runRelease records an ok:false release response as a failure even when the op exits 0", async () => {
+  // Given: the release op reports a failed publish as data — the
+  // `{ ok: false, message }` + exit 0 shape the example plugin uses
+  const okFalseReleaseScript = `console.log(JSON.stringify({ ok: false, message: "simulated rejected publish" }));
+`;
+  const fixture = await setUpReleaseFixture({
+    releaseScriptOverride: okFalseReleaseScript,
+  });
+
+  try {
+    // When: dv release runs against both packages
+    const caughtError = await assertRejects(
+      () =>
+        runRelease({
+          force: false,
+          yes: true,
+          emitJson: false,
+          colorEnabled: false,
+        }),
+      DvError,
+    );
+
+    // Then: both outcomes count as failures and the tags stay minted
+    assertEquals(caughtError.kind.code, "release-partial-failure");
+    if (caughtError.kind.code === "release-partial-failure") {
+      assertEquals(caughtError.kind.context.failedCount, 2);
+    }
     const tagsInRepo = await listTagsInRepo(fixture.repoRootPath);
     assertEquals(tagsInRepo.sort(), ["pkg-a@1.0.0", "pkg-b@1.0.0"]);
   } finally {
