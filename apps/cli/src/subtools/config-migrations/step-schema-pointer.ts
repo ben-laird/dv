@@ -1,5 +1,10 @@
 import { lessThan, tryParse } from "@std/semver";
 import { publishedSchemaUrl } from "../../domain/published-schema.ts";
+import {
+  dvConfigSchemaVersion,
+  SCHEMA_KEY_PATTERN,
+  SCHEMA_MODELINE_PATTERN,
+} from "../config/schema-pointer.ts";
 import type {
   ConfigMigrationStep,
   ConfigMigrationStepApplyArgs,
@@ -23,12 +28,6 @@ export const MODELINE_CHANGE_PATH = "# yaml-language-server";
 export const SCHEMA_KEY_CHANGE_PATH = "$schema";
 /** The {@link MigrationChange.kind} this step reports. */
 export const SCHEMA_URL_CHANGE_KIND = "schema-url";
-
-const DV_CONFIG_SCHEMA_URL_PATTERN =
-  /^https:\/\/jsr\.io\/@dv-cli\/dv\/([^/\s]+)\/schemas\/config\.json$/;
-const MODELINE_PATTERN =
-  /^(\s*#\s*yaml-language-server:\s*\$schema=)(\S+)(\s*)$/;
-const SCHEMA_KEY_PATTERN = /^(\$schema:[ \t]*)(["']?)([^"'\s#]+)\2(.*)$/;
 
 /** Arguments to {@link createSchemaPointerStep}. */
 export interface CreateSchemaPointerStepArgs {
@@ -71,7 +70,7 @@ function rewriteSchemaPointers(
     schema: "config",
   });
   const isOlderDvSchemaUrl = (url: string): boolean => {
-    const versionText = DV_CONFIG_SCHEMA_URL_PATTERN.exec(url)?.[1];
+    const versionText = dvConfigSchemaVersion(url);
     const pointedSemVer =
       versionText === undefined ? undefined : tryParse(versionText);
     return (
@@ -90,7 +89,7 @@ function rewriteSchemaPointers(
   };
 
   const outputLines = args.text.split("\n").map((line) => {
-    const modelineMatch = MODELINE_PATTERN.exec(line);
+    const modelineMatch = SCHEMA_MODELINE_PATTERN.exec(line);
     if (modelineMatch) {
       const [, prefix = "", url = "", trailing = ""] = modelineMatch;
       if (!isOlderDvSchemaUrl(url)) return line;
