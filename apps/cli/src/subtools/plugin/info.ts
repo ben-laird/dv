@@ -29,6 +29,7 @@ const DEFAULT_INFO_TIMEOUT_MS = 30_000;
 
 export interface InvokeInfoArgs {
   resolvedPlugin: ResolvedPlugin;
+  repoRootPath: string;
   timeoutMs?: number;
   tracingHooks?: TracingHooks;
 }
@@ -37,8 +38,9 @@ export async function invokeInfo(args: InvokeInfoArgs): Promise<InfoResponse> {
   const { resolvedPlugin } = args;
   const { rawStdout } = await invokeOp({
     resolvedPlugin,
+    repoRootPath: args.repoRootPath,
     opName: "info",
-    environmentVariables: buildInfoEnvironment(),
+    environmentVariables: buildInfoEnvironment(args.repoRootPath),
     timeoutMs: args.timeoutMs ?? DEFAULT_INFO_TIMEOUT_MS,
     tracingHooks: args.tracingHooks,
   });
@@ -57,9 +59,10 @@ export async function invokeInfo(args: InvokeInfoArgs): Promise<InfoResponse> {
   return validatedResponse;
 }
 
-function buildInfoEnvironment(): Record<string, string> {
+function buildInfoEnvironment(repoRootPath: string): Record<string, string> {
   const childEnvironment: Record<string, string> = {
     PATH: Deno.env.get("PATH") ?? "",
+    DV_REPO_ROOT: repoRootPath,
   };
   const homeDirectory = Deno.env.get("HOME");
   if (homeDirectory) childEnvironment.HOME = homeDirectory;
@@ -125,6 +128,7 @@ export class PluginInfoCache {
   async getOrLoad(args: {
     pluginKey: string;
     resolvedPlugin: ResolvedPlugin;
+    repoRootPath: string;
     timeoutMs?: number;
     tracingHooks?: TracingHooks;
   }): Promise<InfoResponse> {
@@ -132,6 +136,7 @@ export class PluginInfoCache {
     if (cached !== undefined) return cached;
     const fresh = await invokeInfo({
       resolvedPlugin: args.resolvedPlugin,
+      repoRootPath: args.repoRootPath,
       timeoutMs: args.timeoutMs,
       tracingHooks: args.tracingHooks,
     });

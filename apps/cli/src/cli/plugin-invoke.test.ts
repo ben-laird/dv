@@ -1,5 +1,6 @@
 import { assertEquals, assertRejects } from "@std/assert";
 import { fromFileUrl, join, resolve } from "@std/path";
+import { z } from "zod";
 import { DvError } from "../domain/errors.ts";
 import { runPluginInvoke } from "./plugin-invoke.ts";
 
@@ -122,6 +123,81 @@ Deno.test("runPluginInvoke runs `read-version` and returns the parsed version", 
     assertEquals(parsed.version, "2.3.4");
   } finally {
     await fixture.cleanup();
+  }
+});
+
+Deno.test("runPluginInvoke without --repo-root, run from a subdirectory of a repo, uses the git repo root", async () => {
+  // Given a repo with one package and a cwd inside that package
+  const fixture = await setUpRepo({
+    packages: [{ name: "pkg-a", path: "packages/pkg-a", version: "1.0.0" }],
+  });
+  Deno.chdir(join(fixture.repoRootPath, "packages/pkg-a"));
+  try {
+    // When discover is invoked without --repo-root
+    const result = await silenceStdout(() =>
+      runPluginInvoke({
+        pluginPositional: fixture.pluginInvocation,
+        opName: "discover",
+        discoverGlob: "packages/*",
+        emitJson: false,
+        colorEnabled: false,
+      }),
+    );
+
+    // Then DV_REPO_ROOT is the repo root and discover found the package
+    assertEquals(
+      await Deno.realPath(result.environmentVariables.DV_REPO_ROOT ?? ""),
+      await Deno.realPath(fixture.repoRootPath),
+    );
+    assertEquals(
+      z
+        .object({ packages: z.array(z.object({ name: z.string() })) })
+        .parse(result.parsedResponse)
+        .packages.map((discovered) => discovered.name),
+      ["pkg-a"],
+    );
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+Deno.test("runPluginInvoke without --repo-root, run outside a git repo, uses the cwd", async () => {
+  // Given a directory that is not a git repo, holding one package
+  const outsidePath = await Deno.realPath(
+    await Deno.makeTempDir({ prefix: "dv-plugin-invoke-no-repo-" }),
+  );
+  await Deno.mkdir(join(outsidePath, "packages/pkg-a"), { recursive: true });
+  await Deno.writeTextFile(
+    join(outsidePath, "packages/pkg-a/deno.json"),
+    `${JSON.stringify({ name: "pkg-a", version: "1.0.0" })}\n`,
+  );
+  const previousWorkingDirectory = Deno.cwd();
+  const realPluginMainPath = resolve(
+    fromFileUrl(new URL(".", import.meta.url)),
+    "../../../../examples/plugins/deno/main.ts",
+  );
+  Deno.chdir(outsidePath);
+  try {
+    // When discover is invoked there without --repo-root
+    const result = await silenceStdout(() =>
+      runPluginInvoke({
+        pluginPositional: `run:deno run -A ${realPluginMainPath}`,
+        opName: "discover",
+        discoverGlob: "packages/*",
+        emitJson: false,
+        colorEnabled: false,
+      }),
+    );
+
+    // Then DV_REPO_ROOT falls back to the cwd
+    assertEquals(
+      await Deno.realPath(result.environmentVariables.DV_REPO_ROOT ?? ""),
+      outsidePath,
+    );
+    assertEquals(result.conformant, true);
+  } finally {
+    Deno.chdir(previousWorkingDirectory);
+    await Deno.remove(outsidePath, { recursive: true });
   }
 });
 

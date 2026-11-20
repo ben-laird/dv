@@ -1,6 +1,7 @@
 import { DvError } from "../domain/errors.ts";
 import { SCHEMA_URNS } from "../domain/schema-urns.ts";
 import { resolvePlugin } from "../subtools/discovery/resolve.ts";
+import { findRepoRootOrCwd } from "../subtools/git/mod.ts";
 import {
   invokeInfo,
   invokeOp,
@@ -40,7 +41,7 @@ const BOGUS_OP_NAME = "__dv_plugin_verify_bogus__";
 export interface RunPluginVerifyOptions {
   /** Plugin positional: a name to resolve, or a path to the executable. */
   pluginPositional: string;
-  /** Repo root the plugin resolves against; defaults to `Deno.cwd()`. */
+  /** Repo root the plugin resolves against; defaults to the git repo root, or the cwd outside a repo. */
   repoRoot?: string;
   /** Glob passed to the `discover` Op; defaults to `*`. */
   discoverGlob?: string;
@@ -93,7 +94,7 @@ export async function runPluginVerify(
   const pluginReference = parsePluginPositional({
     rawPositional: options.pluginPositional,
   });
-  const repoRootPath = options.repoRoot ?? Deno.cwd();
+  const repoRootPath = options.repoRoot ?? (await findRepoRootOrCwd());
   const resolvedPlugin = await resolvePlugin({
     pluginReference,
     repoRootPath,
@@ -116,6 +117,7 @@ export async function runPluginVerify(
   try {
     const infoResponse = await invokeInfo({
       resolvedPlugin,
+      repoRootPath,
       timeoutMs: opTimeoutMs,
       tracingHooks,
     });
@@ -156,6 +158,7 @@ export async function runPluginVerify(
     try {
       const discoverInvocation = await invokeOp({
         resolvedPlugin,
+        repoRootPath,
         opName: "discover",
         environmentVariables: buildVerifyEnvironment({
           repoRootPath,
@@ -199,6 +202,7 @@ export async function runPluginVerify(
         try {
           const readVersionInvocation = await invokeOp({
             resolvedPlugin,
+            repoRootPath,
             opName: "read-version",
             environmentVariables: buildVerifyEnvironment({
               repoRootPath,
@@ -255,6 +259,7 @@ export async function runPluginVerify(
     try {
       const finalizeInvocation = await invokeOp({
         resolvedPlugin,
+        repoRootPath,
         opName: "finalize",
         environmentVariables: buildVerifyEnvironment({
           repoRootPath,
@@ -311,6 +316,7 @@ export async function runPluginVerify(
         try {
           const getDependenciesInvocation = await invokeOp({
             resolvedPlugin,
+            repoRootPath,
             opName: "get-dependencies",
             environmentVariables: buildVerifyEnvironment({
               repoRootPath,
@@ -361,6 +367,7 @@ export async function runPluginVerify(
   try {
     await invokeOp({
       resolvedPlugin,
+      repoRootPath,
       opName: BOGUS_OP_NAME,
       environmentVariables: buildVerifyEnvironment({ repoRootPath }),
       timeoutMs: opTimeoutMs,

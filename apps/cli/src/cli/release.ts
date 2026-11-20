@@ -163,6 +163,7 @@ export async function runRelease(
   // and matches the pattern in version.ts / v1.ts.
   const pluginInfoCache = await loadInfoForAllPlugins({
     resolvedPluginsByKey: resolvedPluginsByUseString,
+    repoRootPath,
     timeoutMs: DEFAULT_FAST_OP_TIMEOUT_MS,
     tracingHooks,
   });

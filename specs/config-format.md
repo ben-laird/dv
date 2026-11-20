@@ -179,6 +179,11 @@ discovery:
   command substitution (`` `cmd` ``) are deliberately not performed
   — `run:` is a tokenized invocation, not a shell line.
 
+  dv spawns every plugin with the repo root as its working directory
+  (`plugin-contract.md` § Invocation), so a relative path inside a
+  `run:` string (`deno run -A ./tools/my-plugin/main.ts`) resolves
+  against the repo root, whatever directory `dv` was run from.
+
 Setting more than one key on the same `use:` is a config error
 (`config-shape`). The "exactly one of" rule is enforced by the Zod
 schema before any resolution runs.

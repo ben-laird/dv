@@ -72,6 +72,7 @@ echo '{"version":"1.2.3"}'
       // When invokeOp runs with recording tracing hooks
       const result = await invokeOp({
         resolvedPlugin,
+        repoRootPath: Deno.cwd(),
         opName: "read-version",
         environmentVariables: { DV_PACKAGE_NAME: "foo" },
         tracingHooks: makeRecordingHooks(recordedEvents),
@@ -120,6 +121,7 @@ exit 3
       try {
         await invokeOp({
           resolvedPlugin,
+          repoRootPath: Deno.cwd(),
           opName: "discover",
           tracingHooks: makeRecordingHooks(recordedEvents),
         });
@@ -159,6 +161,7 @@ Deno.test("tracing hooks fire error when the plugin executable is not found", as
   try {
     await invokeOp({
       resolvedPlugin,
+      repoRootPath: Deno.cwd(),
       opName: "discover",
       tracingHooks: makeRecordingHooks(recordedEvents),
     });

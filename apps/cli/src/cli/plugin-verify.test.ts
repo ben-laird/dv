@@ -104,6 +104,75 @@ Deno.test("runPluginVerify reports PASS against the example deno plugin with a d
   }
 });
 
+Deno.test("runPluginVerify without --repo-root, run from a subdirectory of a repo, verifies against the git repo root", async () => {
+  // Given a repo with one package and a cwd inside that package
+  const fixture = await setUpRepo({
+    packages: [{ name: "pkg-a", path: "packages/pkg-a", version: "1.0.0" }],
+  });
+  Deno.chdir(join(fixture.repoRootPath, "packages/pkg-a"));
+  try {
+    // When verify runs without --repo-root
+    const result = await silenceStdout(() =>
+      runPluginVerify({
+        pluginPositional: fixture.pluginInvocation,
+        discoverGlob: "packages/*",
+        emitJson: false,
+        colorEnabled: false,
+      }),
+    );
+
+    // Then discover ran against the repo root, so the package was
+    // found and its read-version check ran and passed
+    assertEquals(result.failedCount, 0);
+    const readVersionCheck = result.checks.find((check) =>
+      check.name.startsWith("read-version["),
+    );
+    assertEquals(readVersionCheck?.outcome, "pass");
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+Deno.test("runPluginVerify without --repo-root, run outside a git repo, verifies against the cwd", async () => {
+  // Given a directory that is not a git repo, holding one package
+  const outsidePath = await Deno.realPath(
+    await Deno.makeTempDir({ prefix: "dv-plugin-verify-no-repo-" }),
+  );
+  await Deno.mkdir(join(outsidePath, "packages/pkg-a"), { recursive: true });
+  await Deno.writeTextFile(
+    join(outsidePath, "packages/pkg-a/deno.json"),
+    `${JSON.stringify({ name: "pkg-a", version: "1.0.0" })}\n`,
+  );
+  const previousWorkingDirectory = Deno.cwd();
+  const realPluginMainPath = resolve(
+    fromFileUrl(new URL(".", import.meta.url)),
+    "../../../../examples/plugins/deno/main.ts",
+  );
+  Deno.chdir(outsidePath);
+  try {
+    // When verify runs there without --repo-root
+    const result = await silenceStdout(() =>
+      runPluginVerify({
+        pluginPositional: `run:deno run -A ${realPluginMainPath}`,
+        discoverGlob: "packages/*",
+        emitJson: false,
+        colorEnabled: false,
+      }),
+    );
+
+    // Then the cwd served as the root: the package was discovered and
+    // its read-version check passed
+    assertEquals(result.failedCount, 0);
+    const readVersionCheck = result.checks.find((check) =>
+      check.name.startsWith("read-version["),
+    );
+    assertEquals(readVersionCheck?.outcome, "pass");
+  } finally {
+    Deno.chdir(previousWorkingDirectory);
+    await Deno.remove(outsidePath, { recursive: true });
+  }
+});
+
 Deno.test("runPluginVerify reports read-version as skipped when discover returns no packages", async () => {
   // Given a fixture with no packages — discover succeeds (empty
   // list), which means read-version has nothing to exercise

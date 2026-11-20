@@ -193,6 +193,7 @@ export async function runV1(options: RunV1Options): Promise<RunV1Result> {
   });
   const pluginInfoCache = await loadInfoForAllPlugins({
     resolvedPluginsByKey: resolvedPluginsByUseString,
+    repoRootPath,
     timeoutMs: DEFAULT_FAST_OP_TIMEOUT_MS,
     tracingHooks,
   });
@@ -909,6 +910,7 @@ export async function runV1Catalog(
   // used in catalog mode, but the up-front check matters.
   await loadInfoForAllPlugins({
     resolvedPluginsByKey: resolvedPluginsByUseString,
+    repoRootPath,
     timeoutMs: DEFAULT_FAST_OP_TIMEOUT_MS,
     tracingHooks,
   });

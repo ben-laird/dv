@@ -73,6 +73,7 @@ export async function invokeFinalize(
 
   const { rawStdout } = await invokeOp({
     resolvedPlugin: args.resolvedPlugin,
+    repoRootPath: args.repoRootPath,
     opName: "finalize",
     environmentVariables: childEnvironment,
     timeoutMs: args.timeoutMs,

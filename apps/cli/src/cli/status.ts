@@ -214,6 +214,7 @@ async function computeDependencyEdgesLeniently(
     });
     const pluginInfoCache = await loadInfoForAllPlugins({
       resolvedPluginsByKey: resolvedPluginsByUseString,
+      repoRootPath: args.repoRootPath,
       timeoutMs: DEFAULT_FAST_OP_TIMEOUT_MS,
       tracingHooks: args.tracingHooks,
     });
