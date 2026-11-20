@@ -3,6 +3,22 @@
 // the step registry (which would create a cycle: steps.ts imports
 // each step, each step imports the types).
 
+/** One registered config migration step (see steps.ts). */
+export interface ConfigMigrationStep {
+  /**
+   * Stable identifier, kebab-case. Used in `--json` output and in human
+   * summaries so users can correlate a change to its step.
+   */
+  id: string;
+  /** One-line human description, used by the CLI's summary. */
+  description: string;
+  /**
+   * Pure function: text in, text + change-list out. A step that doesn't
+   * detect its legacy shape returns `changes: []` and the text unchanged.
+   */
+  apply(args: ConfigMigrationStepApplyArgs): ConfigMigrationStepApplyResult;
+}
+
 /** Arguments to a migration step's `apply`. */
 export interface ConfigMigrationStepApplyArgs {
   /** The config text fed to the step. */
