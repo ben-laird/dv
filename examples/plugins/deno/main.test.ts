@@ -173,6 +173,109 @@ Deno.test("write-version edits the last of duplicate version keys, the one parse
   });
 });
 
+Deno.test("write-version skips over strings with escapes and brackets", async () => {
+  await withTempDir(async (packageDir) => {
+    // Given: a string ahead of `version` holding escaped quotes,
+    // backslashes, brackets and comment-like text
+    const manifestPath = join(packageDir, "deno.json");
+    const original = `{\n\t"name": "@fixture/escapes",\n\t"description": "a \\"quoted\\" \\\\ path }{ ][ // not a comment",\n\t"version": "1.0.0"\n}\n`;
+    await Deno.writeTextFile(manifestPath, original);
+
+    // When: dv writes a new version
+    const outcome = await runOp({
+      op: "write-version",
+      env: { DV_PACKAGE_PATH: packageDir, DV_NEW_VERSION: "1.0.1" },
+    });
+
+    // Then: only the version value changed
+    assertEquals(outcome, { exitCode: 0, response: { ok: true } });
+    assertEquals(
+      await Deno.readTextFile(manifestPath),
+      original.replace('"1.0.0"', '"1.0.1"'),
+    );
+  });
+});
+
+Deno.test("write-version edits the top-level version, not a nested one", async () => {
+  await withTempDir(async (packageDir) => {
+    // Given: a nested `version` key ahead of the top-level one
+    const manifestPath = join(packageDir, "deno.json");
+    const original = `{\n\t"name": "@fixture/nested",\n\t"tasks": { "version": "deno run version.ts" },\n\t"version": "1.0.0"\n}\n`;
+    await Deno.writeTextFile(manifestPath, original);
+
+    // When: dv writes a new version
+    const outcome = await runOp({
+      op: "write-version",
+      env: { DV_PACKAGE_PATH: packageDir, DV_NEW_VERSION: "2.0.0" },
+    });
+
+    // Then: the task is untouched and the top-level version moved
+    assertEquals(outcome, { exitCode: 0, response: { ok: true } });
+    assertEquals(
+      await Deno.readTextFile(manifestPath),
+      original.replace('"1.0.0"', '"2.0.0"'),
+    );
+  });
+});
+
+Deno.test("write-version inserts a top-level version when only a nested one exists", async () => {
+  await withTempDir(async (packageDir) => {
+    // Given: no top-level version, but a nested `version` key
+    const manifestPath = join(packageDir, "deno.json");
+    await Deno.writeTextFile(
+      manifestPath,
+      `{\n\t"name": "@fixture/nested",\n\t"tasks": { "version": "deno run version.ts" }\n}\n`,
+    );
+
+    // When: dv writes the first version
+    const outcome = await runOp({
+      op: "write-version",
+      env: { DV_PACKAGE_PATH: packageDir, DV_NEW_VERSION: "0.1.0" },
+    });
+
+    // Then: a top-level version is added after name; the task is untouched
+    assertEquals(outcome, { exitCode: 0, response: { ok: true } });
+    assertEquals(
+      await Deno.readTextFile(manifestPath),
+      `{\n\t"name": "@fixture/nested",\n\t"version": "0.1.0",\n\t"tasks": { "version": "deno run version.ts" }\n}\n`,
+    );
+  });
+});
+
+Deno.test("write-version keeps CRLF line endings when editing and inserting", async () => {
+  await withTempDir(async (packageDir) => {
+    // Given: two CRLF manifests, one with a version and one without
+    const withVersionDir = join(packageDir, "with");
+    const withoutVersionDir = join(packageDir, "without");
+    await Deno.mkdir(withVersionDir);
+    await Deno.mkdir(withoutVersionDir);
+    const withVersion = `{\r\n\t"name": "@fixture/crlf",\r\n\t"version": "1.0.0"\r\n}\r\n`;
+    await Deno.writeTextFile(join(withVersionDir, "deno.json"), withVersion);
+    await Deno.writeTextFile(
+      join(withoutVersionDir, "deno.json"),
+      `{\r\n\t"name": "@fixture/crlf",\r\n\t"exports": "./mod.ts"\r\n}\r\n`,
+    );
+
+    // When: dv writes a version into each
+    for (const targetDir of [withVersionDir, withoutVersionDir]) {
+      await runOp({
+        op: "write-version",
+        env: { DV_PACKAGE_PATH: targetDir, DV_NEW_VERSION: "1.2.0" },
+      });
+    }
+
+    // Then: both files keep CRLF, including the inserted line
+    assertEquals(
+      await Deno.readTextFile(join(withVersionDir, "deno.json")),
+      withVersion.replace('"1.0.0"', '"1.2.0"'),
+    );
+    assertEquals(
+      await Deno.readTextFile(join(withoutVersionDir, "deno.json")),
+      `{\r\n\t"name": "@fixture/crlf",\r\n\t"version": "1.2.0",\r\n\t"exports": "./mod.ts"\r\n}\r\n`,
+    );
+  });
+});
+
 Deno.test("update-dependency on a tab-indented deno.json changes only the constraint", async () => {
   await withTempDir(async (packageDir) => {
     // Given: a tab-indented manifest importing @fixture/core
@@ -325,6 +428,50 @@ Deno.test("get-dependencies unions import-map entries with module-graph edges", 
       ok: true,
       dependencies: ["@fixture/b", "@fixture/c"],
     });
+  });
+});
+
+Deno.test("get-dependencies matches jsr:/npm: import-map entries and ignores registry imports in source", async () => {
+  await withTempDir(async (repoRoot) => {
+    // Given: a maps b through npm: and c through jsr:, and its source
+    // also pulls registry modules that are never workspace members
+    await writeWorkspaceFixture(repoRoot);
+    await Deno.writeTextFile(
+      join(repoRoot, "packages", "a", "deno.json"),
+      `${JSON.stringify(
+        {
+          name: "@fixture/a",
+          version: "1.0.0",
+          exports: "./mod.ts",
+          imports: {
+            "@fixture/b": "npm:@fixture/b@^1.0.0",
+            "@fixture/c": "jsr:@fixture/c@^1.0.0",
+            "@std/path": "jsr:@std/path@^1",
+          },
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    await Deno.writeTextFile(
+      join(repoRoot, "packages", "a", "mod.ts"),
+      `import { join } from "jsr:@std/path@^1";\nimport chalk from "npm:chalk@5";\nexport const a = join("x") + String(chalk);\n`,
+    );
+
+    // When: dv asks which candidates a depends on
+    const { outcome, stderr } = await runOpCapturingStderr({
+      op: "get-dependencies",
+      env: getDependenciesEnv({ repoRoot, member: "a" }),
+      stdin: { candidates: ["@fixture/b", "@fixture/c"] },
+    });
+
+    // Then: both mapped members are reported, registry modules are
+    // skipped without tripping the broken-graph fallback
+    assertEquals(outcome, {
+      exitCode: 0,
+      response: { ok: true, dependencies: ["@fixture/b", "@fixture/c"] },
+    });
+    assertEquals(stderr.includes("warning"), false);
   });
 });
 
