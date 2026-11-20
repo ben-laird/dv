@@ -118,8 +118,10 @@ async function runReadVersion(): Promise<void> {
   // documented "no version yet" default. dv's algebra treats
   // 0.0.0 as Unstable.
   const version = manifest.value.parsed.version;
-  const reportedVersion =
-    typeof version === "string" && version.length > 0 ? version : "0.0.0";
+  let reportedVersion = "0.0.0";
+  if (typeof version === "string" && version.length > 0) {
+    reportedVersion = version;
+  }
   console.log(JSON.stringify({ version: reportedVersion }));
 }
 
@@ -144,8 +146,9 @@ async function runWriteVersion(): Promise<void> {
     path: ["version"],
     value: newVersion,
   });
-  if (!edited.ok)
+  if (!edited.ok) {
     failWith(`cannot edit ${manifest.value.path}: ${edited.error}`);
+  }
   await Deno.writeTextFile(manifest.value.path, edited.value);
   console.log(JSON.stringify({ ok: true }));
 }
@@ -163,21 +166,17 @@ async function runUpdateDependency(): Promise<void> {
   // without a payload, so we only read stdin on ops that expect it.
   const payload = await readStdinJson();
   if (!payload.ok) failWith(payload.error);
-  const dependencyName = isRecord(payload.value)
-    ? payload.value.dependency
-    : undefined;
-  const newVersion = isRecord(payload.value)
-    ? payload.value.new_version
-    : undefined;
+  const payloadFields = isRecord(payload.value) ? payload.value : {};
+  const dependencyName = payloadFields.dependency;
+  const newVersion = payloadFields.new_version;
   if (typeof dependencyName !== "string" || typeof newVersion !== "string") {
     failWith("stdin payload missing `dependency` or `new_version`");
   }
   const manifest = await readManifest(packagePath);
   if (!manifest.ok) failWith(manifest.error);
-  const importsMap = manifest.value.parsed.imports;
-  const originalSpecifier = isRecord(importsMap)
-    ? importsMap[dependencyName]
-    : undefined;
+  const rawImports = manifest.value.parsed.imports;
+  const importsMap = isRecord(rawImports) ? rawImports : {};
+  const originalSpecifier = importsMap[dependencyName];
   if (typeof originalSpecifier !== "string") {
     // No-op path of the cascade: this dependent doesn't import the
     // bumped package through its import map. dv's plan-builder
@@ -198,8 +197,9 @@ async function runUpdateDependency(): Promise<void> {
     path: ["imports", dependencyName],
     value: rewrittenSpecifier,
   });
-  if (!edited.ok)
+  if (!edited.ok) {
     failWith(`cannot edit ${manifest.value.path}: ${edited.error}`);
+  }
   await Deno.writeTextFile(manifest.value.path, edited.value);
   console.log(JSON.stringify({ ok: true, changed: true }));
 }
@@ -236,8 +236,8 @@ function rewriteSpecifierVersion({
   // Default to caret for unrecognized prefixes (covers the empty-
   // prefix "exact pin" case too — we widen to caret since dv
   // versions are semantically a moving target).
-  const preservedPrefix =
-    rangePrefix === "^" || rangePrefix === "~" ? rangePrefix : "^";
+  const keepsRangePrefix = rangePrefix === "^" || rangePrefix === "~";
+  const preservedPrefix = keepsRangePrefix ? rangePrefix : "^";
   return `${prefixBeforeAt}@${preservedPrefix}${nextVersion}`;
 }
 
@@ -276,9 +276,8 @@ async function runGetDependencies(): Promise<void> {
   // this package depends on.
   const payload = await readStdinJson();
   if (!payload.ok) failWith(payload.error);
-  const candidates = isRecord(payload.value)
-    ? payload.value.candidates
-    : undefined;
+  const payloadFields = isRecord(payload.value) ? payload.value : {};
+  const candidates = payloadFields.candidates;
   if (!Array.isArray(candidates)) {
     failWith("stdin payload missing `candidates` array");
   }
@@ -615,24 +614,20 @@ async function runFinalize(): Promise<void> {
   // startup); that drift is invisible to a before/after-install diff
   // but still must ship in the version commit. Reporting against HEAD
   // closes that blind spot while staying churn-free for an in-sync lock.
-  const additionalChangedFiles = (await differsFromHead({
+  const lockfileDiffersFromHead = await differsFromHead({
     repoRoot,
     relativePath: "deno.lock",
-  }))
-    ? ["deno.lock"]
-    : [];
-  console.log(
-    JSON.stringify({
-      ok: true,
-      additionalChangedFiles,
-      message:
-        additionalChangedFiles.length > 0
-          ? installMovedLockfile
-            ? "refreshed deno.lock"
-            : "deno.lock was out of sync with HEAD"
-          : "deno.lock already up to date",
-    }),
-  );
+  });
+  const additionalChangedFiles = lockfileDiffersFromHead ? ["deno.lock"] : [];
+  let message = "deno.lock already up to date";
+  if (lockfileDiffersFromHead) {
+    if (installMovedLockfile) {
+      message = "refreshed deno.lock";
+    } else {
+      message = "deno.lock was out of sync with HEAD";
+    }
+  }
+  console.log(JSON.stringify({ ok: true, additionalChangedFiles, message }));
 }
 
 // True if `relativePath` differs from its committed (HEAD) content.
@@ -804,9 +799,10 @@ function insertMember({
   literal: string;
 }): string {
   const member = `${JSON.stringify(key)}: ${literal}`;
-  const anchor =
-    container.members.find((candidate) => candidate.key === "name") ??
-    container.members[container.members.length - 1];
+  const nameMember = container.members.find(
+    (candidate) => candidate.key === "name",
+  );
+  const anchor = nameMember ?? container.members.at(-1);
   if (anchor === undefined) {
     const openingBrace = container.span.start + 1;
     return `${text.slice(0, openingBrace)} ${member} ${text.slice(container.span.end - 1)}`;
@@ -868,6 +864,7 @@ type JsoncNode =
   | { kind: "array"; span: Span }
   | { kind: "string"; span: Span }
   | { kind: "literal"; span: Span };
+// {}
 
 function scanJsonc(text: string): JsoncNode {
   let position = 0;
