@@ -4,6 +4,16 @@ All notable changes to this Package are documented in this file. The
 format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this Package adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.12.0] - 2026-11-20
+
+### Changed
+
+- **BREAKING** `deno install jsr:@dv-cli/dv` installs a working `dv`; the library moves to `@dv-cli/dv/lib` ([link](https://github.com/ben-laird/dv/issues/45))
+
+### Fixed
+
+- `dv --version` reports the installed version ([link](https://github.com/ben-laird/dv/issues/43))
+
 ## [0.11.0] - 2026-06-08
 
 ### Added

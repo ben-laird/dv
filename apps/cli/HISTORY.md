@@ -5,6 +5,35 @@ one h3 subsection per Record consumed during that release, with the
 Record's body prose verbatim. For terse one-line bullets, see
 CHANGELOG.md.
 
+## [0.12.0] - 2026-11-20
+
+### `deno install jsr:@dv-cli/dv` installs a working `dv`; the library moves to `@dv-cli/dv/lib`
+
+The package's default export was the library module, which never ran the CLI,
+so `deno install jsr:@dv-cli/dv` produced a binary that exited 0 and did
+nothing. The default export is now the CLI entry point, so the documented
+install command yields a working `dv`.
+
+**Breaking:** everything else the bare specifier used to export moves to the
+`./lib` export: the `run*` command runners, the `PLUGIN_OP_NAMES`,
+`CHANGE_TYPES`, `SCHEMA_URNS` and `SCHEMA_URN_MAJOR` constants, and all the
+exported types (runner options and results, the `Plan` contract types, and the
+domain types they reference). Update those imports from `@dv-cli/dv` to
+`@dv-cli/dv/lib`:
+
+```ts
+import { runStatus, type Plan } from "@dv-cli/dv/lib";
+```
+
+`main` is unaffected: it is still exported from `@dv-cli/dv`, and also from
+`@dv-cli/dv/lib`.
+
+### `dv --version` reports the installed version
+
+`dv --version` and the `dv status` banner printed a stale, hand-maintained
+`0.1.0` regardless of the installed release. dv now reads its version from its
+own package manifest, so both always match the published version.
+
 ## [0.11.0] - 2026-06-08
 
 ### Expose release notes in dv release --json
