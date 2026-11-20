@@ -391,6 +391,29 @@ Deno.test("release reports a failed publish as data, not a crash", async () => {
   });
 });
 
+Deno.test("release failure messages carry no ANSI escape codes", async () => {
+  await withTempDir(async (packageDir) => {
+    // Given: a publish command whose stderr Deno would colour
+    await Deno.writeTextFile(
+      join(packageDir, "deno.json"),
+      `{\n\t"name": "@fixture/lib",\n\t"version": "1.0.0"\n}\n`,
+    );
+
+    // When: dv fires the release op and the command fails
+    const outcome = await runOp({
+      op: "release",
+      env: {
+        ...releaseEnv({ packageDir, packageName: "@fixture/lib" }),
+        DENO_PLUGIN_PUBLISH_COMMAND: JSON.stringify(FAILING_PUBLISH_COMMAND),
+      },
+    });
+
+    // Then: the message dv records (and prints in --json) is plain text
+    const response = isRecord(outcome.response) ? outcome.response : {};
+    assertEquals(String(response.message).includes("\u001b"), false);
+  });
+});
+
 Deno.test("release reports a successful publish as published", async () => {
   await withTempDir(async (packageDir) => {
     // Given: a publishable member whose publish command succeeds
@@ -420,11 +443,12 @@ Deno.test("release reports a successful publish as published", async () => {
   });
 });
 
-// Stands in for a `deno publish` the registry rejects.
+// Stands in for a `deno publish` the registry rejects. An uncaught
+// error makes Deno print a coloured "error:" line unless NO_COLOR.
 const FAILING_PUBLISH_COMMAND = [
   "deno",
   "eval",
-  "console.error('simulated publish failure'); Deno.exit(1);",
+  "throw new Error('simulated publish failure');",
 ];
 
 function releaseEnv({

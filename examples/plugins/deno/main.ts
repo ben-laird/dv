@@ -371,6 +371,8 @@ async function localModulesOf({
         entryPoint,
       ],
       cwd: packageDir,
+      // Plain-text errors: they end up in our error/warning messages.
+      env: { NO_COLOR: "1" },
       stdout: "piped",
       stderr: "piped",
       signal,
@@ -527,6 +529,9 @@ async function runRelease(): Promise<void> {
     publishResult = await new Deno.Command(executable, {
       args: publishArgs,
       cwd: packagePath,
+      // Deno colours stderr even when piped; keep escape codes out of
+      // the message dv records and prints with --json.
+      env: { NO_COLOR: "1" },
       stdout: "piped",
       stderr: "piped",
     }).output();
