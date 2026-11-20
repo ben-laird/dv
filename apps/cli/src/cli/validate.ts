@@ -96,25 +96,28 @@ export async function runValidate(
 ): Promise<RunValidateResult> {
   const repoRootPath = await requireRepoRoot();
   const validationProblems: ValidationProblem[] = [];
-  const tracingHooks: TracingHooks | undefined = options.debug
-    ? makeStderrTracingHooks({ colorEnabled: options.colorEnabled })
-    : undefined;
+  let tracingHooks: TracingHooks | undefined;
+  if (options.debug) {
+    tracingHooks = makeStderrTracingHooks({
+      colorEnabled: options.colorEnabled,
+    });
+  }
 
   const loadedConfigOrNull = await tryLoadConfig({
     repoRootPath,
     validationProblems,
   });
-  const validationWarnings = loadedConfigOrNull
-    ? await readSchemaPointerWarnings({ repoRootPath })
-    : [];
-  const discoveredPackageNames = loadedConfigOrNull
-    ? await tryDiscoverPackages({
-        config: loadedConfigOrNull,
-        repoRootPath,
-        validationProblems,
-        tracingHooks,
-      })
-    : new Set<string>();
+  let validationWarnings: ValidationWarning[] = [];
+  let discoveredPackageNames = new Set<string>();
+  if (loadedConfigOrNull) {
+    validationWarnings = await readSchemaPointerWarnings({ repoRootPath });
+    discoveredPackageNames = await tryDiscoverPackages({
+      config: loadedConfigOrNull,
+      repoRootPath,
+      validationProblems,
+      tracingHooks,
+    });
+  }
 
   const renameLedger = await tryLoadRenameLedger({
     repoRootPath,
@@ -148,13 +151,13 @@ export async function runValidate(
       const resolvedReference =
         renameResolver.resolve(packageReference) ?? packageReference;
       if (!discoveredPackageNames.has(resolvedReference)) {
+        let renameNote = "";
+        if (resolvedReference !== packageReference) {
+          renameNote = ` (resolved through renames to '${resolvedReference}')`;
+        }
         validationProblems.push({
           code: "unresolved-reference",
-          message:
-            `record references unknown package '${packageReference}'` +
-            (resolvedReference !== packageReference
-              ? ` (resolved through renames to '${resolvedReference}')`
-              : ""),
+          message: `record references unknown package '${packageReference}'${renameNote}`,
           source: parsedRecord.filename,
         });
       }
@@ -419,25 +422,24 @@ interface RenderHumanReportArgs {
 function renderHumanReport(args: RenderHumanReportArgs): void {
   const checkMark = args.colorEnabled ? "\x1b[32m✓\x1b[39m" : "✓";
   const crossMark = args.colorEnabled ? "\x1b[31m✗\x1b[39m" : "✗";
-  const dim = (text: string) =>
-    args.colorEnabled ? `\x1b[2m${text}\x1b[22m` : text;
+  const dim = (text: string): string => {
+    return args.colorEnabled ? `\x1b[2m${text}\x1b[22m` : text;
+  };
+  const sourceSuffixFor = (source: string | undefined): string => {
+    return source ? ` ${dim(source)}` : "";
+  };
 
   const warningMark = args.colorEnabled ? "\x1b[33m⚠\x1b[39m" : "⚠";
-  console.log(
-    `${args.report.ok ? checkMark : crossMark} ${validationSummary(args.report)}`,
-  );
+  const statusMark = args.report.ok ? checkMark : crossMark;
+  console.log(`${statusMark} ${validationSummary(args.report)}`);
   for (const reportProblem of args.report.problems) {
-    const sourceSuffix = reportProblem.source
-      ? ` ${dim(reportProblem.source)}`
-      : "";
+    const sourceSuffix = sourceSuffixFor(reportProblem.source);
     console.log(
       `  ${reportProblem.code}: ${reportProblem.message}${sourceSuffix}`,
     );
   }
   for (const reportWarning of args.report.warnings) {
-    const sourceSuffix = reportWarning.source
-      ? ` ${dim(reportWarning.source)}`
-      : "";
+    const sourceSuffix = sourceSuffixFor(reportWarning.source);
     console.log(
       `  ${warningMark} ${reportWarning.code}: ${reportWarning.message}${sourceSuffix}`,
     );
