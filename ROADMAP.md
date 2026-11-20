@@ -253,7 +253,7 @@ conclusion:
   indirect.
 
 Likeliest shape: a `releaseNotes` (or `notes`) string per
-`awaitingRelease` entry in the Plan schema (`specs/schemas/plan.json`,
+`awaitingRelease` entry in the Plan schema (`apps/cli/schemas/plan.json`,
 regenerated from the Zod source — never hand-edited), populated by a
 first-party CHANGELOG extractor. That makes "mint a GitHub Release with
 the right body" a clean consumer of dv's JSON instead of a CHANGELOG

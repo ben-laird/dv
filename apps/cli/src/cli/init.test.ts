@@ -1,5 +1,8 @@
 import { assertEquals } from "@std/assert";
 import { join } from "@std/path";
+import { publishedSchemaUrl } from "../domain/published-schema.ts";
+import { DV_VERSION } from "../dv-version.ts";
+import { loadConfig } from "../subtools/config/mod.ts";
 import { runInit } from "./init.ts";
 
 // `dv init` walks up to the git root; tests need a temp git repo for that
@@ -55,6 +58,52 @@ Deno.test("runInit creates the config file, records directory, and changelog git
       // The gitignore should at minimum cover the in-progress record
       // edit file pattern — that's the whole reason it exists
       assertEquals(gitignoreBody.includes(".dv-record-edit-*"), true);
+    },
+  });
+});
+
+Deno.test("runInit points the starter config at the running release's published config schema, as both a modeline and a $schema key", async () => {
+  await inTempRepo({
+    testBody: async () => {
+      // Given a fresh git repo and the config schema URL for this dv release
+      const expectedSchemaUrl = publishedSchemaUrl({
+        version: DV_VERSION,
+        schema: "config",
+      });
+
+      // When runInit scaffolds the config
+      const initResult = await runInit();
+      const configBody = await Deno.readTextFile(
+        join(initResult.repoRoot, ".dv", "config.yaml"),
+      );
+
+      // Then the first line is the yaml-language-server modeline and the
+      // document carries the same URL as its $schema key
+      const configLines = configBody.split("\n");
+      assertEquals(
+        configLines[0],
+        `# yaml-language-server: $schema=${expectedSchemaUrl}`,
+      );
+      assertEquals(configLines.includes(`$schema: ${expectedSchemaUrl}`), true);
+      // ...and nowhere else, so the two pointers are the only copies
+      assertEquals(configBody.split(expectedSchemaUrl).length - 1, 2);
+    },
+  });
+});
+
+Deno.test("runInit's starter config loads cleanly through the config parser", async () => {
+  await inTempRepo({
+    testBody: async () => {
+      // Given a freshly scaffolded config
+      const initResult = await runInit();
+
+      // When dv loads it
+      const loadedConfig = await loadConfig(
+        join(initResult.repoRoot, ".dv", "config.yaml"),
+      );
+
+      // Then the $schema key is accepted and nothing else is configured
+      assertEquals(loadedConfig.discovery.plugins, []);
     },
   });
 });

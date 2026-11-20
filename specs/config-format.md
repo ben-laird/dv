@@ -19,7 +19,7 @@ Biome's `biome.json`.
 ## Top-level shape
 
 ```yaml
-$schema: https://dv.dev/schema/v1.yaml
+$schema: https://jsr.io/@dv-cli/dv/<version>/schemas/config.json
 
 extends: []
 
@@ -48,14 +48,48 @@ user-configurable in v1, so it has no config section.
 
 ## `$schema`
 
-Recommended for editor support. Points at the versioned JSON Schema:
+Recommended for editor support. Points at the JSON Schema for the config,
+which every dv release from 0.13.0 onward publishes to JSR at an
+immutable, versioned URL (0.12.0 and earlier shipped without them, so no
+URL exists for those versions):
 
-```yaml
-$schema: https://dv.dev/schema/v1.yaml
+```text
+https://jsr.io/@dv-cli/dv/<version>/schemas/config.json
 ```
 
-VS Code with the YAML extension (and most other modern editors) will pick
-this up automatically and provide autocomplete and validation.
+Use the version of dv that reads the config, so the schema matches the
+parser exactly. `dv init` writes the pointer for the running version in
+two forms:
+
+```yaml
+# yaml-language-server: $schema=https://jsr.io/@dv-cli/dv/<version>/schemas/config.json
+
+$schema: https://jsr.io/@dv-cli/dv/<version>/schemas/config.json
+```
+
+- The **`# yaml-language-server:` modeline** is what editors backed by
+  yaml-language-server (VS Code's YAML extension, and most others) read
+  to provide autocomplete and validation. It works without the editor
+  parsing the document first. `dv init` puts it on the first line; dv
+  recognizes it anywhere in the leading block of comment, blank and `---`
+  lines before the first YAML content, taking the first one there. A
+  look-alike comment further down (inside a block scalar, say) is not a
+  modeline.
+- The **`$schema` key** keeps the pointer in the config's data, where any
+  tool that reads the parsed YAML can find it. dv accepts and ignores it.
+
+Both carry the same URL; keep them in step when you upgrade dv.
+`dv migrate config` does this for you: when either pointer names dv's
+config schema for an older dv release, it rewrites that pointer to the
+running version's URL. Pointers at anything else (a local path, a custom
+URL, a newer dv) stay as written. See
+[cli.md § `dv migrate config`](cli.md#dv-migrate-config). `dv validate`
+warns (without failing) when a pointer names a different dv release or
+only one of the two pointers is present; see
+[cli.md § `dv validate`](cli.md#dv-validate). The
+schemas for records (`record.json`), the rename ledger
+(`rename-ledger.json`) and every `--json` contract are published alongside
+it under the same `schemas/` path.
 
 ## `extends`
 
@@ -501,7 +535,7 @@ are repo-level and documented under `git` above.)
 ## Full example
 
 ```yaml
-$schema: https://dv.dev/schema/v1.yaml
+$schema: https://jsr.io/@dv-cli/dv/<version>/schemas/config.json
 
 discovery:
   plugins:

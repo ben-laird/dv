@@ -53,7 +53,9 @@ sit at `0.1.0` — pre-1.0, *unstable* in SemVer terms.
 dv init
 ```
 
-This writes `.dv/config.yaml` to your repo. The default config wires up
+This writes `.dv/config.yaml` to your repo. Its first line points your
+editor at the config schema for your dv version, so you get
+autocomplete and validation while you edit. The default config wires up
 the example Deno plugin and points it at `packages/*`:
 
 ```yaml

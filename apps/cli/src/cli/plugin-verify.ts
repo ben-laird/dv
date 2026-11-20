@@ -84,7 +84,7 @@ export interface RunPluginVerifyResult {
 
 /**
  * Conformance-check a plugin against the versioned per-Op schemas in
- * `specs/schemas/plugin-responses.json`. Backs `dv plugin verify`: invokes
+ * `apps/cli/schemas/plugin-responses.json`. Backs `dv plugin verify`: invokes
  * `info`, exercises safe Ops end-to-end, skips side-effectful Ops, and
  * asserts a bogus Op name fails loudly. See {@link RunPluginVerifyOptions}.
  */

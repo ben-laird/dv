@@ -8,11 +8,11 @@
   // validate directly. The Zod-driven validator in `dv validate`
   // covers that gap.
   "yaml.schemas": {
-    "./specs/schemas/config.json": [
+    "./apps/cli/schemas/config.json": [
       ".dv/config.yaml",
       "**/.dv/config.yaml"
     ],
-    "./specs/schemas/rename-ledger.json": [
+    "./apps/cli/schemas/rename-ledger.json": [
       ".dv/renames.yaml",
       "**/.dv/renames.yaml"
     ]
