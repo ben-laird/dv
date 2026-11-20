@@ -1,4 +1,4 @@
-// Generates the JSON Schema artifacts under specs/schemas/ from the Zod
+// Generates the JSON Schema artifacts under apps/cli/schemas/ from the Zod
 // schemas that live in source. Run via `deno task schemas:generate`.
 //
 // The CI gate `deno task schemas:check` re-runs this in memory and diffs
@@ -53,7 +53,7 @@ const schemaFile = (
   schema: z.ZodType,
   schemaId: string,
 ): GeneratedSchemaFile => ({
-  outputPath: resolve(REPO_ROOT, "specs/schemas", fileName),
+  outputPath: resolve(REPO_ROOT, "apps/cli/schemas", fileName),
   schema,
   schemaId,
 });

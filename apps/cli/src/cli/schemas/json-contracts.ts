@@ -3,7 +3,7 @@ import { SCHEMA_URNS } from "../../domain/schema-urns.ts";
 import { rawPlanSchema } from "../../subtools/versioning/plan-schema.ts";
 
 // Zod sources for every `dv` command `--json` result envelope. These feed
-// `z.toJSONSchema()` in the schema generator (specs/schemas/*-result.json)
+// `z.toJSONSchema()` in the schema generator (apps/cli/schemas/*-result.json)
 // and back the contract-conformance tests that assert each command's
 // emitted output validates against its schema.
 //
@@ -19,27 +19,55 @@ import { rawPlanSchema } from "../../subtools/versioning/plan-schema.ts";
 const schemaUrnLiteral = (urn: string) =>
   z.literal(urn).describe("Versioned schema URN identifying this payload.");
 
+// A plain-string discriminator dv may extend in a minor release
+// (specs/design.md § Contract versioning). `noun` names its values.
+const openEnumeration = (noun: string): z.ZodString => {
+  return z
+    .string()
+    .describe(
+      `Open enumeration: consumers must tolerate ${noun} they don't recognize.`,
+    );
+};
+
 // === validate =====================================================
 
 const validationProblemSchema = z
   .object({
-    code: z.string(),
+    code: openEnumeration("codes"),
     message: z.string(),
     source: z.string().optional(),
+  })
+  .strict();
+
+const validationWarningSchema = z
+  .object({
+    code: openEnumeration("codes"),
+    message: z.string(),
+    source: z.string().optional(),
+    hint: z.string().describe("What to do about the warning."),
   })
   .strict();
 
 export const rawValidationReportSchema = z
   .object({
     schema: schemaUrnLiteral(SCHEMA_URNS.validationReport),
-    ok: z.boolean(),
+    ok: z
+      .boolean()
+      .describe("True iff `problems` is empty. Warnings never affect it."),
     recordsChecked: z.number().int(),
     problems: z.array(validationProblemSchema),
+    warnings: z
+      .array(validationWarningSchema)
+      .optional()
+      .describe(
+        "Non-fatal findings. Never affect `ok` or the exit code. Added in a minor revision of v1; absent in reports from older dv releases.",
+      ),
   })
   .strict()
   .meta({
     title: "Validation report",
-    description: "The `dv validate --json` report: ok flag + problems.",
+    description:
+      "The `dv validate --json` report: ok flag, problems, and non-fatal warnings.",
   });
 
 // === release ======================================================
@@ -98,14 +126,14 @@ const migrationChangeSchema = z
   .object({
     path: z.string(),
     before: z.string(),
-    kind: z.string(),
+    kind: openEnumeration("kinds"),
     value: z.string(),
   })
   .strict();
 
 const configMigrationStepResultSchema = z
   .object({
-    stepId: z.string(),
+    stepId: openEnumeration("step ids"),
     description: z.string(),
     changes: z.array(migrationChangeSchema),
   })
@@ -164,9 +192,9 @@ const pluginListEntrySchema = z
     matchGlobs: z.array(z.string()),
     status: z.enum(["ok", "resolve-failed", "discover-failed"]),
     resolvedPluginPath: z.string().nullable(),
-    resolvedPluginKind: z.string().nullable(),
+    resolvedPluginKind: openEnumeration("plugin kinds").nullable(),
     packages: z.array(pluginListPackageSchema),
-    errorCode: z.string().nullable(),
+    errorCode: openEnumeration("codes").nullable(),
     errorMessage: z.string().nullable(),
   })
   .strict();
@@ -189,7 +217,7 @@ export const rawPluginListResultSchema = z
 
 const checkReportSchema = z
   .object({
-    name: z.string(),
+    name: openEnumeration("check names"),
     outcome: z.enum(["pass", "fail", "skipped"]),
     detail: z.string(),
   })
@@ -221,7 +249,7 @@ export const rawPluginInvokeResultSchema = z
   .object({
     schema: schemaUrnLiteral(SCHEMA_URNS.pluginInvokeResult),
     pluginPath: z.string(),
-    opName: z.string(),
+    opName: openEnumeration("Op names"),
     environmentVariables: z.record(z.string(), z.string()),
     stdinPayload: z.string().nullable(),
     rawStdout: z.string(),

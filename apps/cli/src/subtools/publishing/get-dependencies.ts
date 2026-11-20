@@ -49,6 +49,7 @@ export async function invokeGetDependencies(
   });
   const { rawStdout } = await invokeOp({
     resolvedPlugin: args.resolvedPlugin,
+    repoRootPath: args.repoRootPath,
     opName: "get-dependencies",
     environmentVariables: childEnvironment,
     stdinPayload,

@@ -1,9 +1,11 @@
 // Config migrations subtool. Each breaking shape change to
 // `.dv/config.yaml` between dv versions ships with one migration
-// step that recognizes the legacy shape and rewrites it in place.
-// The runner composes all registered steps so a single
-// `dv migrate config` invocation walks a config forward through
-// every applicable step in order.
+// step that recognizes the legacy shape and rewrites it in place,
+// and so does each routine upkeep rewrite a config needs as dv
+// moves on (e.g. `schema-pointer-current`, which moves the schema
+// pointers to the running release). The runner composes all
+// registered steps so a single `dv migrate config` invocation walks
+// a config forward through every applicable step in order.
 //
 // Why this lives in its own subtool: the config schema *will*
 // move again (v1 → v2, etc.). Each breaking change shoulders the
@@ -11,8 +13,8 @@
 // "given config in shape N, produce config in shape N+1", every
 // new migration ends up bolted onto whatever existed before. The
 // subtool gives migrations a home with a stable shape: one step
-// per breaking change, registered in `steps.ts` in order, each
-// independently testable.
+// per breaking change or upkeep rewrite, registered in `steps.ts`
+// in order, each independently testable.
 //
 // Text-in / text-out per step: comments and whitespace in the
 // user's YAML are part of the value of the file (they explain
@@ -40,8 +42,8 @@ export interface RunConfigMigrationsResult {
   // case).
   rewrittenText: string;
   // Per-step records of what the step changed. Steps that didn't
-  // match are omitted entirely — empty `changes` always means
-  // "config is already in the current shape."
+  // match are omitted entirely — an empty list always means
+  // "config is already up to date."
   stepResults: ConfigMigrationStepResult[];
 }
 
@@ -57,10 +59,10 @@ export interface ConfigMigrationStepResult {
 
 // Runs every registered migration step against `originalText` in
 // order. Each step decides whether it applies (by detecting the
-// legacy shape it knows about) and rewrites if so; the runner
-// pipes each step's output into the next step's input. Idempotent
-// by construction: a step that doesn't detect its legacy shape
-// returns `changes: []` and the text unchanged, so repeatedly
+// legacy shape or outdated value it knows about) and rewrites if so;
+// the runner pipes each step's output into the next step's input.
+// Idempotent by construction: a step with nothing to rewrite returns
+// `changes: []` and the text unchanged, so repeatedly
 // running migrations on an up-to-date config is a no-op.
 export function runConfigMigrations(
   args: RunConfigMigrationsArgs,

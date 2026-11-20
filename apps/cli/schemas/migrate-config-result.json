@@ -20,7 +20,8 @@
         "type": "object",
         "properties": {
           "stepId": {
-            "type": "string"
+            "type": "string",
+            "description": "Open enumeration: consumers must tolerate step ids they don't recognize."
           },
           "description": {
             "type": "string"
@@ -37,7 +38,8 @@
                   "type": "string"
                 },
                 "kind": {
-                  "type": "string"
+                  "type": "string",
+                  "description": "Open enumeration: consumers must tolerate kinds they don't recognize."
                 },
                 "value": {
                   "type": "string"

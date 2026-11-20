@@ -1,4 +1,7 @@
 import { assertEquals } from "@std/assert";
+import { parse as parseSemVer } from "@std/semver";
+import { publishedSchemaUrl } from "../../domain/published-schema.ts";
+import { DV_VERSION } from "../../dv-version.ts";
 import { runConfigMigrations } from "./mod.ts";
 
 // Tests for the runner. The per-step logic is covered by each
@@ -7,7 +10,7 @@ import { runConfigMigrations } from "./mod.ts";
 // step matched" shape.
 
 Deno.test("runConfigMigrations returns the input unchanged when no step matched", () => {
-  // Given a config in the current shape — nothing legacy for any
+  // Given an up-to-date config — nothing legacy or outdated for any
   // registered step to recognize
   const text = `discovery:
   plugins:
@@ -68,10 +71,67 @@ Deno.test("runConfigMigrations is idempotent: a second run on the rewritten text
   });
 
   // Then the second pass produces zero changes (the output of
-  // the first pass is already in the current shape). This is
+  // the first pass is already up to date). This is
   // the canonical "safe to re-run" property — important because
   // users might run `dv migrate config` defensively without
   // remembering whether they've run it before.
   assertEquals(secondPass.stepResults, []);
   assertEquals(secondPass.rewrittenText, firstPass.rewrittenText);
+});
+
+// The release just below `version`, so a test can sit right at the edge
+// of what counts as older. Throws for 0.0.0, which has no predecessor.
+function versionJustBelow(version: string): string {
+  const { major, minor, patch } = parseSemVer(version);
+  if (patch > 0) {
+    return `${major}.${minor}.${patch - 1}`;
+  }
+  if (minor > 0) {
+    return `${major}.${minor - 1}.0`;
+  }
+  if (major > 0) {
+    return `${major - 1}.0.0`;
+  }
+  throw new Error(`no release precedes ${version}`);
+}
+
+Deno.test("runConfigMigrations moves a pointer at the release just below the running DV_VERSION", () => {
+  // Given a $schema key naming the release immediately before the real
+  // running version (a stale DV_VERSION would fail this)
+  const previousUrl = publishedSchemaUrl({
+    version: versionJustBelow(DV_VERSION),
+    schema: "config",
+  });
+  const text = `$schema: ${previousUrl}\n`;
+
+  // When the runner walks every registered step
+  const result = runConfigMigrations({ originalText: text });
+
+  // Then the key now names DV_VERSION's schema
+  const currentUrl = publishedSchemaUrl({
+    version: DV_VERSION,
+    schema: "config",
+  });
+  assertEquals(result.rewrittenText, `$schema: ${currentUrl}\n`);
+});
+
+Deno.test("runConfigMigrations moves an older dv schema pointer to the running release", () => {
+  // Given a config whose $schema key names a dv release older than any
+  // that can be running
+  const olderUrl = publishedSchemaUrl({ version: "0.0.1", schema: "config" });
+  const text = `$schema: ${olderUrl}\n`;
+
+  // When the runner walks every registered step
+  const result = runConfigMigrations({ originalText: text });
+
+  // Then the schema-pointer step reports it and the key names DV_VERSION
+  const currentUrl = publishedSchemaUrl({
+    version: DV_VERSION,
+    schema: "config",
+  });
+  assertEquals(
+    result.stepResults.map((stepResult) => stepResult.stepId),
+    ["schema-pointer-current"],
+  );
+  assertEquals(result.rewrittenText, `$schema: ${currentUrl}\n`);
 });

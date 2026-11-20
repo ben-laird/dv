@@ -257,3 +257,51 @@ Deno.test("runStatus surfaces a config-missing hint when .dv/config.yaml is abse
     await Deno.remove(repoRootPath, { recursive: true });
   }
 });
+
+// A `run:` plugin whose script path is relative (`bash ./plugin`) only
+// resolves when dv spawns plugins with the repo root as their working
+// directory (specs/plugin-contract.md § Invocation), whatever the
+// caller's cwd. Issue #52: the root `deno task dv` runs dv from apps/cli/.
+for (const callerSubdirectory of ["packages/core", "apps/cli"]) {
+  Deno.test(`runStatus invoked from ${callerSubdirectory}/ resolves a relative run: plugin path against the repo root`, async () => {
+    // Given a repo whose config references its plugin by a relative
+    // path inside a `run:` invocation, and a caller cwd nested below
+    // the repo root
+    const fixture = await setUpRepoWithPlugin({
+      configYaml: `discovery:
+  plugins:
+    - match: "packages/*"
+      use:
+        run: bash ./plugin
+`,
+      pluginScript: `case "\${DV_OPERATION:-$1}" in
+  discover)
+    echo '{"packages":[{"name":"core","path":"packages/core"}]}'
+    ;;
+  read-version)
+    echo '{"version":"1.4.2"}'
+    ;;
+esac`,
+    });
+    const callerWorkingDirectory = join(
+      fixture.repoRootPath,
+      callerSubdirectory,
+    );
+    await Deno.mkdir(callerWorkingDirectory, { recursive: true });
+    Deno.chdir(callerWorkingDirectory);
+
+    try {
+      // When status runs from that subdirectory
+      const { result } = await captureStdout(() =>
+        runStatus({ emitJson: false, colorEnabled: false }),
+      );
+
+      // Then the plugin ran from the repo root and reported the package
+      assertEquals(result.plan?.tracked, [
+        { package: "core", currentVersion: "1.4.2", path: "packages/core" },
+      ]);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+}

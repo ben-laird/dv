@@ -5,7 +5,7 @@
 > *before* writing any code or touching [language.md](../language.md). When
 > accepted, the Lexicon / Domains / Operations / Algebra / Forbidden-synonyms
 > sections below fold into `language.md` verbatim, and the schema stubs become
-> real files under `specs/schemas/`. Until then, nothing here binds the
+> real files under `apps/cli/schemas/`. Until then, nothing here binds the
 > implementation.
 >
 > Tracks [ROADMAP.md #26](../../ROADMAP.md). Builds on
@@ -242,7 +242,7 @@ roadmap:
   `additionalProperties: false` today.
 - Nothing under `records` may add a field the algebra reads. The Record's
   `type` / `packages` core stays exactly as in
-  [record.json](../schemas/record.json).
+  [record.json](../../apps/cli/schemas/record.json).
 
 ---
 

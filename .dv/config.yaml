@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../specs/schemas/config.json
+# yaml-language-server: $schema=../apps/cli/schemas/config.json
 # dv dogfooding itself.
 #
 # This repo is a monorepo:
@@ -14,6 +14,9 @@
 # taken before #44. Since #44 the example also runs a real `deno publish`
 # and its other ops have moved on: in-place manifest edits, deno.jsonc,
 # workspace deps from the module graph, and skipping `"publish": false`.
+
+# Local path, so dogfooding follows the working tree's schema.
+$schema: ../apps/cli/schemas/config.json
 
 discovery:
   plugins:

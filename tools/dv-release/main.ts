@@ -440,7 +440,7 @@ async function runRelease(): Promise<void> {
 //                             entries for packages this plugin
 //                             governs that bumped this run
 //
-// Return shape (specs/schemas/plugin-responses.json):
+// Return shape (apps/cli/schemas/plugin-responses.json):
 //   { ok, unsupported?, additionalChangedFiles?, message? }
 
 async function runFinalize(): Promise<void> {

@@ -1,7 +1,17 @@
 import { relative } from "@std/path";
+import { parse as parseYaml } from "@std/yaml";
 import { DvError } from "../domain/errors.ts";
+import { publishedSchemaUrl } from "../domain/published-schema.ts";
 import { SCHEMA_URNS, type SchemaUrns } from "../domain/schema-urns.ts";
+import { DV_VERSION } from "../dv-version.ts";
 import { configPath, loadConfig, recordsPath } from "../subtools/config/mod.ts";
+import {
+  diagnoseSchemaPointers,
+  readSchemaPointers,
+  type SchemaPointerFinding,
+  type SchemaPointerKind,
+  type SchemaVersionDirection,
+} from "../subtools/config/schema-pointer.ts";
 import { discoverPackages } from "../subtools/discovery/mod.ts";
 import { requireRepoRoot } from "../subtools/git/repo-root.ts";
 import type { TracingHooks } from "../subtools/plugin/mod.ts";
@@ -33,16 +43,30 @@ export interface ValidationProblem {
   source?: string;
 }
 
+/** A non-fatal finding from `dv validate`; never affects `ok` or the exit code. */
+export interface ValidationWarning {
+  /** Stable machine-readable warning code (an open set). */
+  code: string;
+  /** Human-readable description of the warning. */
+  message: string;
+  /** Originating path or identifier, when known. */
+  source?: string;
+  /** What to do about it. */
+  hint: string;
+}
+
 /** The `--json` report shape for `dv validate`; one {@link ValidationProblem} per issue. */
 export interface ValidationReport {
   /** Versioned schema URN identifying this report shape. */
   schema: SchemaUrns["validationReport"];
-  /** `true` iff no problems were found. */
+  /** `true` iff no problems were found; warnings never affect it. */
   ok: boolean;
   /** Number of Records parsed during the run. */
   recordsChecked: number;
   /** All problems found, empty when `ok`. */
   problems: ValidationProblem[];
+  /** Non-fatal findings (see {@link ValidationWarning}). */
+  warnings: ValidationWarning[];
 }
 
 /** Runtime options controlling a {@link runValidate} call. */
@@ -72,22 +96,28 @@ export async function runValidate(
 ): Promise<RunValidateResult> {
   const repoRootPath = await requireRepoRoot();
   const validationProblems: ValidationProblem[] = [];
-  const tracingHooks: TracingHooks | undefined = options.debug
-    ? makeStderrTracingHooks({ colorEnabled: options.colorEnabled })
-    : undefined;
+  let tracingHooks: TracingHooks | undefined;
+  if (options.debug) {
+    tracingHooks = makeStderrTracingHooks({
+      colorEnabled: options.colorEnabled,
+    });
+  }
 
   const loadedConfigOrNull = await tryLoadConfig({
     repoRootPath,
     validationProblems,
   });
-  const discoveredPackageNames = loadedConfigOrNull
-    ? await tryDiscoverPackages({
-        config: loadedConfigOrNull,
-        repoRootPath,
-        validationProblems,
-        tracingHooks,
-      })
-    : new Set<string>();
+  let validationWarnings: ValidationWarning[] = [];
+  let discoveredPackageNames = new Set<string>();
+  if (loadedConfigOrNull) {
+    validationWarnings = await readSchemaPointerWarnings({ repoRootPath });
+    discoveredPackageNames = await tryDiscoverPackages({
+      config: loadedConfigOrNull,
+      repoRootPath,
+      validationProblems,
+      tracingHooks,
+    });
+  }
 
   const renameLedger = await tryLoadRenameLedger({
     repoRootPath,
@@ -121,13 +151,13 @@ export async function runValidate(
       const resolvedReference =
         renameResolver.resolve(packageReference) ?? packageReference;
       if (!discoveredPackageNames.has(resolvedReference)) {
+        let renameNote = "";
+        if (resolvedReference !== packageReference) {
+          renameNote = ` (resolved through renames to '${resolvedReference}')`;
+        }
         validationProblems.push({
           code: "unresolved-reference",
-          message:
-            `record references unknown package '${packageReference}'` +
-            (resolvedReference !== packageReference
-              ? ` (resolved through renames to '${resolvedReference}')`
-              : ""),
+          message: `record references unknown package '${packageReference}'${renameNote}`,
           source: parsedRecord.filename,
         });
       }
@@ -141,6 +171,7 @@ export async function runValidate(
     ok: validationProblems.length === 0,
     recordsChecked: totalRecordsChecked,
     problems: validationProblems,
+    warnings: validationWarnings,
   };
 
   if (options.emitJson) {
@@ -176,6 +207,128 @@ async function tryLoadConfig(
     });
     return null;
   }
+}
+
+interface ReadSchemaPointerWarningsArgs {
+  repoRootPath: string;
+}
+
+type ConfigDocumentRead =
+  | { ok: true; text: string; data: unknown }
+  | { ok: false };
+
+async function readConfigDocument(
+  configFilePath: string,
+): Promise<ConfigDocumentRead> {
+  try {
+    const text = await Deno.readTextFile(configFilePath);
+    return { ok: true, text, data: parseYaml(text) };
+  } catch {
+    return { ok: false };
+  }
+}
+
+function topLevelSchemaKey(data: unknown): string | undefined {
+  if (typeof data !== "object" || data === null || !("$schema" in data)) {
+    return undefined;
+  }
+  return typeof data.$schema === "string" ? data.$schema : undefined;
+}
+
+async function readSchemaPointerWarnings(
+  args: ReadSchemaPointerWarningsArgs,
+): Promise<ValidationWarning[]> {
+  const configFilePath = configPath(args.repoRootPath);
+  const configDocument = await readConfigDocument(configFilePath);
+  if (!configDocument.ok) {
+    // The config loaded moments ago; anything wrong with it now is
+    // loadConfig's to report, not a schema-pointer finding.
+    return [];
+  }
+  // The key comes from the parsed YAML so every spelling counts; the raw
+  // text tells whether it is the block form `dv migrate config` rewrites.
+  const rawPointers = readSchemaPointers(configDocument.text);
+  const keyUrl = topLevelSchemaKey(configDocument.data);
+  const findings = diagnoseSchemaPointers({
+    pointers: { modeline: rawPointers.modeline, key: keyUrl },
+    runningVersion: DV_VERSION,
+  });
+  return findings.map((finding) => {
+    return schemaPointerWarning({
+      finding,
+      source: relative(args.repoRootPath, configFilePath),
+      keyMigratable: keyUrl !== undefined && rawPointers.key === keyUrl,
+    });
+  });
+}
+
+const POINTER_NAMES: Record<SchemaPointerKind, string> = {
+  modeline: "the `# yaml-language-server` modeline",
+  key: "the `$schema` key",
+};
+
+interface SchemaPointerWarningArgs {
+  finding: SchemaPointerFinding;
+  source: string;
+  /**
+   * Whether the `$schema` key is in the block form `$schema: <url>` that
+   * `dv migrate config` rewrites (quoted-key or flow forms are not).
+   */
+  keyMigratable: boolean;
+}
+
+/** Turns a schema-pointer finding into a `dv validate` warning. */
+export function schemaPointerWarning(
+  args: SchemaPointerWarningArgs,
+): ValidationWarning {
+  const { finding, source } = args;
+  const currentUrl = publishedSchemaUrl({
+    version: DV_VERSION,
+    schema: "config",
+  });
+  if (finding.kind === "incomplete") {
+    const missing = finding.present === "modeline" ? "key" : "modeline";
+    return {
+      code: "config-schema-pointer-incomplete",
+      message: `only ${POINTER_NAMES[finding.present]} points at a schema; ${POINTER_NAMES[missing]} is missing`,
+      source,
+      hint: `add ${POINTER_NAMES[missing]} with the same URL (${finding.url}); \`dv init\` writes both`,
+    };
+  }
+  const message = `${POINTER_NAMES[finding.pointer]} names the config schema for dv ${finding.pointedVersion}, but this is dv ${DV_VERSION}`;
+  return {
+    code: "config-schema-version-mismatch",
+    message,
+    source,
+    hint: versionMismatchHint({
+      direction: finding.direction,
+      pointedVersion: finding.pointedVersion,
+      currentUrl,
+      migratable: finding.pointer === "modeline" || args.keyMigratable,
+    }),
+  };
+}
+
+interface VersionMismatchHintArgs {
+  direction: SchemaVersionDirection;
+  pointedVersion: string;
+  currentUrl: string;
+  migratable: boolean;
+}
+
+// `dv migrate config` only moves an older pointer forward, and only the
+// modeline or a block-form `$schema: <url>` key.
+function versionMismatchHint(args: VersionMismatchHintArgs): string {
+  if (args.direction === "older" && args.migratable) {
+    return "run `dv migrate config` to point it at this dv release";
+  }
+  if (args.direction === "older") {
+    return `\`dv migrate config\` only rewrites the block form \`$schema: <url>\`; change this one to ${args.currentUrl} by hand`;
+  }
+  if (args.direction === "newer") {
+    return `upgrade dv to ${args.pointedVersion} or later, or point it at ${args.currentUrl}`;
+  }
+  return `point it at ${args.currentUrl}`;
 }
 
 interface TryDiscoverPackagesArgs {
@@ -269,31 +422,46 @@ interface RenderHumanReportArgs {
 function renderHumanReport(args: RenderHumanReportArgs): void {
   const checkMark = args.colorEnabled ? "\x1b[32m✓\x1b[39m" : "✓";
   const crossMark = args.colorEnabled ? "\x1b[31m✗\x1b[39m" : "✗";
-  const dim = (text: string) =>
-    args.colorEnabled ? `\x1b[2m${text}\x1b[22m` : text;
+  const dim = (text: string): string => {
+    return args.colorEnabled ? `\x1b[2m${text}\x1b[22m` : text;
+  };
+  const sourceSuffixFor = (source: string | undefined): string => {
+    return source ? ` ${dim(source)}` : "";
+  };
 
-  if (args.report.ok) {
-    console.log(
-      `${checkMark} ${args.report.recordsChecked} record${
-        args.report.recordsChecked === 1 ? "" : "s"
-      }, 0 problems`,
-    );
-    return;
-  }
-
-  console.log(
-    `${crossMark} ${args.report.recordsChecked} record${
-      args.report.recordsChecked === 1 ? "" : "s"
-    }, ${args.report.problems.length} problem${
-      args.report.problems.length === 1 ? "" : "s"
-    }`,
-  );
+  const warningMark = args.colorEnabled ? "\x1b[33m⚠\x1b[39m" : "⚠";
+  const statusMark = args.report.ok ? checkMark : crossMark;
+  console.log(`${statusMark} ${validationSummary(args.report)}`);
   for (const reportProblem of args.report.problems) {
-    const sourceSuffix = reportProblem.source
-      ? ` ${dim(reportProblem.source)}`
-      : "";
+    const sourceSuffix = sourceSuffixFor(reportProblem.source);
     console.log(
       `  ${reportProblem.code}: ${reportProblem.message}${sourceSuffix}`,
     );
   }
+  for (const reportWarning of args.report.warnings) {
+    const sourceSuffix = sourceSuffixFor(reportWarning.source);
+    console.log(
+      `  ${warningMark} ${reportWarning.code}: ${reportWarning.message}${sourceSuffix}`,
+    );
+    console.log(`    ${dim(`hint: ${reportWarning.hint}`)}`);
+  }
+}
+
+const pluralize = (args: { count: number; noun: string }): string => {
+  return `${args.count} ${args.noun}${args.count === 1 ? "" : "s"}`;
+};
+
+/**
+ * The one-line summary of a report: `N records, P problems`, plus
+ * `, M warnings` when there are any.
+ */
+export function validationSummary(report: ValidationReport): string {
+  const parts = [
+    pluralize({ count: report.recordsChecked, noun: "record" }),
+    pluralize({ count: report.problems.length, noun: "problem" }),
+  ];
+  if (report.warnings.length > 0) {
+    parts.push(pluralize({ count: report.warnings.length, noun: "warning" }));
+  }
+  return parts.join(", ");
 }

@@ -22,7 +22,7 @@ the target.
 - `specs/record-format.md` — the user-facing record file format
 - `specs/config-format.md` — `.dv/config.yaml` reference
 - `specs/plugin-contract.md` — extension surface (any executable can be a plugin)
-- `specs/schemas/` — versioned JSON Schema drafts: config, plugin-responses, plan
+- `apps/cli/schemas/` — versioned JSON Schema drafts: config, plugin-responses, plan
 - `specs/v1-scope.md` — what's in v1, what's deferred, in what order to build
 
 ## Working agreement
@@ -38,7 +38,7 @@ the target.
   ask**, don't invent the decision. Many choices here were made deliberately
   against plausible alternatives; silently reinventing them is a regression.
 - **Keep docs and code in lockstep.** If a decision genuinely changes, update
-  the relevant doc — and `language.md` / `specs/schemas/` if the vocabulary or
+  the relevant doc — and `language.md` / `apps/cli/schemas/` if the vocabulary or
   contracts move — in the same change. Code that contradicts the docs is a
   bug in one of them.
 - **The algebra is testable.** The laws in `language.md` (bump = join,

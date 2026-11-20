@@ -3,6 +3,22 @@
 // the step registry (which would create a cycle: steps.ts imports
 // each step, each step imports the types).
 
+/** One registered config migration step (see steps.ts). */
+export interface ConfigMigrationStep {
+  /**
+   * Stable identifier, kebab-case. Used in `--json` output and in human
+   * summaries so users can correlate a change to its step.
+   */
+  id: string;
+  /** One-line human description, used by the CLI's summary. */
+  description: string;
+  /**
+   * Pure function: text in, text + change-list out. A step with nothing
+   * to rewrite returns `changes: []` and the text unchanged.
+   */
+  apply(args: ConfigMigrationStepApplyArgs): ConfigMigrationStepApplyResult;
+}
+
 /** Arguments to a migration step's `apply`. */
 export interface ConfigMigrationStepApplyArgs {
   /** The config text fed to the step. */
@@ -29,9 +45,11 @@ export interface ConfigMigrationStepApplyResult {
  */
 export interface MigrationChange {
   /**
-   * Dotted breadcrumb identifying the location within the config, e.g.
-   * `"discovery.plugins[0].use"` or `"publishing.plugin"`. Stays stable
-   * across migration releases for the same logical field.
+   * Where in the config the change happened. Usually a dotted key
+   * breadcrumb (`"discovery.plugins[0].use"`, `"publishing.plugin"`,
+   * `"$schema"`); a location that is not a key, such as the
+   * `"# yaml-language-server"` modeline comment, gets a descriptive
+   * label. Stays stable across releases for the same location.
    */
   path: string;
   /** The original string value (or short summary) the user had. */
