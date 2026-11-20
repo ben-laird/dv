@@ -24,10 +24,12 @@ typed `boolean | "null" | undefined`, and shows in `--help` as
 `--askOnCommit[=true|false|null]` (`--x[=<string>]` for a free value, or
 `--x[=<valueName>]` when it names its value). A CLI that declared such a
 flag as a `string` and re-parsed it can declare it directly instead.
-Declaring a separate `no-x` flag beside an optional-value `x` makes
-`command()` throw when the tree is built, since `--no-x` already means
-`false`: drop the separate `no-x` flag. Flag errors are now reported in the
-order they were typed.
+`command()` throws when the tree is built on a declaration that contradicts
+itself: a separate `no-x` flag beside an optional-value `x` (`--no-x`
+already means `false`; drop the `no-x` flag), an optional-value flag named
+`no-y` beside a declared `y` (rename it), or `"true"`/`"false"` in `values`
+with `booleans: true` (those already read as booleans; drop them from
+`values`).
 
 **Breaking (types):**
 

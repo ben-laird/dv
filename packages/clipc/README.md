@@ -125,9 +125,17 @@ error and exit 2.
 `--help` lists every accepted spelling: `--askOnCommit[=true|false|null]`, or
 `--label[=<string>]` for a free value. A `valueName` replaces the list
 (`--askOnCommit[=<setting>]`), which hides a closed set, so leave it unset when
-the set is short. The flag takes no short `alias`, and declaring a separate
-`no-askOnCommit` flag beside it is refused when the command is built, since
-`--no-askOnCommit` already means `false`.
+the set is short. The flag takes no short `alias`.
+
+`command()` throws when the tree is built if the declaration contradicts
+itself:
+
+- a separate `no-askOnCommit` flag beside it, since `--no-askOnCommit` already
+  means `false` (drop the separate flag);
+- an optional-value flag named `no-<y>` beside a declared `<y>`, whose
+  negation that name would shadow (rename the optional-value flag);
+- `"true"` or `"false"` in `values` together with `booleans: true`, since
+  those spellings already read as booleans (drop them from `values`).
 
 ## A larger example
 

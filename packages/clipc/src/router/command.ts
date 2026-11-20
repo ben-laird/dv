@@ -108,9 +108,11 @@ export interface CommandNode<Ctx = unknown> {
  * breadcrumb path. An undeclared flag is returned as a typed
  * `unknown-flag` error (exit 2), and an `"optional-value"` flag given an
  * undeclared value as an `invalid-flag-value` error (exit 2), not thrown.
- * A flag map that contradicts itself (an `"optional-value"` flag `x`
- * beside a declared `no-x`) is a bug in the CLI, so `command` throws on
- * it when the tree is built.
+ * A flag map that contradicts itself is a bug in the CLI, so `command`
+ * throws on it when the tree is built: an `"optional-value"` flag `x`
+ * beside a declared `no-x`; an `"optional-value"` flag named `no-y` beside
+ * a declared `y`; or `"true"`/`"false"` in an `"optional-value"` flag's
+ * `values` when it sets `booleans: true`.
  *
  * `Ctx` is the first type parameter so callers can write
  * `command<MyCtx>({...})` and let `TFlags` infer from the literal
