@@ -19,7 +19,7 @@
 
 import { expandGlob } from "jsr:@std/fs@^1/expand-glob";
 import { parse as parseJsonc } from "jsr:@std/jsonc@^1";
-import { join, relative } from "jsr:@std/path@^1";
+import { dirname, join, relative } from "jsr:@std/path@^1";
 
 const op = Deno.args[0];
 switch (op) {
@@ -247,15 +247,22 @@ function rewriteSpecifierVersion({
 // `dv release` can publish dependencies before their dependents
 // (JSR rejects publishes that reference unpublished imports).
 //
-// Implementation: walk the manifest's `imports` map. Each entry's
-// key is the bare specifier the package imports under — for Deno
-// workspaces this is typically the package name itself (e.g.
-// `"@scope/clipc": "jsr:@scope/clipc@^0.3.0"`). Match keys against
-// `candidates`; the result is the strict subset of names present.
+// Two sources, unioned:
 //
-// External deps (registry packages, std-lib) and aliases that
-// don't match a candidate are silently dropped — they don't
-// affect intra-workspace publish ordering.
+// 1. The manifest's `imports` map. Each key is the bare specifier
+//    the package imports under — often the package name itself
+//    (`"@scope/clipc": "jsr:@scope/clipc@^0.3.0"`).
+// 2. The module graph. Deno workspace members import each other by
+//    name WITHOUT an `imports` entry; the workspace resolves them.
+//    `deno info --json` on each `exports` entry point lists every
+//    local file the package loads (transitively); a file that sits
+//    inside another member's directory makes that member a
+//    dependency. `--no-remote --no-npm --no-lock` keeps this an
+//    offline, read-only walk: registry modules are skipped (they
+//    are never workspace members) and deno.lock is never written.
+//
+// Only names in `candidates` are reported; external deps
+// (registry packages, std-lib) don't affect publish ordering.
 
 async function runGetDependencies(): Promise<void> {
   const packagePath = Deno.env.get("DV_PACKAGE_PATH");
@@ -266,7 +273,7 @@ async function runGetDependencies(): Promise<void> {
   // get-dependencies reads `candidates` from stdin so the plugin
   // can scope its match without re-running discovery. dv passes
   // every OTHER discovered package's name; we return the subset
-  // present in this package's manifest.
+  // this package depends on.
   const payload = await readStdinJson();
   if (!payload.ok) failWith(payload.error);
   const candidates = isRecord(payload.value)
@@ -283,11 +290,175 @@ async function runGetDependencies(): Promise<void> {
 
   const manifest = await readManifest(packagePath);
   if (!manifest.ok) failWith(manifest.error);
-  const importsMap = manifest.value.parsed.imports;
-  const dependencies = Object.keys(isRecord(importsMap) ? importsMap : {})
-    .filter((importKey) => candidateSet.has(importKey))
-    .sort();
-  console.log(JSON.stringify({ ok: true, dependencies }));
+  const dependencies = new Set<string>();
+  // Nothing can match an empty candidate set; skip the graph walk.
+  if (candidateSet.size > 0) {
+    const importsMap = manifest.value.parsed.imports;
+    for (const importKey of Object.keys(
+      isRecord(importsMap) ? importsMap : {},
+    )) {
+      if (candidateSet.has(importKey)) dependencies.add(importKey);
+    }
+    const graphPackages = await packagesInModuleGraph({
+      packageDir: packagePath,
+      exports: manifest.value.parsed.exports,
+    });
+    if (!graphPackages.ok) failWith(graphPackages.error);
+    for (const packageName of graphPackages.value) {
+      if (candidateSet.has(packageName)) dependencies.add(packageName);
+    }
+  }
+  console.log(
+    JSON.stringify({ ok: true, dependencies: [...dependencies].sort() }),
+  );
+}
+
+// Names of the packages owning every local module reachable from
+// the package's export entry points.
+async function packagesInModuleGraph({
+  packageDir,
+  exports,
+}: {
+  packageDir: string;
+  exports: unknown;
+}): Promise<Result<Set<string>>> {
+  const ownerNames = new Set<string>();
+  const ownerNameByDir = new Map<string, string | undefined>();
+  for (const entryPoint of exportEntryPoints(exports)) {
+    const localModules = await localModulesOf({ packageDir, entryPoint });
+    if (!localModules.ok) return localModules;
+    for (const modulePath of localModules.value) {
+      const ownerName = await owningPackageName({
+        modulePath,
+        ownerNameByDir,
+      });
+      if (ownerName !== undefined) ownerNames.add(ownerName);
+    }
+  }
+  return { ok: true, value: ownerNames };
+}
+
+// `exports` is either one path or a map of subpath → path.
+function exportEntryPoints(exports: unknown): string[] {
+  if (typeof exports === "string") return [exports];
+  if (!isRecord(exports)) return [];
+  return Object.values(exports).filter(
+    (entryPoint): entryPoint is string => typeof entryPoint === "string",
+  );
+}
+
+// Runs `deno info --json` from the package directory (so the
+// workspace config resolves member names) and returns the file
+// path of every local module in the graph.
+async function localModulesOf({
+  packageDir,
+  entryPoint,
+}: {
+  packageDir: string;
+  entryPoint: string;
+}): Promise<Result<string[]>> {
+  // Bounded: a hung resolver must not stall `dv release`.
+  const timeoutMs = 30_000;
+  const signal = AbortSignal.timeout(timeoutMs);
+  let infoOutput: Deno.CommandOutput;
+  try {
+    infoOutput = await new Deno.Command("deno", {
+      args: [
+        "info",
+        "--json",
+        "--no-remote",
+        "--no-npm",
+        "--no-lock",
+        entryPoint,
+      ],
+      cwd: packageDir,
+      stdout: "piped",
+      stderr: "piped",
+      signal,
+    }).output();
+  } catch (caughtError) {
+    return {
+      ok: false,
+      error: `cannot run deno info: ${describeError(caughtError)}`,
+    };
+  }
+  if (signal.aborted) {
+    return {
+      ok: false,
+      error: `deno info ${entryPoint} timed out after ${timeoutMs}ms`,
+    };
+  }
+  if (!infoOutput.success) {
+    const stderrText = new TextDecoder().decode(infoOutput.stderr).trim();
+    return {
+      ok: false,
+      error: `deno info ${entryPoint} failed (exit ${infoOutput.code}): ${stderrText || "<no stderr>"}`,
+    };
+  }
+  let graph: unknown;
+  try {
+    graph = JSON.parse(new TextDecoder().decode(infoOutput.stdout));
+  } catch (caughtError) {
+    return {
+      ok: false,
+      error: `deno info ${entryPoint} printed invalid JSON: ${describeError(caughtError)}`,
+    };
+  }
+  const modules = isRecord(graph) ? graph.modules : undefined;
+  if (!Array.isArray(modules)) {
+    return { ok: false, error: `deno info ${entryPoint} listed no modules` };
+  }
+  const localPaths: string[] = [];
+  for (const graphModule of modules) {
+    if (!isRecord(graphModule)) continue;
+    // Remote modules error by design under --no-remote; a LOCAL
+    // module that fails to load means the graph is incomplete.
+    const { specifier, error, local } = graphModule;
+    if (
+      typeof error === "string" &&
+      typeof specifier === "string" &&
+      specifier.startsWith("file:")
+    ) {
+      return { ok: false, error: `deno info ${entryPoint}: ${error}` };
+    }
+    if (typeof local === "string") localPaths.push(local);
+  }
+  return { ok: true, value: localPaths };
+}
+
+// The `name` of the nearest manifest at or above the module's
+// directory — the workspace member that owns the file. Memoized per
+// directory since a graph revisits the same folders constantly.
+async function owningPackageName({
+  modulePath,
+  ownerNameByDir,
+}: {
+  modulePath: string;
+  ownerNameByDir: Map<string, string | undefined>;
+}): Promise<string | undefined> {
+  const visitedDirs: string[] = [];
+  let currentDir = dirname(modulePath);
+  let ownerName: string | undefined;
+  while (true) {
+    if (ownerNameByDir.has(currentDir)) {
+      ownerName = ownerNameByDir.get(currentDir);
+      break;
+    }
+    visitedDirs.push(currentDir);
+    const manifest = await readManifest(currentDir);
+    if (manifest.ok) {
+      const name = manifest.value.parsed.name;
+      ownerName = typeof name === "string" ? name : undefined;
+      break;
+    }
+    const parentDir = dirname(currentDir);
+    if (parentDir === currentDir) break;
+    currentDir = parentDir;
+  }
+  for (const visitedDir of visitedDirs) {
+    ownerNameByDir.set(visitedDir, ownerName);
+  }
+  return ownerName;
 }
 
 // === release ===================================================

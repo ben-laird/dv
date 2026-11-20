@@ -194,3 +194,149 @@ Deno.test("update-dependency leaves a manifest without the dependency untouched"
     assertEquals(await Deno.readTextFile(manifestPath), TAB_INDENTED_MANIFEST);
   });
 });
+
+// A Deno workspace where member `a` imports member `b` by name with
+// no `imports` entry — the workspace alone resolves `@fixture/b`.
+async function writeWorkspaceFixture(repoRoot: string): Promise<void> {
+  await Deno.writeTextFile(
+    join(repoRoot, "deno.json"),
+    `{ "workspace": ["./packages/a", "./packages/b", "./packages/c"] }\n`,
+  );
+  const members: Record<string, { manifest: unknown; source: string }> = {
+    a: {
+      manifest: { name: "@fixture/a", version: "1.0.0", exports: "./mod.ts" },
+      source: `import { b } from "@fixture/b";\nexport const a = b + 1;\n`,
+    },
+    b: {
+      manifest: {
+        name: "@fixture/b",
+        version: "1.0.0",
+        exports: { ".": "./mod.ts" },
+      },
+      source: "export const b = 1;\n",
+    },
+    c: {
+      manifest: { name: "@fixture/c", version: "1.0.0", exports: "./mod.ts" },
+      source: "export const c = 1;\n",
+    },
+  };
+  for (const [memberDir, member] of Object.entries(members)) {
+    const packageDir = join(repoRoot, "packages", memberDir);
+    await Deno.mkdir(packageDir, { recursive: true });
+    await Deno.writeTextFile(
+      join(packageDir, "deno.json"),
+      `${JSON.stringify(member.manifest, null, 2)}\n`,
+    );
+    await Deno.writeTextFile(join(packageDir, "mod.ts"), member.source);
+  }
+}
+
+function getDependenciesEnv({
+  repoRoot,
+  member,
+}: {
+  repoRoot: string;
+  member: string;
+}): Record<string, string> {
+  return {
+    DV_REPO_ROOT: repoRoot,
+    DV_PACKAGE_NAME: `@fixture/${member}`,
+    DV_PACKAGE_PATH: join(repoRoot, "packages", member),
+  };
+}
+
+Deno.test("get-dependencies finds a workspace member imported without an import-map entry", async () => {
+  await withTempDir(async (repoRoot) => {
+    // Given: member a imports member b only through the workspace
+    await writeWorkspaceFixture(repoRoot);
+
+    // When: dv asks which candidates a depends on
+    const outcome = await runOp({
+      op: "get-dependencies",
+      env: getDependenciesEnv({ repoRoot, member: "a" }),
+      stdin: { candidates: ["@fixture/b", "@fixture/c"] },
+    });
+
+    // Then: b is reported (from the module graph) and c is not
+    assertEquals(outcome, {
+      exitCode: 0,
+      response: { ok: true, dependencies: ["@fixture/b"] },
+    });
+  });
+});
+
+Deno.test("get-dependencies unions import-map entries with module-graph edges", async () => {
+  await withTempDir(async (repoRoot) => {
+    // Given: member a also declares c in its import map, without using it
+    await writeWorkspaceFixture(repoRoot);
+    await Deno.writeTextFile(
+      join(repoRoot, "packages", "a", "deno.json"),
+      `${JSON.stringify(
+        {
+          name: "@fixture/a",
+          version: "1.0.0",
+          exports: "./mod.ts",
+          imports: { "@fixture/c": "jsr:@fixture/c@^1.0.0" },
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    // When: dv asks which candidates a depends on
+    const outcome = await runOp({
+      op: "get-dependencies",
+      env: getDependenciesEnv({ repoRoot, member: "a" }),
+      stdin: { candidates: ["@fixture/b", "@fixture/c"] },
+    });
+
+    // Then: both the declared and the graph-derived dependency appear
+    assertEquals(outcome.response, {
+      ok: true,
+      dependencies: ["@fixture/b", "@fixture/c"],
+    });
+  });
+});
+
+Deno.test("get-dependencies reports a leaf member as having no dependencies", async () => {
+  await withTempDir(async (repoRoot) => {
+    // Given: member b imports no other member
+    await writeWorkspaceFixture(repoRoot);
+
+    // When: dv asks which candidates b depends on
+    const outcome = await runOp({
+      op: "get-dependencies",
+      env: getDependenciesEnv({ repoRoot, member: "b" }),
+      stdin: { candidates: ["@fixture/a", "@fixture/c"] },
+    });
+
+    // Then: the subset is empty — a's edge to b is not reversed
+    assertEquals(outcome.response, { ok: true, dependencies: [] });
+  });
+});
+
+Deno.test("get-dependencies returns a contract error when an entry point is missing", async () => {
+  await withTempDir(async (repoRoot) => {
+    // Given: member a exports a file that does not exist
+    await writeWorkspaceFixture(repoRoot);
+    await Deno.remove(join(repoRoot, "packages", "a", "mod.ts"));
+
+    // When: dv asks which candidates a depends on
+    const outcome = await runOp({
+      op: "get-dependencies",
+      env: getDependenciesEnv({ repoRoot, member: "a" }),
+      stdin: { candidates: ["@fixture/b"] },
+    });
+
+    // Then: the op fails loudly with a structured error
+    assertEquals(outcome.exitCode, 1);
+    assertEquals(
+      isRecord(outcome.response) ? outcome.response.ok : undefined,
+      false,
+    );
+  });
+});
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}

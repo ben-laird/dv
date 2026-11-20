@@ -44,7 +44,22 @@ covers the four arms and when to pick which.
   `~`) and defaults to caret (`^`) for unrecognized forms — the modern
   Deno convention. Manifests with no `imports` map, or no entry for the
   named dependency, return `{ ok: true, changed: false }` — the documented
-  no-op path of the cascade.
+  no-op path of the cascade. Workspace members that import each other
+  without an `imports` entry have no constraint to rewrite, so they take
+  this path too.
+- `get-dependencies` — reports which `candidates` this package depends on,
+  so `dv release` publishes dependencies first. Unions two sources: the
+  manifest's `imports` keys, and the module graph from
+  `deno info --json` run on each `exports` entry point. The graph catches
+  what the import map can't: Deno workspace members import each other by
+  name with no `imports` entry. Every local module in the graph is mapped
+  to the member owning it (the nearest `deno.json`/`deno.jsonc` above the
+  file). The walk runs with `--no-remote --no-npm --no-lock`, so it is
+  offline and never writes `deno.lock`, and each `deno info` call is
+  bounded by a 30-second timeout. A local module that fails to load is a
+  `{ ok: false, error }` response rather than a silently short list.
+- `finalize` — runs `deno install` to refresh `deno.lock` and reports it
+  in `additionalChangedFiles` whenever it differs from `HEAD`.
 - `release` — **stub** that reports `{ok: true, published: false}` with a
   message naming the package + version it would have published. Real
   plugins replace this with `deno publish`, `npm publish`,
