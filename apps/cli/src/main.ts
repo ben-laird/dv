@@ -1,7 +1,21 @@
-// dv entry point. The whole CLI is one router tree (see
-// ./cli/router/root.ts); this file is the binary boundary: it
-// resolves the output mode from the raw argv and hands off to the
-// framework. No subcommand dispatch lives here.
+/**
+ * The `dv` command-line entry point — the package's default export, so
+ * `deno install jsr:@dv-cli/dv` and `deno run jsr:@dv-cli/dv` run the CLI.
+ *
+ * ```sh
+ * deno install --global --allow-all --name dv jsr:@dv-cli/dv
+ * dv --version
+ * ```
+ *
+ * Run as a program, it calls {@link main} with `Deno.args` and exits with its
+ * code. To drive `dv` in-process instead, import from `@dv-cli/dv/lib`.
+ *
+ * @module
+ */
+
+// The whole CLI is one router tree (see ./cli/router/root.ts); this file is
+// the binary boundary: it resolves the output mode from the raw argv and hands
+// off to the framework. No subcommand dispatch lives here.
 
 import { defineCli } from "@dv-cli/clipc";
 import type { DvCtx } from "./cli/router/ctx.ts";
@@ -70,7 +84,7 @@ function isDebugEnabled(argv: string[]): boolean {
  *   (clipc maps unknown subcommands/flags to `2`).
  * @example
  * ```ts
- * import { main } from "@dv-cli/dv";
+ * import { main } from "@dv-cli/dv/lib";
  * const code = await main(["status", "--json"]);
  * Deno.exit(code);
  * ```

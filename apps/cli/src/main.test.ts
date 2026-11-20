@@ -149,3 +149,30 @@ Deno.test("main() reports the version declared in the package's deno.json for --
   assertEquals(result, 0);
   assertEquals(captured.stdout.trim(), manifestVersion);
 });
+
+Deno.test("the package's default export runs the CLI when executed as a program", async () => {
+  // Given the module the package's "." export points at (what
+  // `deno install jsr:@dv-cli/dv` and `deno run jsr:@dv-cli/dv` execute)
+  const manifestUrl = new URL("../deno.json", import.meta.url);
+  const manifest = z
+    .object({
+      version: z.string(),
+      exports: z.object({ ".": z.string() }),
+    })
+    .parse(JSON.parse(await Deno.readTextFile(manifestUrl)));
+  const entryPointUrl = new URL(manifest.exports["."], manifestUrl);
+
+  // When that module runs as a program with --version
+  const output = await new Deno.Command(Deno.execPath(), {
+    args: ["run", "-A", entryPointUrl.href, "--version"],
+    stdout: "piped",
+    stderr: "piped",
+  }).output();
+
+  // Then it exits 0 and prints the version, rather than exiting silently
+  assertEquals(output.code, 0);
+  assertEquals(
+    new TextDecoder().decode(output.stdout).trim(),
+    manifest.version,
+  );
+});
