@@ -165,6 +165,7 @@ export async function runPluginInvoke(
     : undefined;
   const invocation = await invokeOp({
     resolvedPlugin,
+    repoRootPath,
     opName: options.opName,
     environmentVariables,
     stdinPayload,

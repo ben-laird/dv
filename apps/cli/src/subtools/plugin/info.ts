@@ -29,6 +29,7 @@ const DEFAULT_INFO_TIMEOUT_MS = 30_000;
 
 export interface InvokeInfoArgs {
   resolvedPlugin: ResolvedPlugin;
+  repoRootPath: string;
   timeoutMs?: number;
   tracingHooks?: TracingHooks;
 }
@@ -37,6 +38,7 @@ export async function invokeInfo(args: InvokeInfoArgs): Promise<InfoResponse> {
   const { resolvedPlugin } = args;
   const { rawStdout } = await invokeOp({
     resolvedPlugin,
+    repoRootPath: args.repoRootPath,
     opName: "info",
     environmentVariables: buildInfoEnvironment(),
     timeoutMs: args.timeoutMs ?? DEFAULT_INFO_TIMEOUT_MS,
@@ -125,6 +127,7 @@ export class PluginInfoCache {
   async getOrLoad(args: {
     pluginKey: string;
     resolvedPlugin: ResolvedPlugin;
+    repoRootPath: string;
     timeoutMs?: number;
     tracingHooks?: TracingHooks;
   }): Promise<InfoResponse> {
@@ -132,6 +135,7 @@ export class PluginInfoCache {
     if (cached !== undefined) return cached;
     const fresh = await invokeInfo({
       resolvedPlugin: args.resolvedPlugin,
+      repoRootPath: args.repoRootPath,
       timeoutMs: args.timeoutMs,
       tracingHooks: args.tracingHooks,
     });

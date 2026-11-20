@@ -39,6 +39,7 @@ export async function resolveAllPlugins(
 // `.get(pluginKey)?.supportedOps` to gate optional ops.
 export async function loadInfoForAllPlugins(args: {
   resolvedPluginsByKey: Map<string, ResolvedPlugin>;
+  repoRootPath: string;
   timeoutMs: number;
   tracingHooks?: TracingHooks;
 }): Promise<PluginInfoCache> {
@@ -47,6 +48,7 @@ export async function loadInfoForAllPlugins(args: {
     await cache.getOrLoad({
       pluginKey,
       resolvedPlugin,
+      repoRootPath: args.repoRootPath,
       timeoutMs: args.timeoutMs,
       tracingHooks: args.tracingHooks,
     });

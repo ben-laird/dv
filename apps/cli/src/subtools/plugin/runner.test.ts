@@ -1,5 +1,6 @@
 import { assertEquals } from "@std/assert";
 import { join } from "@std/path";
+import { z } from "zod";
 import type { ResolvedPlugin } from "../discovery/resolve.ts";
 import { invokeOp } from "./runner.ts";
 
@@ -64,6 +65,7 @@ Deno.test("invokeOp invocation-kind: spawns the executable with [...baseArgs, op
       // When invokeOp runs with opName "discover"
       const { rawStdout } = await invokeOp({
         resolvedPlugin,
+        repoRootPath: Deno.cwd(),
         opName: "discover",
       });
 
@@ -97,6 +99,7 @@ Deno.test("invokeOp invocation-kind: DV_OPERATION env var still rides along", as
       // When invokeOp runs
       const { rawStdout } = await invokeOp({
         resolvedPlugin,
+        repoRootPath: Deno.cwd(),
         opName: "read-version",
       });
 
@@ -109,4 +112,43 @@ Deno.test("invokeOp invocation-kind: DV_OPERATION env var still rides along", as
       await Deno.remove(opEchoScript);
     },
   });
+});
+
+Deno.test("invokeOp spawns the plugin with the repo root as its working directory, whatever dv's cwd", async () => {
+  // Given a repo root holding a plugin script referenced by a relative
+  // path, and a dv process whose cwd is a subdirectory of that root
+  const repoRootPath = await Deno.realPath(
+    await Deno.makeTempDir({ prefix: "dv-runner-cwd-" }),
+  );
+  const callerWorkingDirectory = join(repoRootPath, "apps", "cli");
+  await Deno.mkdir(callerWorkingDirectory, { recursive: true });
+  await Deno.writeTextFile(
+    join(repoRootPath, "echo-cwd.ts"),
+    "console.log(JSON.stringify({ cwd: Deno.cwd() }));\n",
+  );
+  const resolvedPlugin: ResolvedPlugin = {
+    kind: "invocation",
+    path: "deno run -A ./echo-cwd.ts",
+    executable: "deno",
+    baseArgs: ["run", "-A", "./echo-cwd.ts"],
+  };
+  const previousWorkingDirectory = Deno.cwd();
+  Deno.chdir(callerWorkingDirectory);
+
+  try {
+    // When invokeOp runs
+    const { rawStdout } = await invokeOp({
+      resolvedPlugin,
+      repoRootPath,
+      opName: "discover",
+    });
+
+    // Then the relative script path resolved and the plugin saw the
+    // repo root as its cwd
+    const echoed = z.object({ cwd: z.string() }).parse(JSON.parse(rawStdout));
+    assertEquals(echoed.cwd, repoRootPath);
+  } finally {
+    Deno.chdir(previousWorkingDirectory);
+    await Deno.remove(repoRootPath, { recursive: true });
+  }
 });

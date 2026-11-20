@@ -218,6 +218,7 @@ export async function runVersion(
   // any per-package op runs, not mid-pipeline.
   const pluginInfoCache = await loadInfoForAllPlugins({
     resolvedPluginsByKey: resolvedPluginsByUseString,
+    repoRootPath,
     timeoutMs: DEFAULT_FAST_OP_TIMEOUT_MS,
     tracingHooks,
   });

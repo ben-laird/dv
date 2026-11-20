@@ -116,6 +116,7 @@ export async function runPluginVerify(
   try {
     const infoResponse = await invokeInfo({
       resolvedPlugin,
+      repoRootPath,
       timeoutMs: opTimeoutMs,
       tracingHooks,
     });
@@ -156,6 +157,7 @@ export async function runPluginVerify(
     try {
       const discoverInvocation = await invokeOp({
         resolvedPlugin,
+        repoRootPath,
         opName: "discover",
         environmentVariables: buildVerifyEnvironment({
           repoRootPath,
@@ -199,6 +201,7 @@ export async function runPluginVerify(
         try {
           const readVersionInvocation = await invokeOp({
             resolvedPlugin,
+            repoRootPath,
             opName: "read-version",
             environmentVariables: buildVerifyEnvironment({
               repoRootPath,
@@ -255,6 +258,7 @@ export async function runPluginVerify(
     try {
       const finalizeInvocation = await invokeOp({
         resolvedPlugin,
+        repoRootPath,
         opName: "finalize",
         environmentVariables: buildVerifyEnvironment({
           repoRootPath,
@@ -311,6 +315,7 @@ export async function runPluginVerify(
         try {
           const getDependenciesInvocation = await invokeOp({
             resolvedPlugin,
+            repoRootPath,
             opName: "get-dependencies",
             environmentVariables: buildVerifyEnvironment({
               repoRootPath,
@@ -361,6 +366,7 @@ export async function runPluginVerify(
   try {
     await invokeOp({
       resolvedPlugin,
+      repoRootPath,
       opName: BOGUS_OP_NAME,
       environmentVariables: buildVerifyEnvironment({ repoRootPath }),
       timeoutMs: opTimeoutMs,
