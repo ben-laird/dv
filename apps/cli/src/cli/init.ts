@@ -55,27 +55,32 @@ export async function runInit(): Promise<InitResult> {
   const gitignorePath = join(repoRoot, CONFIG_DIR, ".gitignore");
 
   await ensureDir(dirname(cfgPath));
-  const configCreated = await writeIfMissing(cfgPath, STARTER_CONFIG);
+  const configCreated = await writeIfMissing({
+    path: cfgPath,
+    contents: STARTER_CONFIG,
+  });
   const recordsDirCreated = await ensureDirCreated(recPath);
-  const gitignoreCreated = await writeIfMissing(
-    gitignorePath,
-    STARTER_CHANGELOG_GITIGNORE,
-  );
+  const gitignoreCreated = await writeIfMissing({
+    path: gitignorePath,
+    contents: STARTER_CHANGELOG_GITIGNORE,
+  });
 
   return { repoRoot, configCreated, recordsDirCreated, gitignoreCreated };
 }
 
-async function writeIfMissing(
-  path: string,
-  contents: string,
-): Promise<boolean> {
+interface WriteIfMissingArgs {
+  path: string;
+  contents: string;
+}
+
+async function writeIfMissing(args: WriteIfMissingArgs): Promise<boolean> {
   try {
-    await Deno.lstat(path);
+    await Deno.lstat(args.path);
     return false;
   } catch (err) {
     if (!(err instanceof Deno.errors.NotFound)) throw err;
   }
-  await Deno.writeTextFile(path, contents);
+  await Deno.writeTextFile(args.path, args.contents);
   return true;
 }
 
