@@ -418,8 +418,11 @@ async function localModulesOf({
   if (infoRun.kind === "spawn-failed") {
     return denoInfoBroken(`cannot run deno info: ${infoRun.reason}`);
   }
+  // deno info reports missing or broken modules as per-module errors
+  // and still exits 0; a non-zero exit means the setup itself is
+  // broken (a malformed deno.json, an unsupported flag, a crash).
   if (infoRun.code !== 0) {
-    return graphUnavailable(
+    return denoInfoBroken(
       `deno info ${entryPoint} failed (exit ${infoRun.code}): ${infoRun.stderr.trim() || "<no stderr>"}`,
     );
   }
@@ -455,10 +458,10 @@ async function localModulesOf({
 }
 
 // Why the module graph couldn't be read. `graph-unavailable` is a
-// fact about this package (an entry point won't load, the walk ran
+// fact about this package (a local module won't load, the walk ran
 // out of time): the op falls back to the import map. `deno-info-broken`
-// means the tool itself misbehaved (deno missing, output that isn't
-// the expected JSON); guessing past that would hide a broken setup.
+// means the setup misbehaved (deno missing or exiting non-zero, output
+// that isn't a module graph); guessing past that would hide it.
 type GraphFailure =
   | { kind: "graph-unavailable"; reason: string }
   | { kind: "deno-info-broken"; reason: string };

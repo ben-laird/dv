@@ -887,15 +887,20 @@ Deno.test("get-dependencies fails, without falling back, when deno info lists no
   });
 });
 
-Deno.test("get-dependencies falls back with a warning when deno info exits non-zero", async () => {
+Deno.test("get-dependencies falls back with a warning on a per-module load error", async () => {
   await withTempDir(async (repoRoot) => {
-    // Given: a deno whose info run fails, as on an unloadable entry point
+    // Given: a deno whose graph carries a local module error and exits
+    // 0, as real deno info does for an unloadable entry point
     await writeWorkspaceFixture(repoRoot);
+    const graphWithError = JSON.stringify({
+      roots: ["file:///gen/mod.ts"],
+      modules: [{ specifier: "file:///gen/mod.ts", error: "Module not found" }],
+    });
 
     // When: dv asks which candidates a depends on
     const { outcome, stderr } = await getDependenciesWithFakeDeno({
       repoRoot,
-      fakeDenoScript: "#!/bin/sh\necho 'error: Module not found' >&2\nexit 1\n",
+      fakeDenoScript: `#!/bin/sh\necho '${graphWithError}'\n`,
     });
 
     // Then: the op succeeds with the (empty) import-map answer and warns
@@ -905,6 +910,25 @@ Deno.test("get-dependencies falls back with a warning when deno info exits non-z
     });
     assertStringIncludes(stderr, "warning: @fixture/a:");
     assertStringIncludes(stderr, "Module not found");
+  });
+});
+
+Deno.test("get-dependencies fails, without falling back, when deno info exits non-zero", async () => {
+  await withTempDir(async (repoRoot) => {
+    // Given: a deno whose info run exits non-zero, as on a malformed config
+    await writeWorkspaceFixture(repoRoot);
+
+    // When: dv asks which candidates a depends on
+    const { outcome, stderr } = await getDependenciesWithFakeDeno({
+      repoRoot,
+      fakeDenoScript: "#!/bin/sh\necho 'error: invalid config' >&2\nexit 1\n",
+    });
+
+    // Then: the op fails with a structured error, not a warning
+    assertEquals(outcome.exitCode, 1);
+    const response = isRecord(outcome.response) ? outcome.response : {};
+    assertStringIncludes(String(response.error), "invalid config");
+    assertEquals(stderr.includes("warning"), false);
   });
 });
 
