@@ -85,6 +85,8 @@ Deno.test("runInit points the starter config at the running release's published 
         `# yaml-language-server: $schema=${expectedSchemaUrl}`,
       );
       assertEquals(configLines.includes(`$schema: ${expectedSchemaUrl}`), true);
+      // ...and nowhere else, so the two pointers are the only copies
+      assertEquals(configBody.split(expectedSchemaUrl).length - 1, 2);
     },
   });
 });

@@ -16,7 +16,7 @@ interface StarterConfigArgs {
 function starterConfig(args: StarterConfigArgs): string {
   return `# yaml-language-server: $schema=${args.configSchemaUrl}
 #
-# dv configuration. Schema: ${args.configSchemaUrl}
+# dv configuration.
 #
 # Discovery defines which paths are Packages and which plugin owns each.
 # Uncomment and adapt once you have a plugin (see specs/plugin-contract.md
