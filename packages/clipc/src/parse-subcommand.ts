@@ -147,7 +147,14 @@ const OPTIONAL_VALUE_PLACEHOLDER_KEY = "clipc optional value";
 const OPTIONAL_VALUE_PLACEHOLDER = `--${OPTIONAL_VALUE_PLACEHOLDER_KEY}=`;
 // An undeclared key, so parseArgs hands each marker to `unknown` at its
 // place in argv; the attached index keeps markers distinct.
-const REFUSAL_MARKER_PREFIX = "--clipc refused flag=";
+const REFUSAL_MARKER_KEY = "clipc refused flag";
+const REFUSAL_MARKER_PREFIX = `--${REFUSAL_MARKER_KEY}=`;
+// A user may type either key; such a token is refused before rewriting so
+// it can't pose as a placeholder or a marker.
+const RESERVED_FLAG_KEYS: ReadonlySet<string> = new Set([
+  OPTIONAL_VALUE_PLACEHOLDER_KEY,
+  REFUSAL_MARKER_KEY,
+]);
 
 // parseArgs has no optional attached value: told the flag is a string it
 // takes the next word, told it's a boolean it takes a next `true`/`false`.
@@ -205,8 +212,8 @@ type OptionalValueSpelling =
 
 // One token against the declared optional-value flags: `--x` is true,
 // `--no-x` false, `--x=<value>` whatever validateOptionalValue reads it
-// as. `--no-x=<value>`
-// is refused here, since parseArgs would quietly read it as `--x=<value>`.
+// as. `--no-x=<value>` is refused here, since parseArgs would quietly
+// read it as `--x=<value>`, and so is any typed reserved key.
 function readOptionalValueSpelling(
   args: ReadOptionalValueSpellingArgs,
 ): OptionalValueSpelling {
@@ -214,6 +221,17 @@ function readOptionalValueSpelling(
   const [name = "", ...attachedParts] = args.token.slice(2).split("=");
   const attached =
     attachedParts.length === 0 ? undefined : attachedParts.join("=");
+
+  const keyAfterNegation = name.startsWith("no-") ? name.slice(3) : name;
+  if (
+    RESERVED_FLAG_KEYS.has(name) ||
+    RESERVED_FLAG_KEYS.has(keyAfterNegation)
+  ) {
+    return {
+      kind: "refused",
+      error: { kind: "unknown-flag", flagToken: args.token },
+    };
+  }
 
   const spec = args.optionalValueSpecs.get(name);
   if (spec !== undefined) {

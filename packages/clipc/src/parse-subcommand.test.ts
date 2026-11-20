@@ -554,6 +554,32 @@ Deno.test("parseSubcommandArgv still refuses an unknown flag between optional-va
   });
 });
 
+Deno.test("parseSubcommandArgv refuses typed tokens that spell its internal keys", () => {
+  // Given an optional-value flag beside a string flag
+  const flagSpecMap = askOnCommitFlags;
+
+  for (const token of [
+    "--clipc optional value=evil",
+    "--clipc optional value",
+    "--clipc refused flag=0",
+    "--no-clipc optional value=evil",
+  ]) {
+    // When the reserved spelling is typed, next to an invalid value that
+    // would otherwise own marker 0, and before a word
+    const outcome = parseSubcommandArgv({
+      flagSpecMap,
+      subcommandArgv: [token, "word", "--askOnCommit=bad"],
+    });
+
+    // Then it is an unknown flag named as typed: not dropped, not taking
+    // the next word, and not passing for the later refusal
+    assertEquals(outcome, {
+      ok: false,
+      error: { kind: "unknown-flag", flagToken: token },
+    });
+  }
+});
+
 Deno.test("parseSubcommandArgv reads an optional-value flag whose name starts with no-", () => {
   // Given an optional-value flag named like a negation
   const flagSpecMap = {
