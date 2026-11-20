@@ -55,8 +55,10 @@ covers the four arms and when to pick which.
   name with no `imports` entry. Every local module in the graph is mapped
   to the member owning it (the nearest `deno.json`/`deno.jsonc` above the
   file). The walk runs with `--no-remote --no-npm --no-lock`, so it is
-  offline and never writes `deno.lock`, and each `deno info` call is
-  bounded by a 30-second timeout. A local module that fails to load is a
+  offline and never writes `deno.lock`. The whole walk shares one
+  45-second budget across every entry point (inside dv's 60-second
+  fast-op timeout), and a `deno info` still running when it expires is
+  killed. A local module that fails to load is a
   `{ ok: false, error }` response rather than a silently short list.
 - `finalize` — runs `deno install` to refresh `deno.lock` and reports it
   in `additionalChangedFiles` whenever it differs from `HEAD`.

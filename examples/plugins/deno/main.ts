@@ -321,10 +321,20 @@ async function packagesInModuleGraph({
   packageDir: string;
   exports: unknown;
 }): Promise<Result<Set<string>>> {
+  // One deadline for the whole walk, well inside dv's 60s fast-op
+  // timeout, however many entry points the package exports. Aborting
+  // the signal kills any `deno info` child still running.
+  const budgetMs = 45_000;
+  const deadline = AbortSignal.timeout(budgetMs);
   const ownerNames = new Set<string>();
   const ownerNameByDir = new Map<string, string | undefined>();
   for (const entryPoint of exportEntryPoints(exports)) {
-    const localModules = await localModulesOf({ packageDir, entryPoint });
+    const localModules = await localModulesOf({
+      packageDir,
+      entryPoint,
+      deadline,
+      budgetMs,
+    });
     if (!localModules.ok) return localModules;
     for (const modulePath of localModules.value) {
       const ownerName = await owningPackageName({
@@ -352,13 +362,19 @@ function exportEntryPoints(exports: unknown): string[] {
 async function localModulesOf({
   packageDir,
   entryPoint,
+  deadline,
+  budgetMs,
 }: {
   packageDir: string;
   entryPoint: string;
+  deadline: AbortSignal;
+  budgetMs: number;
 }): Promise<Result<string[]>> {
-  // Bounded: a hung resolver must not stall `dv release`.
-  const timeoutMs = 30_000;
-  const signal = AbortSignal.timeout(timeoutMs);
+  const timedOut: Result<string[]> = {
+    ok: false,
+    error: `deno info ${entryPoint} ran past the ${budgetMs}ms budget`,
+  };
+  if (deadline.aborted) return timedOut;
   let infoOutput: Deno.CommandOutput;
   try {
     infoOutput = await new Deno.Command("deno", {
@@ -375,7 +391,7 @@ async function localModulesOf({
       env: { NO_COLOR: "1" },
       stdout: "piped",
       stderr: "piped",
-      signal,
+      signal: deadline,
     }).output();
   } catch (caughtError) {
     return {
@@ -383,12 +399,7 @@ async function localModulesOf({
       error: `cannot run deno info: ${describeError(caughtError)}`,
     };
   }
-  if (signal.aborted) {
-    return {
-      ok: false,
-      error: `deno info ${entryPoint} timed out after ${timeoutMs}ms`,
-    };
-  }
+  if (deadline.aborted) return timedOut;
   if (!infoOutput.success) {
     const stderrText = new TextDecoder().decode(infoOutput.stderr).trim();
     return {
