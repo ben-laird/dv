@@ -315,10 +315,12 @@ About to commit core to 1.0.0 — this is a stability promise. Proceed? [y/N]
 dv migrate config [--dry-run] [--json]
 ```
 
-Rewrites `.dv/config.yaml` to match the current schema shape. Each
-breaking config change between dv versions ships with one migration
-step in the [config-migrations subtool](../apps/cli/src/subtools/config-migrations/);
-this command walks every registered step against the file. Idempotent
+Rewrites `.dv/config.yaml` to match the current dv. Each breaking config
+change between dv versions ships with one migration step in the
+[config-migrations subtool](../apps/cli/src/subtools/config-migrations/),
+and so does each piece of routine upkeep a config needs as dv moves on
+(such as `schema-pointer-current` below); this command walks every
+registered step against the file. Idempotent
 — running on an already-migrated config is a friendly no-op.
 
 The first step, `use-key-discriminated`,

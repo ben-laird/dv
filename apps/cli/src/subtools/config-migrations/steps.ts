@@ -13,6 +13,10 @@ export type { ConfigMigrationStep } from "./step-types.ts";
 // load-bearing only when future steps build on the output of
 // prior ones.
 //
+// A step covers either a breaking config change (`use-key-discriminated`)
+// or routine upkeep a config needs as dv moves on
+// (`schema-pointer-current`). Both kinds must be idempotent.
+//
 // To add a new step:
 //   1. Create `subtools/config-migrations/step-<short-name>.ts`
 //      exporting a descriptor object matching the
@@ -21,8 +25,8 @@ export type { ConfigMigrationStep } from "./step-types.ts";
 //      insert — users with a config from an earlier dv release
 //      still need every prior step to walk forward.
 //   3. Add tests under `subtools/config-migrations/step-<name>.test.ts`.
-//   4. Update specs/config-format.md § Migration with the
-//      before/after for the new shape.
+//   4. Specify it in specs/cli.md § dv migrate config and in the
+//      specs/config-format.md section for the field it rewrites.
 
 export const CONFIG_MIGRATION_STEPS: ConfigMigrationStep[] = [
   useKeyStep,

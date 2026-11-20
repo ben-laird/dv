@@ -30,8 +30,10 @@ per capability; commands compose them and hold no domain logic of their own.
 - `src/subtools/tagging` — Tag formatting + git tag IO (M5).
 - `src/subtools/publishing` — invoke the release plugin (M5).
 - `src/subtools/config-migrations` — ordered step registry that
-  rewrites `.dv/config.yaml` between dv schema versions. Each
-  breaking config change ships one `step-*.ts` here; the runner
+  rewrites `.dv/config.yaml` between dv versions. Each breaking config
+  change, and each routine upkeep rewrite (e.g. `schema-pointer-current`,
+  which moves the schema pointers to the running dv), ships one
+  `step-*.ts` here; the runner
   composes them. Text-in / text-out per step so user comments
   survive — round-tripping through @std/yaml would destroy them.
   Powers `dv migrate config`.
