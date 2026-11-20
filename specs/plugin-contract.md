@@ -47,12 +47,17 @@ Both forms are supported; choose whichever fits.
 
 When `dv` invokes an operation, it:
 
-1. Sets a small set of environment variables (see below).
-2. If the operation has a structured payload, writes it as JSON to the
+1. Spawns the plugin process with the **repo root** as its working
+   directory, whatever directory `dv` itself was run from. Relative
+   paths a plugin reads or returns therefore resolve against the repo
+   root, as do relative paths inside a `run:` invocation
+   (`config-format.md` § Plugin resolution).
+2. Sets a small set of environment variables (see below).
+3. If the operation has a structured payload, writes it as JSON to the
    plugin's stdin.
-3. Reads JSON from stdout as the response.
-4. Treats stderr as human-readable logs (passed through to the user).
-5. Checks the exit code: `0` = success, non-zero = failure.
+4. Reads JSON from stdout as the response.
+5. Treats stderr as human-readable logs (passed through to the user).
+6. Checks the exit code: `0` = success, non-zero = failure.
 
 ## Environment variables
 

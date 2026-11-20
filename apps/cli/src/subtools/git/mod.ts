@@ -14,7 +14,11 @@ export {
   assertNoUnstagedFinalizeDrift,
 } from "./finalize-drift.ts";
 export { type PushTagsArgs, pushTags } from "./push.ts";
-export { findRepoRoot, requireRepoRoot } from "./repo-root.ts";
+export {
+  findRepoRoot,
+  findRepoRootOrCwd,
+  requireRepoRoot,
+} from "./repo-root.ts";
 export { type StageFilesArgs, stageFiles } from "./stage.ts";
 export { type MintTagArgs, mintTag } from "./tag.ts";
 export {

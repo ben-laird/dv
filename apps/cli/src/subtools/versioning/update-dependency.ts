@@ -50,6 +50,7 @@ export async function invokeUpdateDependency(
   });
   const { rawStdout } = await invokeOp({
     resolvedPlugin: args.resolvedPlugin,
+    repoRootPath: args.repoRootPath,
     opName: "update-dependency",
     environmentVariables: childEnvironment,
     stdinPayload,

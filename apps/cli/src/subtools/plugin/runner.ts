@@ -16,6 +16,11 @@ import type { TracingHooks } from "./tracing.ts";
 export interface InvokeOpArgs {
   resolvedPlugin: ResolvedPlugin;
   opName: string;
+  // Absolute repo root. The plugin process runs with it as its
+  // working directory whatever dv's own cwd, so relative paths in
+  // `run:` invocations and plugin output resolve against the repo
+  // root (specs/plugin-contract.md § Invocation).
+  repoRootPath: string;
   environmentVariables?: Record<string, string>;
   stdinPayload?: string;
   timeoutMs?: number;
@@ -81,6 +86,7 @@ export async function invokeOp(args: InvokeOpArgs): Promise<InvokeOpResult> {
   try {
     childProcess = new Deno.Command(executablePath, {
       args: executableArgv,
+      cwd: args.repoRootPath,
       env: childEnvironment,
       stdin: args.stdinPayload !== undefined ? "piped" : "null",
       stdout: "piped",

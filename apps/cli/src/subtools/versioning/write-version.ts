@@ -36,6 +36,7 @@ export async function invokeWriteVersion(
   });
   const { rawStdout } = await invokeOp({
     resolvedPlugin: args.resolvedPlugin,
+    repoRootPath: args.repoRootPath,
     opName: "write-version",
     environmentVariables: childEnvironment,
     timeoutMs: args.timeoutMs,

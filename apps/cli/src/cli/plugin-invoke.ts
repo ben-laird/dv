@@ -1,6 +1,7 @@
 import { DvError } from "../domain/errors.ts";
 import { SCHEMA_URNS } from "../domain/schema-urns.ts";
 import { resolvePlugin } from "../subtools/discovery/resolve.ts";
+import { findRepoRootOrCwd } from "../subtools/git/mod.ts";
 import {
   DV_CONTRACT_VERSION,
   invokeOp,
@@ -66,7 +67,7 @@ export interface RunPluginInvokeOptions {
   packageName?: string;
   /** Package directory to pass as Op context (sets `DV_PACKAGE_PATH`). */
   packagePath?: string;
-  /** Repo root to pass as Op context (sets `DV_REPO_ROOT`). */
+  /** Repo root to pass as Op context (sets `DV_REPO_ROOT`); defaults to the git repo root, or the cwd outside a repo. */
   repoRoot?: string;
   /** Discovery glob to pass to a `discover` Op. */
   discoverGlob?: string;
@@ -123,7 +124,7 @@ export async function runPluginInvoke(
   const pluginReference = parsePluginPositional({
     rawPositional: options.pluginPositional,
   });
-  const repoRootPath = options.repoRoot ?? Deno.cwd();
+  const repoRootPath = options.repoRoot ?? (await findRepoRootOrCwd());
   const resolvedPlugin = await resolvePlugin({
     pluginReference,
     repoRootPath,
@@ -165,6 +166,7 @@ export async function runPluginInvoke(
     : undefined;
   const invocation = await invokeOp({
     resolvedPlugin,
+    repoRootPath,
     opName: options.opName,
     environmentVariables,
     stdinPayload,

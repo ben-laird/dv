@@ -436,13 +436,18 @@ Exit code: `0` when every assignment resolved and discovered cleanly,
 
 ```
 dv plugin invoke <plugin> <op> [--package <name>] [--path <dir>]
-                 [--json '<payload>']
+                 [--repo-root <dir>] [--json '<payload>']
 ```
 
 Runs a single Op against a Plugin with controlled inputs — no repo, config,
 or Records required. Sets the env vars / stdin `dv` would set, prints the
 full exchange, and conformance-checks the response. The workhorse for
 iterating on one Op. See [plugin-contract.md](plugin-contract.md).
+
+The repo root (`DV_REPO_ROOT`, the Plugin's working directory, and the base
+for a relative Plugin path) is `--repo-root` when given; otherwise the git
+repo root containing the current directory, or the current directory itself
+outside a git repo.
 
 ```
 $ dv plugin invoke ./my-plugin read-version --package core --path packages/core
@@ -456,14 +461,16 @@ $ dv plugin invoke ./my-plugin read-version --package core --path packages/core
 ## `dv plugin verify`
 
 ```
-dv plugin verify <plugin>
+dv plugin verify <plugin> [--repo-root <dir>] [--glob <glob>]
 ```
 
 Automated conformance smoke test, CI-friendly. Checks the Plugin is
 resolvable and executable, that `discover` is present, that each declared Op
 returns contract-valid JSON (against the versioned per-op response schemas),
 and that bad input produces a non-zero exit. Run it in a Plugin's own
-pipeline to guard against contract drift.
+pipeline to guard against contract drift. The repo root defaults as for
+[`dv plugin invoke`](#dv-plugin-invoke): `--repo-root`, else the enclosing git
+repo root, else the current directory.
 
 ```
 $ dv plugin verify ./my-plugin
