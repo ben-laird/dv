@@ -306,6 +306,50 @@ Deno.test("get-dependencies unions import-map entries with module-graph edges", 
   });
 });
 
+Deno.test("get-dependencies attributes a module under a nameless nested manifest to the named member above it", async () => {
+  await withTempDir(async (repoRoot) => {
+    // Given: a reaches b only through a file under b/internal, which
+    // carries its own nameless deno.json
+    await writeWorkspaceFixture(repoRoot);
+    const internalDir = join(repoRoot, "packages", "b", "internal");
+    await Deno.mkdir(internalDir);
+    await Deno.writeTextFile(join(internalDir, "deno.json"), "{}\n");
+    await Deno.writeTextFile(
+      join(internalDir, "util.ts"),
+      "export const util = 1;\n",
+    );
+    await Deno.writeTextFile(
+      join(repoRoot, "packages", "b", "deno.json"),
+      `${JSON.stringify(
+        {
+          name: "@fixture/b",
+          version: "1.0.0",
+          exports: { ".": "./mod.ts", "./internal": "./internal/util.ts" },
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    await Deno.writeTextFile(
+      join(repoRoot, "packages", "a", "mod.ts"),
+      `import { util } from "@fixture/b/internal";\nexport const a = util;\n`,
+    );
+
+    // When: dv asks which candidates a depends on
+    const outcome = await runOp({
+      op: "get-dependencies",
+      env: getDependenciesEnv({ repoRoot, member: "a" }),
+      stdin: { candidates: ["@fixture/b", "@fixture/c"] },
+    });
+
+    // Then: the walk passes the nameless manifest and credits b
+    assertEquals(outcome, {
+      exitCode: 0,
+      response: { ok: true, dependencies: ["@fixture/b"] },
+    });
+  });
+});
+
 Deno.test("get-dependencies reports a leaf member as having no dependencies", async () => {
   await withTempDir(async (repoRoot) => {
     // Given: member b imports no other member

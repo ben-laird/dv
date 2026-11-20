@@ -53,8 +53,9 @@ covers the four arms and when to pick which.
   `deno info --json` run on each `exports` entry point. The graph catches
   what the import map can't: Deno workspace members import each other by
   name with no `imports` entry. Every local module in the graph is mapped
-  to the member owning it (the nearest `deno.json`/`deno.jsonc` above the
-  file). The walk runs with `--no-remote --no-npm --no-lock`, so it is
+  to the member owning it: the nearest `deno.json`/`deno.jsonc` above the
+  file that has a `name`. Nameless manifests on the way up, such as a
+  nested tool config, are skipped. The walk runs with `--no-remote --no-npm --no-lock`, so it is
   offline and never writes `deno.lock`. The whole walk shares one
   45-second budget across every entry point (inside dv's 60-second
   fast-op timeout), and a `deno info` still running when it expires is

@@ -449,8 +449,10 @@ async function localModulesOf({
   return { ok: true, value: localPaths };
 }
 
-// The `name` of the nearest manifest at or above the module's
-// directory — the workspace member that owns the file. Memoized per
+// The `name` of the nearest NAMED manifest at or above the module's
+// directory — the workspace member that owns the file. A nameless
+// deno.json on the way up (a nested tool config, the workspace root)
+// is not a package, so the walk keeps climbing past it. Memoized per
 // directory since a graph revisits the same folders constantly.
 async function owningPackageName({
   modulePath,
@@ -469,9 +471,9 @@ async function owningPackageName({
     }
     visitedDirs.push(currentDir);
     const manifest = await readManifest(currentDir);
-    if (manifest.ok) {
-      const name = manifest.value.parsed.name;
-      ownerName = typeof name === "string" ? name : undefined;
+    const name = manifest.ok ? manifest.value.parsed.name : undefined;
+    if (typeof name === "string" && name.length > 0) {
+      ownerName = name;
       break;
     }
     const parentDir = dirname(currentDir);
