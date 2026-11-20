@@ -42,7 +42,7 @@ switch (op) {
     await runGetDependencies();
     break;
   case "release":
-    runRelease();
+    await runRelease();
     break;
   case "finalize":
     await runFinalize();
@@ -463,37 +463,75 @@ async function owningPackageName({
 
 // === release ===================================================
 
-function runRelease(): void {
-  // STUB: reports a successful no-publish result so `dv release`
-  // can complete the tag-minting + plugin-dispatch path end-to-end
-  // without actually pushing anything to a registry. A real plugin
-  // for a Deno workspace would `deno publish` here, or shell out to
-  // `npm publish` / `cargo publish` / `gh release create` depending
-  // on the ecosystem the package lives in.
-  //
-  // Env vars dv sets for this op:
-  //   DV_REPO_ROOT    — absolute path to repo root
-  //   DV_PACKAGE_NAME — package name from discover
-  //   DV_PACKAGE_PATH — directory of this package, relative to repo
-  //   DV_NEW_VERSION  — the version just tagged
-  //   DV_GIT_TAG      — the tag string that was minted
-  //
-  // Return shape (specs/schemas/plugin-responses.json):
-  //   { ok, published?, skipped?, message? }
-  //
-  // Per specs/plugin-contract.md, a release-op failure does NOT
-  // roll back the tag — the plugin's job is to be idempotent (or
-  // at least safe to re-run via `dv release --force`). Returning
-  // `{ ok: false, message: "..." }` is a valid response shape: dv
-  // continues with the rest of the run and surfaces the failure
-  // in the summary.
+// Publishes the package to JSR with `deno publish`, run from the
+// package directory so it reads that member's manifest. This is the
+// publisher dv uses for its own releases, lifted in so the example
+// works on a real repo. Swap the command for `npm publish`,
+// `gh release create`, etc. if your registry differs.
+//
+// Env vars dv sets for this op:
+//   DV_REPO_ROOT    — absolute path to repo root
+//   DV_PACKAGE_NAME — package name from discover
+//   DV_PACKAGE_PATH — directory of this package
+//   DV_NEW_VERSION  — the version just tagged
+//   DV_GIT_TAG      — the tag string that was minted
+//
+// Credentials: no --token is passed. On a GitHub Actions workflow
+// that JSR trusts, `deno publish` picks up OIDC credentials on its
+// own; elsewhere, set up auth the way `deno publish` documents.
+//
+// Return shape (specs/schemas/plugin-responses.json):
+//   { ok, published?, skipped?, message? }
+//
+// Per specs/plugin-contract.md, a release-op failure does NOT roll
+// back the tag. A failed publish is data, not a crash: respond
+// `{ ok: false, message }` and exit 0, so dv records the outcome,
+// continues with the other packages, and `dv release --force` can
+// retry once the cause is fixed. dv bounds this op with
+// `publishing.timeout`.
+
+async function runRelease(): Promise<void> {
+  const packagePath = Deno.env.get("DV_PACKAGE_PATH");
   const packageName = Deno.env.get("DV_PACKAGE_NAME") ?? "<unknown>";
   const newVersion = Deno.env.get("DV_NEW_VERSION") ?? "<unknown>";
+  if (!packagePath) failWith("DV_PACKAGE_PATH is required");
+
+  // --allow-dirty: dv has written the version commit and tag, but
+  // the tree may still carry unrelated changes (e.g. CI artifacts).
+  // --quiet keeps JSR's progress chatter off stdout, which dv
+  // parses as JSON.
+  let publishResult: Deno.CommandOutput;
+  try {
+    publishResult = await new Deno.Command("deno", {
+      args: ["publish", "--allow-dirty", "--quiet"],
+      cwd: packagePath,
+      stdout: "piped",
+      stderr: "piped",
+    }).output();
+  } catch (caughtError) {
+    console.log(
+      JSON.stringify({
+        ok: false,
+        message: `cannot run deno publish: ${describeError(caughtError)}`,
+      }),
+    );
+    return;
+  }
+  if (!publishResult.success) {
+    const stderrText = new TextDecoder().decode(publishResult.stderr).trim();
+    console.log(
+      JSON.stringify({
+        ok: false,
+        message: `deno publish failed for ${packageName}@${newVersion} (exit ${publishResult.code}): ${stderrText || "<no stderr>"}`,
+      }),
+    );
+    return;
+  }
   console.log(
     JSON.stringify({
       ok: true,
-      published: false,
-      message: `example plugin: would have published ${packageName}@${newVersion}; replace this stub to actually publish`,
+      published: true,
+      message: `published ${packageName}@${newVersion} to JSR`,
     }),
   );
 }

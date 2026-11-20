@@ -60,22 +60,22 @@ covers the four arms and when to pick which.
   `{ ok: false, error }` response rather than a silently short list.
 - `finalize` — runs `deno install` to refresh `deno.lock` and reports it
   in `additionalChangedFiles` whenever it differs from `HEAD`.
-- `release` — **stub** that reports `{ok: true, published: false}` with a
-  message naming the package + version it would have published. Real
-  plugins replace this with `deno publish`, `npm publish`,
-  `cargo publish`, `gh release create`, posts to Slack, etc. The stub
-  exists so `dv release` can complete the tag-minting + plugin-dispatch
-  path end-to-end without actually pushing to a registry. Per
-  `specs/plugin-contract.md`, a release-op failure does NOT roll back
-  the tag — the plugin's job is to be idempotent (or at least safe to
-  re-run via `dv release --force`).
+- `release` — publishes the package to JSR with
+  `deno publish --allow-dirty --quiet`, run from the package directory.
+  It passes no `--token`: on a GitHub Actions workflow JSR trusts,
+  `deno publish` uses OIDC on its own. A successful publish reports
+  `{ ok: true, published: true }`. A failed publish reports
+  `{ ok: false, message }` (with `deno publish`'s stderr) and exits 0:
+  per `specs/plugin-contract.md`, a release-op failure does NOT roll back
+  the tag, so dv records the outcome, carries on with the other packages,
+  and `dv release --force` retries once the cause is fixed.
 
 ## How
 
 Single-file dispatcher: `main.ts` switches on `Deno.args[0]` (the Op name dv
 appends) and routes to the per-Op handler function. JSON-over-stdio per
 `specs/plugin-contract.md`. Imports JSR std modules inline
-(`jsr:@std/path`, `jsr:@std/fs`) so no separate `deno.json` for the plugin
+(`jsr:@std/path`, `jsr:@std/fs`, `jsr:@std/jsonc`) so no separate `deno.json` for the plugin
 directory is needed — copy `main.ts` into your repo and the script is
 self-contained.
 
@@ -87,10 +87,10 @@ The most common adaptations:
   `deno.json` reads/writes with the manifest format your packages use.
   The Op surfaces (`discover` returns `{ name, path }`; `read-version`
   returns `{ version }`; etc.) don't change.
-- **Implement `release` properly** — replace the stub with whatever
-  publishing command your registry needs. The function gets
-  `DV_PACKAGE_NAME`, `DV_NEW_VERSION`, `DV_GIT_TAG`, and `DV_PACKAGE_PATH`
-  in env vars.
+- **Publish somewhere other than JSR** — swap the `deno publish` command
+  in `runRelease` for whatever your registry needs (`npm publish`,
+  `gh release create`, …). The function gets `DV_PACKAGE_NAME`,
+  `DV_NEW_VERSION`, `DV_GIT_TAG`, and `DV_PACKAGE_PATH` in env vars.
 - **Lock down permissions** — `deno run -A` grants everything for
   simplicity. A real plugin can narrow to just what it needs, e.g.
   `deno run --allow-read --allow-env --allow-write ...`.
