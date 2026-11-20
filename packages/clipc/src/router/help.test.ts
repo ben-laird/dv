@@ -51,3 +51,46 @@ Deno.test("formatCommandHelp renders a value flag's valueName in place of its ki
     "  --pkg <name>    Package",
   ]);
 });
+
+Deno.test("formatCommandHelp renders an optional-value flag's declared values as an optional attachment", () => {
+  // Given optional-value flags with one and with several declared values
+  const flags = {
+    askOnCommit: {
+      kind: "optional-value",
+      values: ["null"],
+      description: "Ask before commit",
+    },
+    color: {
+      kind: "optional-value",
+      values: ["always", "never"],
+      description: "Colorize",
+    },
+  } satisfies Record<string, FlagSpec>;
+
+  // When the leaf's help is rendered
+  const lines = flagLines(flags);
+
+  // Then each shows `--flag[=value]`, several values separated by `|`
+  assertEquals(lines, [
+    "  --askOnCommit[=null]      Ask before commit",
+    "  --color[=always|never]    Colorize",
+  ]);
+});
+
+Deno.test("formatCommandHelp renders an optional-value flag's valueName as an optional attachment", () => {
+  // Given an optional-value flag that names its value
+  const flags = {
+    askOnCommit: {
+      kind: "optional-value",
+      values: ["null"],
+      valueName: "reset",
+      description: "Ask before commit",
+    },
+  } satisfies Record<string, FlagSpec>;
+
+  // When the leaf's help is rendered
+  const lines = flagLines(flags);
+
+  // Then it shows `--flag[=<valueName>]`
+  assertEquals(lines, ["  --askOnCommit[=<reset>]    Ask before commit"]);
+});

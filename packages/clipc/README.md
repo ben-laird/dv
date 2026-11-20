@@ -63,7 +63,8 @@ clipc is five ideas. Once you have them, the whole surface follows.
   `flags` argument, so `flags.name` is a `string | undefined`, not `any` — the
   compiler enforces the contract you declared.
 - **Flag specs** (`FlagSpec`, `lowerFlagSpec`) — flags are data, not parsing
-  code. Each flag declares its `kind` (`string`, `boolean`, …) and description;
+  code. Each flag declares its `kind` (`string`, `boolean`, `collect`,
+  `optional-value`) and description;
   the framework derives parsing, `--help` text, and the static `FlagsOf<…>` type
   from one declaration. A value-carrying flag can name its value for `--help`:
   `{ kind: "string", valueName: "path" }` shows `--out <path>` instead of the
@@ -91,6 +92,30 @@ its own. Everything after `--` is a positional word, never a switch:
 A lone `-` is a word too (by convention it often means stdin): `mycli add -`
 hands the leaf `"-"`, and `--title -` sets `title` to `"-"`, as `-t -` and
 `--title=-` do.
+
+**Switches with an optional value.** An `optional-value` flag is a switch that
+may also carry one of a few declared values, attached with `=`:
+
+```typescript
+flags: {
+  askOnCommit: {
+    kind: "optional-value",
+    values: ["null"],
+    description: "Ask before each commit (=null resets to the default)",
+  },
+}
+// --askOnCommit       → true
+// --no-askOnCommit    → false
+// --askOnCommit=null  → "null"
+// (absent)            → undefined
+```
+
+`flags.askOnCommit` is typed `boolean | "null" | undefined`. The value must be
+attached: `--askOnCommit null` switches the flag on and leaves `null` as a
+positional word. An undeclared value (`--askOnCommit=foo`) is refused with an
+`invalid-flag-value` error and exit 2. `--help` shows it as
+`--askOnCommit[=null]` (several values read `--color[=always|never]`, and a
+`valueName` reads `--color[=<when>]`). It takes no short `alias`.
 
 ## A larger example
 

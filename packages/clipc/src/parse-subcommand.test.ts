@@ -1,8 +1,8 @@
 import { assertEquals, fail } from "@std/assert";
 import type { FlagSpec } from "./flag-spec.ts";
 import {
-  type ParseSubcommandArgvArgs,
   type ParsedSubcommandArgv,
+  type ParseSubcommandArgvArgs,
   parseSubcommandArgv,
 } from "./parse-subcommand.ts";
 
@@ -251,4 +251,189 @@ Deno.test("parseSubcommandArgv names the first of several unknown flags", () => 
     ok: false,
     error: { kind: "unknown-flag", flagToken: "--first" },
   });
+});
+
+// An optional-value flag: maat's `--askOnCommit`, which can also reset to null.
+// `as const` keeps `"null"` literal, as the builders' `const` type params do.
+const askOnCommitFlags = {
+  askOnCommit: { kind: "optional-value", values: ["null"] },
+  title: { kind: "string" },
+  json: { kind: "boolean" },
+} as const satisfies Record<string, FlagSpec>;
+
+Deno.test("parseSubcommandArgv reads an optional-value flag's three spellings", () => {
+  // Given an optional-value flag declaring the value `null`
+  const flagSpecMap = askOnCommitFlags;
+
+  // When it is written bare, negated, and with its value attached
+  const bare = parseOk({ flagSpecMap, subcommandArgv: ["--askOnCommit"] });
+  const negated = parseOk({
+    flagSpecMap,
+    subcommandArgv: ["--no-askOnCommit"],
+  });
+  const attached = parseOk({
+    flagSpecMap,
+    subcommandArgv: ["--askOnCommit=null"],
+  });
+
+  // Then they read as true, false, and the declared value
+  assertEquals(bare.flags.askOnCommit, true);
+  assertEquals(negated.flags.askOnCommit, false);
+  assertEquals(attached.flags.askOnCommit, "null");
+  for (const parsed of [bare, negated, attached]) {
+    assertEquals(parsed.argv, []);
+  }
+});
+
+Deno.test("parseSubcommandArgv leaves an absent optional-value flag undefined", () => {
+  // Given an optional-value flag
+  const flagSpecMap = askOnCommitFlags;
+
+  // When argv doesn't mention it
+  const parsed = parseOk({ flagSpecMap, subcommandArgv: ["word"] });
+
+  // Then it is undefined, so "not given" differs from `--no-askOnCommit`
+  assertEquals(parsed.flags.askOnCommit, undefined);
+  assertEquals("askOnCommit" in parsed.flags, false);
+});
+
+Deno.test("parseSubcommandArgv never gives an optional-value flag the next word", () => {
+  // Given an optional-value flag
+  const flagSpecMap = askOnCommitFlags;
+
+  // When a separate word follows it, including a declared value or a boolean
+  for (const nextWord of ["null", "foo", "true", "false", "-"]) {
+    const parsed = parseOk({
+      flagSpecMap,
+      subcommandArgv: ["--askOnCommit", nextWord],
+    });
+
+    // Then the flag is just switched on and the word stays positional
+    assertEquals(parsed.flags.askOnCommit, true);
+    assertEquals(parsed.argv, [nextWord]);
+  }
+});
+
+Deno.test("parseSubcommandArgv keeps the last spelling of a repeated optional-value flag", () => {
+  // Given an optional-value flag
+  const flagSpecMap = askOnCommitFlags;
+
+  // When it is written several times
+  const valueLast = parseOk({
+    flagSpecMap,
+    subcommandArgv: ["--askOnCommit", "--no-askOnCommit", "--askOnCommit=null"],
+  });
+  const switchLast = parseOk({
+    flagSpecMap,
+    subcommandArgv: ["--askOnCommit=null", "--askOnCommit"],
+  });
+
+  // Then the last one written wins
+  assertEquals(valueLast.flags.askOnCommit, "null");
+  assertEquals(switchLast.flags.askOnCommit, true);
+});
+
+Deno.test("parseSubcommandArgv leaves the flags around an optional-value flag unchanged", () => {
+  // Given an optional-value flag beside a string and a boolean flag
+  const flagSpecMap = askOnCommitFlags;
+
+  // When a string flag directly precedes it, and a word follows
+  const parsed = parseOk({
+    flagSpecMap,
+    subcommandArgv: ["--title", "--askOnCommit", "word", "--json"],
+  });
+
+  // Then the string flag reads empty, as before any flag, not the word
+  assertEquals(parsed.flags.title, "");
+  assertEquals(parsed.flags.askOnCommit, true);
+  assertEquals(parsed.flags.json, true);
+  assertEquals(parsed.argv, ["word"]);
+});
+
+Deno.test("parseSubcommandArgv refuses an undeclared attached value", () => {
+  // Given an optional-value flag declaring only `null`
+  const flagSpecMap = askOnCommitFlags;
+
+  for (const value of ["foo", "", "true", "NULL", "null=x"]) {
+    // When another value is attached
+    const outcome = parseSubcommandArgv({
+      flagSpecMap,
+      subcommandArgv: [`--askOnCommit=${value}`],
+    });
+
+    // Then an invalid-flag-value error names the flag, value and choices
+    assertEquals(outcome, {
+      ok: false,
+      error: {
+        kind: "invalid-flag-value",
+        flagName: "askOnCommit",
+        value,
+        allowedValues: ["null"],
+      },
+    });
+  }
+});
+
+Deno.test("parseSubcommandArgv refuses a value attached to the negated spelling", () => {
+  // Given an optional-value flag
+  const flagSpecMap = askOnCommitFlags;
+
+  // When a value is attached to `--no-askOnCommit`
+  const outcome = parseSubcommandArgv({
+    flagSpecMap,
+    subcommandArgv: ["--no-askOnCommit=null"],
+  });
+
+  // Then it is an unknown flag, not a quiet `--askOnCommit=null`
+  assertEquals(outcome, {
+    ok: false,
+    error: { kind: "unknown-flag", flagToken: "--no-askOnCommit=null" },
+  });
+});
+
+Deno.test("parseSubcommandArgv leaves optional-value spellings after `--` as words", () => {
+  // Given an optional-value flag
+  const flagSpecMap = askOnCommitFlags;
+
+  // When its spellings follow `--`, even an undeclared value
+  const parsed = parseOk({
+    flagSpecMap,
+    subcommandArgv: ["--", "--askOnCommit=foo", "--no-askOnCommit"],
+  });
+
+  // Then they are words and the flag is unset
+  assertEquals(parsed.argv, ["--askOnCommit=foo", "--no-askOnCommit"]);
+  assertEquals(parsed.flags.askOnCommit, undefined);
+});
+
+Deno.test("parseSubcommandArgv accepts each of several declared values", () => {
+  // Given an optional-value flag with three declared values
+  const flagSpecMap = {
+    color: { kind: "optional-value", values: ["always", "never", "auto"] },
+  } satisfies Record<string, FlagSpec>;
+
+  for (const value of flagSpecMap.color.values) {
+    // When that value is attached
+    const parsed = parseOk({
+      flagSpecMap,
+      subcommandArgv: [`--color=${value}`],
+    });
+
+    // Then the flag carries exactly that value
+    assertEquals(parsed.flags.color, value);
+  }
+});
+
+Deno.test("FlagsOf types an optional-value flag as boolean or a declared value", () => {
+  // Given an optional-value flag declaring `null`
+  const flagSpecMap = askOnCommitFlags;
+
+  // When parsed
+  const parsed = parseOk({ flagSpecMap, subcommandArgv: ["--askOnCommit"] });
+
+  // Then the type admits exactly boolean, the literal, and undefined
+  const askOnCommit: boolean | "null" | undefined = parsed.flags.askOnCommit;
+  // @ts-expect-error: the declared literal is in the type, so this is too narrow
+  const switchOnly: boolean | undefined = parsed.flags.askOnCommit;
+  assertEquals([askOnCommit, switchOnly], [true, true]);
 });

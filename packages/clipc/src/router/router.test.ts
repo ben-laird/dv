@@ -567,6 +567,66 @@ Deno.test("leaf returns kind:error with exit 2 for an unknown flag (typed error 
   assertStringIncludes(stderrText, "--bogus");
 });
 
+Deno.test("leaf hands run an optional-value flag typed as boolean or its declared value", async () => {
+  // Given a leaf with an optional-value flag that records what run saw
+  const seen: Array<{ askOnCommit: boolean | "null" | undefined }> = [];
+  const root = router({
+    commands: {
+      set: command({
+        flags: { askOnCommit: { kind: "optional-value", values: ["null"] } },
+        run: ({ flags }) => {
+          seen.push({ askOnCommit: flags.askOnCommit });
+          return done({ kind: "ok" });
+        },
+      }),
+    },
+  });
+
+  // When each spelling reaches the leaf
+  for (const spelling of [
+    "--askOnCommit",
+    "--no-askOnCommit",
+    "--askOnCommit=null",
+  ]) {
+    await runWithCapture({ rootRouter: root, argv: ["set", spelling] });
+  }
+
+  // Then run saw true, false, and the literal
+  assertEquals(seen, [
+    { askOnCommit: true },
+    { askOnCommit: false },
+    { askOnCommit: "null" },
+  ]);
+});
+
+Deno.test("leaf returns kind:error with exit 2 for an undeclared optional value", async () => {
+  // Given a leaf with an optional-value flag declaring only `null`
+  const root = router({
+    commands: {
+      set: command({
+        flags: { askOnCommit: { kind: "optional-value", values: ["null"] } },
+        run: () => done({ kind: "ok" }),
+      }),
+    },
+  });
+
+  // When the user attaches another value
+  const result = await runWithCapture({
+    rootRouter: root,
+    argv: ["set", "--askOnCommit=foo"],
+  });
+
+  // Then the framework reports a typed invalid-flag-value error
+  assertEquals(result.exitCode, 2);
+  const stderrText = result.stderrLines.join("\n");
+  assertStringIncludes(stderrText, "invalid-flag-value");
+  assertStringIncludes(
+    stderrText,
+    "invalid value 'foo' for '--askOnCommit' (expected one of: null)",
+  );
+  assertStringIncludes(stderrText, "run 'test-cli set --help' for usage");
+});
+
 Deno.test("driver wraps a thrown error into kind:error with code:unknown (degraded path)", async () => {
   // Given a leaf that throws a non-CliError. This is the bug-path:
   // typed runners return errors; throws degrade gracefully.

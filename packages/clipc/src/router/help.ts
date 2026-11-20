@@ -151,7 +151,9 @@ export interface FormatCommandHelpArgs {
  * description, and an alphabetically sorted flag list (showing each
  * flag's usage label and `-x` alias). A boolean flag shows its bare
  * name; a value-carrying flag shows `--name <value>`, where `<value>`
- * is its `valueName` or, by default, its `kind`. A command with no
+ * is its `valueName` or, by default, its `kind`. An `"optional-value"`
+ * flag shows `--name[=a|b]` from its declared values, or
+ * `--name[=<valueName>]` when it names its value. A command with no
  * flags shows `(no flags declared)`. When `colorEnabled` is set,
  * labels are bolded and descriptions dimmed.
  *
@@ -202,7 +204,8 @@ interface FlagUsageLabelArgs {
   flagSpec: FlagSpec;
 }
 
-// How a flag is written in usage: `--json`, `--out <path>`.
+// How a flag is written in usage: `--json`, `--out <path>`, and for an
+// optional attached value `--askOnCommit[=null]` or `--color[=<when>]`.
 function flagUsageLabel(args: FlagUsageLabelArgs): string {
   const longForm = `--${args.flagName}`;
   switch (args.flagSpec.kind) {
@@ -211,6 +214,12 @@ function flagUsageLabel(args: FlagUsageLabelArgs): string {
     case "string":
     case "collect":
       return `${longForm} <${args.flagSpec.valueName ?? args.flagSpec.kind}>`;
+    case "optional-value": {
+      if (args.flagSpec.valueName !== undefined) {
+        return `${longForm}[=<${args.flagSpec.valueName}>]`;
+      }
+      return `${longForm}[=${args.flagSpec.values.join("|")}]`;
+    }
   }
 }
 

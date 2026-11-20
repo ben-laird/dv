@@ -41,5 +41,29 @@ Deno.test("lowerFlagSpec returns empty arrays for an empty flag map", () => {
   const lowered = lowerFlagSpec({});
 
   // Then every output bucket is empty
-  assertEquals(lowered, { string: [], boolean: [], collect: [], alias: {} });
+  assertEquals(lowered, {
+    string: [],
+    boolean: [],
+    collect: [],
+    optionalValue: [],
+    alias: {},
+  });
+});
+
+Deno.test("lowerFlagSpec keeps optional-value flags out of every parseArgs bucket", () => {
+  // Given an optional-value flag beside a boolean
+  const flagSpecMap: Record<string, FlagSpec> = {
+    askOnCommit: { kind: "optional-value", values: ["null"] },
+    json: { kind: "boolean" },
+  };
+
+  // When lowered
+  const lowered = lowerFlagSpec(flagSpecMap);
+
+  // Then it is listed only under optionalValue, since parseArgs would
+  // otherwise read `--askOnCommit word` as taking `word` (or `false`)
+  assertEquals(lowered.optionalValue, ["askOnCommit"]);
+  assertEquals(lowered.string, []);
+  assertEquals(lowered.boolean, ["json"]);
+  assertEquals(lowered.collect, []);
 });

@@ -101,7 +101,8 @@ export interface CommandNode<Ctx = unknown> {
  * any `--`), parses `spec.flags` from the incoming argv, and then invokes `spec.run`
  * with the typed flags, remaining positional argv, shared ctx, and
  * breadcrumb path. An undeclared flag is returned as a typed
- * `unknown-flag` error (exit 2), not thrown.
+ * `unknown-flag` error (exit 2), and an `"optional-value"` flag given an
+ * undeclared value as an `invalid-flag-value` error (exit 2), not thrown.
  *
  * `Ctx` is the first type parameter so callers can write
  * `command<MyCtx>({...})` and let `TFlags` infer from the literal
@@ -123,7 +124,7 @@ export interface CommandNode<Ctx = unknown> {
  */
 export function command<
   Ctx = unknown,
-  TFlags extends Record<string, FlagSpec> = Record<string, FlagSpec>,
+  const TFlags extends Record<string, FlagSpec> = Record<string, FlagSpec>,
 >(spec: CommandSpec<Ctx, TFlags>): CommandNode<Ctx> {
   const handler: CliHandler<Ctx> = async (request: CliRequest<Ctx>) => {
     // Intercept --help/-h before flag parsing so leaves don't have
@@ -190,5 +191,15 @@ function flagParseCliError(args: FlagParseCliErrorArgs): CliError {
         hint,
         exitCode: 2,
       });
+    case "invalid-flag-value": {
+      const { flagName, value, allowedValues } = args.flagParseError;
+      return new CliError({
+        code: "invalid-flag-value",
+        message: `invalid value '${value}' for '--${flagName}' (expected one of: ${allowedValues.join(", ")})`,
+        hint,
+        exitCode: 2,
+        context: { flagName, value, allowedValues: [...allowedValues] },
+      });
+    }
   }
 }
