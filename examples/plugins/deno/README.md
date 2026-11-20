@@ -97,6 +97,10 @@ The most common adaptations:
   in `runRelease` for whatever your registry needs (`npm publish`,
   `gh release create`, …). The function gets `DV_PACKAGE_NAME`,
   `DV_NEW_VERSION`, `DV_GIT_TAG`, and `DV_PACKAGE_PATH` in env vars.
+  To change the command without editing the file, set
+  `DENO_PLUGIN_PUBLISH_COMMAND` to a JSON argv array, e.g.
+  `'["deno", "publish", "--dry-run"]'`. The example's tests use this
+  so they never upload to a real registry.
 - **Lock down permissions** — `deno run -A` grants everything for
   simplicity. A real plugin can narrow to just what it needs, e.g.
   `deno run --allow-read --allow-env --allow-write ...`.

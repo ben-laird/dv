@@ -488,6 +488,10 @@ async function owningPackageName({
 // continues with the other packages, and `dv release --force` can
 // retry once the cause is fixed. dv bounds this op with
 // `publishing.timeout`.
+//
+// DENO_PLUGIN_PUBLISH_COMMAND (optional) overrides the publish
+// command as a JSON argv array, e.g. '["deno","publish","--dry-run"]'.
+// The tests use it so they never upload to a real registry.
 
 async function runRelease(): Promise<void> {
   const packagePath = Deno.env.get("DV_PACKAGE_PATH");
@@ -515,10 +519,13 @@ async function runRelease(): Promise<void> {
   // the tree may still carry unrelated changes (e.g. CI artifacts).
   // --quiet keeps JSR's progress chatter off stdout, which dv
   // parses as JSON.
+  const publishCommand = resolvePublishCommand();
+  if (!publishCommand.ok) failWith(publishCommand.error);
+  const [executable, ...publishArgs] = publishCommand.value;
   let publishResult: Deno.CommandOutput;
   try {
-    publishResult = await new Deno.Command("deno", {
-      args: ["publish", "--allow-dirty", "--quiet"],
+    publishResult = await new Deno.Command(executable, {
+      args: publishArgs,
       cwd: packagePath,
       stdout: "piped",
       stderr: "piped",
@@ -549,6 +556,38 @@ async function runRelease(): Promise<void> {
       message: `published ${packageName}@${newVersion} to JSR`,
     }),
   );
+}
+
+function resolvePublishCommand(): Result<[string, ...string[]]> {
+  const override = Deno.env.get("DENO_PLUGIN_PUBLISH_COMMAND");
+  let command: unknown = ["deno", "publish", "--allow-dirty", "--quiet"];
+  if (override !== undefined) {
+    try {
+      command = JSON.parse(override);
+    } catch (caughtError) {
+      return {
+        ok: false,
+        error: `DENO_PLUGIN_PUBLISH_COMMAND is not JSON: ${describeError(caughtError)}`,
+      };
+    }
+  }
+  if (!Array.isArray(command)) {
+    return {
+      ok: false,
+      error: "DENO_PLUGIN_PUBLISH_COMMAND must be a JSON array of strings",
+    };
+  }
+  const argv = command.filter(
+    (part): part is string => typeof part === "string",
+  );
+  const [executable, ...args] = argv;
+  if (executable === undefined || argv.length !== command.length) {
+    return {
+      ok: false,
+      error: "DENO_PLUGIN_PUBLISH_COMMAND must be a non-empty array of strings",
+    };
+  }
+  return { ok: true, value: [executable, ...args] };
 }
 
 // === finalize ==================================================

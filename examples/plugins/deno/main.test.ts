@@ -1,4 +1,4 @@
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertStringIncludes } from "@std/assert";
 import { fromFileUrl, join } from "@std/path";
 
 // Black-box tests for the example Deno plugin: each test runs the
@@ -339,7 +339,7 @@ Deno.test("get-dependencies returns a contract error when an entry point is miss
 
 Deno.test("release skips publishing a package marked publish: false", async () => {
   await withTempDir(async (packageDir) => {
-    // Given: a member Deno itself would refuse to publish (no exports either)
+    // Given: a publish: false member, and a publish command that would fail
     await Deno.writeTextFile(
       join(packageDir, "deno.json"),
       `{\n\t"name": "@fixture/app",\n\t"version": "1.0.0",\n\t"publish": false\n}\n`,
@@ -349,14 +349,12 @@ Deno.test("release skips publishing a package marked publish: false", async () =
     const outcome = await runOp({
       op: "release",
       env: {
-        DV_PACKAGE_NAME: "@fixture/app",
-        DV_PACKAGE_PATH: packageDir,
-        DV_NEW_VERSION: "1.0.0",
-        DV_GIT_TAG: "@fixture/app@1.0.0",
+        ...releaseEnv({ packageDir, packageName: "@fixture/app" }),
+        DENO_PLUGIN_PUBLISH_COMMAND: JSON.stringify(FAILING_PUBLISH_COMMAND),
       },
     });
 
-    // Then: the op succeeds without running deno publish
+    // Then: the op succeeds because the publish command never ran
     assertEquals(outcome, {
       exitCode: 0,
       response: {
@@ -368,33 +366,81 @@ Deno.test("release skips publishing a package marked publish: false", async () =
   });
 });
 
-Deno.test("release reports a failed deno publish as data, not a crash", async () => {
+Deno.test("release reports a failed publish as data, not a crash", async () => {
   await withTempDir(async (packageDir) => {
-    // Given: a publishable-looking member that deno publish rejects (no exports)
+    // Given: a publishable member whose publish command fails
     await Deno.writeTextFile(
       join(packageDir, "deno.json"),
-      `{\n\t"name": "@fixture/broken",\n\t"version": "1.0.0"\n}\n`,
+      `{\n\t"name": "@fixture/lib",\n\t"version": "1.0.0"\n}\n`,
     );
 
     // When: dv fires the release op
     const outcome = await runOp({
       op: "release",
       env: {
-        DV_PACKAGE_NAME: "@fixture/broken",
-        DV_PACKAGE_PATH: packageDir,
-        DV_NEW_VERSION: "1.0.0",
-        DV_GIT_TAG: "@fixture/broken@1.0.0",
+        ...releaseEnv({ packageDir, packageName: "@fixture/lib" }),
+        DENO_PLUGIN_PUBLISH_COMMAND: JSON.stringify(FAILING_PUBLISH_COMMAND),
       },
     });
 
-    // Then: the op exits 0 with ok:false so dv records the outcome
+    // Then: the op exits 0 with ok:false and the command's stderr
     assertEquals(outcome.exitCode, 0);
-    assertEquals(
-      isRecord(outcome.response) ? outcome.response.ok : undefined,
-      false,
-    );
+    const response = isRecord(outcome.response) ? outcome.response : {};
+    assertEquals(response.ok, false);
+    assertStringIncludes(String(response.message), "simulated publish failure");
   });
 });
+
+Deno.test("release reports a successful publish as published", async () => {
+  await withTempDir(async (packageDir) => {
+    // Given: a publishable member whose publish command succeeds
+    await Deno.writeTextFile(
+      join(packageDir, "deno.json"),
+      `{\n\t"name": "@fixture/lib",\n\t"version": "1.0.0"\n}\n`,
+    );
+
+    // When: dv fires the release op
+    const outcome = await runOp({
+      op: "release",
+      env: {
+        ...releaseEnv({ packageDir, packageName: "@fixture/lib" }),
+        DENO_PLUGIN_PUBLISH_COMMAND: JSON.stringify(["deno", "eval", ""]),
+      },
+    });
+
+    // Then: the op reports the package as published
+    assertEquals(outcome, {
+      exitCode: 0,
+      response: {
+        ok: true,
+        published: true,
+        message: "published @fixture/lib@1.0.0 to JSR",
+      },
+    });
+  });
+});
+
+// Stands in for a `deno publish` the registry rejects.
+const FAILING_PUBLISH_COMMAND = [
+  "deno",
+  "eval",
+  "console.error('simulated publish failure'); Deno.exit(1);",
+];
+
+function releaseEnv({
+  packageDir,
+  packageName,
+}: {
+  packageDir: string;
+  packageName: string;
+}): Record<string, string> {
+  return {
+    DV_PACKAGE_NAME: packageName,
+    DV_PACKAGE_PATH: packageDir,
+    DV_NEW_VERSION: "1.0.0",
+    DV_GIT_TAG: `${packageName}@1.0.0`,
+  };
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
