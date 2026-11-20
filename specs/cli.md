@@ -332,8 +332,10 @@ so a migrated config behaves identically: path-shaped strings become
 `path:`, everything else becomes `builtin:`.
 
 A second step, `schema-pointer-current`, keeps the config's schema
-pointers in step with the running dv. When the first-line
-`# yaml-language-server: $schema=` modeline or the top-level `$schema`
+pointers in step with the running dv. When the modeline (the first
+`# yaml-language-server: $schema=` comment in the config's leading block
+of comment, blank and `---` lines, before any YAML content) or the
+top-level `$schema`
 key names dv's published config schema for an **older** dv release
 (`https://jsr.io/@dv-cli/dv/<older>/schemas/config.json`), the step
 rewrites that URL to the running version's. Each pointer is checked on

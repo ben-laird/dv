@@ -67,10 +67,14 @@ two forms:
 $schema: https://jsr.io/@dv-cli/dv/<version>/schemas/config.json
 ```
 
-- The **`# yaml-language-server:` modeline** on the first line is what
-  editors backed by yaml-language-server (VS Code's YAML extension, and
-  most others) read to provide autocomplete and validation. It works
-  without the editor parsing the document first.
+- The **`# yaml-language-server:` modeline** is what editors backed by
+  yaml-language-server (VS Code's YAML extension, and most others) read
+  to provide autocomplete and validation. It works without the editor
+  parsing the document first. `dv init` puts it on the first line; dv
+  recognizes it anywhere in the leading block of comment, blank and `---`
+  lines before the first YAML content, taking the first one there. A
+  look-alike comment further down (inside a block scalar, say) is not a
+  modeline.
 - The **`$schema` key** keeps the pointer in the config's data, where any
   tool that reads the parsed YAML can find it. dv accepts and ignores it.
 

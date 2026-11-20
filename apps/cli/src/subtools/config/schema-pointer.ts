@@ -31,14 +31,39 @@ export interface SchemaPointers {
   key?: string;
 }
 
-/** Reads the first modeline and the first top-level `$schema` key from config text. */
+const LEADING_BLOCK_LINE_PATTERN = /^(?:[ \t]*#.*|[ \t]*|---[ \t]*)\r?$/;
+
+/**
+ * The index of the config's modeline among its lines: the first
+ * `# yaml-language-server: $schema=` comment in the leading block of
+ * comment, blank and `---` lines before any YAML content. A look-alike
+ * comment further down (say, inside a block scalar) is not the modeline.
+ */
+export function modelineLineIndex(
+  lines: readonly string[],
+): number | undefined {
+  for (const [lineIndex, line] of lines.entries()) {
+    if (!LEADING_BLOCK_LINE_PATTERN.test(line)) {
+      return undefined;
+    }
+    if (SCHEMA_MODELINE_PATTERN.test(line)) {
+      return lineIndex;
+    }
+  }
+  return undefined;
+}
+
+/** Reads the modeline (see {@link modelineLineIndex}) and the first top-level `$schema` key from config text. */
 export function readSchemaPointers(configText: string): SchemaPointers {
   const pointers: SchemaPointers = {};
-  for (const line of configText.split("\n")) {
-    const modelineUrl = SCHEMA_MODELINE_PATTERN.exec(line)?.[2];
-    if (modelineUrl !== undefined && pointers.modeline === undefined) {
-      pointers.modeline = modelineUrl;
-    }
+  const lines = configText.split("\n");
+  const modelineIndex = modelineLineIndex(lines);
+  if (modelineIndex !== undefined) {
+    pointers.modeline = SCHEMA_MODELINE_PATTERN.exec(
+      lines[modelineIndex] ?? "",
+    )?.[2];
+  }
+  for (const line of lines) {
     const keyUrl = SCHEMA_KEY_PATTERN.exec(line)?.[3];
     if (keyUrl !== undefined && pointers.key === undefined) {
       pointers.key = keyUrl;

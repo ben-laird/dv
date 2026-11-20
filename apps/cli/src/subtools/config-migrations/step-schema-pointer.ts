@@ -2,6 +2,7 @@ import { lessThan, tryParse } from "@std/semver";
 import { publishedSchemaUrl } from "../../domain/published-schema.ts";
 import {
   dvConfigSchemaVersion,
+  modelineLineIndex,
   SCHEMA_KEY_PATTERN,
   SCHEMA_MODELINE_PATTERN,
 } from "../config/schema-pointer.ts";
@@ -88,11 +89,16 @@ function rewriteSchemaPointers(
     });
   };
 
-  const outputLines = args.text.split("\n").map((line) => {
-    const modelineMatch = SCHEMA_MODELINE_PATTERN.exec(line);
+  const inputLines = args.text.split("\n");
+  const modelineIndex = modelineLineIndex(inputLines);
+  const outputLines = inputLines.map((line, lineIndex) => {
+    const modelineMatch =
+      lineIndex === modelineIndex ? SCHEMA_MODELINE_PATTERN.exec(line) : null;
     if (modelineMatch) {
       const [, prefix = "", url = "", trailing = ""] = modelineMatch;
-      if (!isOlderDvSchemaUrl(url)) return line;
+      if (!isOlderDvSchemaUrl(url)) {
+        return line;
+      }
       recordChange({ path: MODELINE_CHANGE_PATH, before: url });
       return `${prefix}${currentUrl}${trailing}`;
     }
@@ -100,7 +106,9 @@ function rewriteSchemaPointers(
     if (schemaKeyMatch) {
       const [, prefix = "", quote = "", url = "", trailing = ""] =
         schemaKeyMatch;
-      if (!isOlderDvSchemaUrl(url)) return line;
+      if (!isOlderDvSchemaUrl(url)) {
+        return line;
+      }
       recordChange({ path: SCHEMA_KEY_CHANGE_PATH, before: url });
       return `${prefix}${quote}${currentUrl}${quote}${trailing}`;
     }

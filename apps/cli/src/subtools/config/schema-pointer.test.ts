@@ -114,6 +114,35 @@ $schema: "./b.json" # pinned
   assertEquals(pointers, { modeline: "./a.json", key: "./b.json" });
 });
 
+Deno.test("readSchemaPointers takes the modeline only from the leading comment block", () => {
+  // Given a modeline look-alike inside a block scalar, after content starts
+  const configText = `notes: |
+  # yaml-language-server: $schema=./inside-scalar.json
+`;
+
+  // When the pointers are read
+  const pointers = readSchemaPointers(configText);
+
+  // Then there is no modeline
+  assertEquals(pointers, {});
+});
+
+Deno.test("readSchemaPointers reads the first modeline after blank lines and a document marker", () => {
+  // Given a leading block with a blank line, `---`, and two modelines
+  const configText = `
+---
+# yaml-language-server: $schema=./first.json
+# yaml-language-server: $schema=./second.json
+tagging: {}
+`;
+
+  // When the pointers are read
+  const pointers = readSchemaPointers(configText);
+
+  // Then the first modeline is the one read
+  assertEquals(pointers, { modeline: "./first.json" });
+});
+
 Deno.test("readSchemaPointers reports a missing pointer as absent and ignores nested keys", () => {
   // Given a config with no modeline and only a nested $schema key
   const configText = `publishing:

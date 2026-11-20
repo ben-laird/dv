@@ -173,6 +173,54 @@ Deno.test("schema-pointer step rewrites both pointers in a CRLF config and keeps
   );
 });
 
+Deno.test("schema-pointer step leaves a modeline look-alike inside a block scalar alone", () => {
+  // Given an outdated modeline look-alike inside a block scalar, after
+  // YAML content has started
+  const olderUrl = configSchemaUrlFor("0.12.0");
+  const before = `tagging:
+  format: "{package}@{version}"
+notes: |
+  # yaml-language-server: $schema=${olderUrl}
+`;
+  const step = createSchemaPointerStep({ runningVersion: RUNNING_VERSION });
+
+  // When the step applies
+  const result = step.apply({ text: before });
+
+  // Then the block scalar's text is untouched
+  assertEquals(result.rewrittenText, before);
+  assertEquals(result.changes, []);
+});
+
+Deno.test("schema-pointer step rewrites only the first modeline of the leading comment block", () => {
+  // Given a `---` marker and two outdated modelines in the leading block
+  const olderUrl = configSchemaUrlFor("0.12.0");
+  const before = `---
+# yaml-language-server: $schema=${olderUrl}
+# yaml-language-server: $schema=${olderUrl}
+tagging: {}
+`;
+  const step = createSchemaPointerStep({ runningVersion: RUNNING_VERSION });
+
+  // When the step applies
+  const result = step.apply({ text: before });
+
+  // Then the first one, which is the one dv reads, is the only one moved
+  const currentUrl = configSchemaUrlFor(RUNNING_VERSION);
+  assertEquals(
+    result.rewrittenText,
+    `---
+# yaml-language-server: $schema=${currentUrl}
+# yaml-language-server: $schema=${olderUrl}
+tagging: {}
+`,
+  );
+  assertEquals(
+    result.changes.map((change) => change.path),
+    [MODELINE_CHANGE_PATH],
+  );
+});
+
 Deno.test("schema-pointer step ignores a nested $schema key", () => {
   // Given an older dv URL under a nested key, which is not the config pointer
   const olderUrl = configSchemaUrlFor("0.12.0");
