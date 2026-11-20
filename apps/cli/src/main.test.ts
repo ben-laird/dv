@@ -167,6 +167,7 @@ Deno.test("the package's default export runs the CLI when executed as a program"
     args: ["run", "-A", entryPointUrl.href, "--version"],
     stdout: "piped",
     stderr: "piped",
+    signal: AbortSignal.timeout(30_000),
   }).output();
 
   // Then it exits 0 and prints the version, rather than exiting silently
