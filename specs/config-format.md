@@ -19,7 +19,7 @@ Biome's `biome.json`.
 ## Top-level shape
 
 ```yaml
-$schema: https://jsr.io/@dv-cli/dv/0.11.0/schemas/config.json
+$schema: https://jsr.io/@dv-cli/dv/<version>/schemas/config.json
 
 extends: []
 
@@ -49,7 +49,9 @@ user-configurable in v1, so it has no config section.
 ## `$schema`
 
 Recommended for editor support. Points at the JSON Schema for the config,
-which every dv release publishes to JSR at an immutable, versioned URL:
+which every dv release from the first release after 0.11.0 onward
+publishes to JSR at an immutable, versioned URL (0.11.0 and earlier
+shipped without schemas, so no URL exists for them):
 
 ```text
 https://jsr.io/@dv-cli/dv/<version>/schemas/config.json
@@ -60,9 +62,9 @@ parser exactly. `dv init` writes the pointer for the running version in
 two forms:
 
 ```yaml
-# yaml-language-server: $schema=https://jsr.io/@dv-cli/dv/0.11.0/schemas/config.json
+# yaml-language-server: $schema=https://jsr.io/@dv-cli/dv/<version>/schemas/config.json
 
-$schema: https://jsr.io/@dv-cli/dv/0.11.0/schemas/config.json
+$schema: https://jsr.io/@dv-cli/dv/<version>/schemas/config.json
 ```
 
 - The **`# yaml-language-server:` modeline** on the first line is what
@@ -516,7 +518,7 @@ are repo-level and documented under `git` above.)
 ## Full example
 
 ```yaml
-$schema: https://jsr.io/@dv-cli/dv/0.11.0/schemas/config.json
+$schema: https://jsr.io/@dv-cli/dv/<version>/schemas/config.json
 
 discovery:
   plugins:
