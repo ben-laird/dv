@@ -13,9 +13,12 @@ export type SchemaPointerKind = "modeline" | "key";
 export const SCHEMA_MODELINE_PATTERN: RegExp =
   /^(\s*#\s*yaml-language-server:\s*\$schema=)(\S+)(\s*)$/;
 
-/** Matches a top-level `$schema` key: prefix, quote, URL, trailing text. */
+/**
+ * Matches a top-level `$schema` key: prefix, quote, URL, trailing text
+ * (which keeps a CRLF line's `\r`, so a rewrite preserves line endings).
+ */
 export const SCHEMA_KEY_PATTERN: RegExp =
-  /^(\$schema:[ \t]*)(["']?)([^"'\s#]+)\2(.*)$/;
+  /^(\$schema:[ \t]*)(["']?)([^"'\s#]+)\2([^\r\n]*\r?)$/;
 
 const DV_CONFIG_SCHEMA_URL_PATTERN =
   /^https:\/\/jsr\.io\/@dv-cli\/dv\/([^/\s]+)\/schemas\/config\.json$/;

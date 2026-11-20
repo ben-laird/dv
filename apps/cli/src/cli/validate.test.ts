@@ -165,6 +165,27 @@ Deno.test("runValidate warns when only one schema pointer is present", async () 
   }
 });
 
+Deno.test("runValidate sees both schema pointers in a CRLF config", async () => {
+  // Given CRLF pointer lines at the running release's config schema
+  const currentUrl = publishedSchemaUrl({
+    version: DV_VERSION,
+    schema: "config",
+  });
+  const repo = await setUpRepoForValidate({
+    pluginDiscoverScript: HAPPY_DISCOVER_SCRIPT,
+    configPreamble: `# yaml-language-server: $schema=${currentUrl}\r\n$schema: ${currentUrl}\r\n`,
+  });
+  try {
+    // When runValidate runs
+    const validateResult = await runValidate(NOOP_VALIDATE_OPTIONS);
+
+    // Then neither pointer is reported missing
+    assertEquals(validateResult.report.warnings, []);
+  } finally {
+    await repo.cleanup();
+  }
+});
+
 Deno.test("runValidate's report with warnings conforms to the validation-report schema", async () => {
   // Given a config that triggers a warning
   const repo = await setUpRepoForValidate({

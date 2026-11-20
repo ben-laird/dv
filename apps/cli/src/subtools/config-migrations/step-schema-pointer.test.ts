@@ -148,6 +148,31 @@ $schema: "${currentUrl}" # pinned
   );
 });
 
+Deno.test("schema-pointer step rewrites both pointers in a CRLF config and keeps its line endings", () => {
+  // Given a config with Windows line endings and both pointers outdated
+  const olderUrl = configSchemaUrlFor("0.12.0");
+  const before = configPointingAt({
+    modelineUrl: olderUrl,
+    keyUrl: olderUrl,
+  }).replaceAll("\n", "\r\n");
+  const step = createSchemaPointerStep({ runningVersion: RUNNING_VERSION });
+
+  // When the step applies
+  const result = step.apply({ text: before });
+
+  // Then both pointers move and every line still ends in CRLF
+  const currentUrl = configSchemaUrlFor(RUNNING_VERSION);
+  const expected = configPointingAt({
+    modelineUrl: currentUrl,
+    keyUrl: currentUrl,
+  });
+  assertEquals(result.rewrittenText, expected.replaceAll("\n", "\r\n"));
+  assertEquals(
+    result.changes.map((change) => change.path),
+    [MODELINE_CHANGE_PATH, SCHEMA_KEY_CHANGE_PATH],
+  );
+});
+
 Deno.test("schema-pointer step ignores a nested $schema key", () => {
   // Given an older dv URL under a nested key, which is not the config pointer
   const olderUrl = configSchemaUrlFor("0.12.0");
