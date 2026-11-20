@@ -85,11 +85,11 @@ export const releaseResponseSchema = z
 export type ReleaseResponse = z.infer<typeof releaseResponseSchema>;
 
 // `get-dependencies` is the optional read-only op that lets dv
-// topologically sort `dv release`'s work list. Plugins inspect their
-// package's manifest and return the subset of the provided
-// `candidates` (other discovered Packages) that this package depends
-// on — in whatever ecosystem-specific manifest fields count
-// (runtime, dev, peer, etc.; the plugin decides).
+// topologically sort `dv release`'s work list. Plugins return the
+// subset of the provided `candidates` (other discovered Packages)
+// that this package declares or imports — manifest fields (runtime,
+// dev, peer, etc.) or source imports such as workspace members; the
+// plugin decides.
 //
 // The list is the strict subset of `candidates`: external deps from
 // public registries are omitted, since they don't affect intra-
