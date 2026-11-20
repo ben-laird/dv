@@ -59,11 +59,16 @@ covers the four arms and when to pick which.
   offline and never writes `deno.lock`. The whole walk shares one
   45-second budget across every entry point (inside dv's 60-second
   fast-op timeout), and a `deno info` still running when it expires is
-  killed. If the walk fails (a missing or gitignored generated entry
-  point, a module that won't load, the budget running out), the op still
-  succeeds with the import-map dependencies alone and writes a warning
-  to stderr naming the package and the `deno info` error. The contract
-  treats stderr as free-form logs that dv passes through to the user.
+  killed. If the package's graph can't be built (`deno info` exits
+  non-zero, for example on a missing or gitignored generated entry
+  point; a local module won't load; or the budget runs out), the op
+  still succeeds with the import-map dependencies alone and writes a
+  warning to stderr naming the package and the `deno info` error. The
+  contract treats stderr as free-form logs that dv passes through to
+  the user. If `deno` itself is broken (it can't be started, or prints
+  output that isn't a module graph), the op fails with
+  `{ ok: false, error }` instead, since falling back would hide a broken
+  setup.
 - `finalize` — runs `deno install` to refresh `deno.lock` and reports it
   in `additionalChangedFiles` whenever it differs from `HEAD`.
 - `release` — publishes the package to JSR with

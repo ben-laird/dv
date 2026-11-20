@@ -797,11 +797,114 @@ Deno.test("the module-graph walk returns at its deadline even if deno's pipes st
     }
     const elapsedMs = performance.now() - startedAt;
 
-    // Then: it gives up promptly with a budget error instead of
-    // waiting for the grandchild to release the pipes
+    // Then: it gives up promptly, reporting the graph as unavailable
+    // (so the op falls back) instead of waiting for the grandchild
     assertEquals(elapsedMs < 5_000, true, `took ${elapsedMs}ms`);
     assertEquals(result.ok, false);
-    if (!result.ok) assertStringIncludes(result.error, "500ms budget");
+    if (!result.ok) {
+      assertEquals(result.error.kind, "graph-unavailable");
+      assertStringIncludes(result.error.reason, "500ms budget");
+    }
+  });
+});
+
+// Runs get-dependencies for member a with `deno` on PATH replaced by
+// `fakeDenoScript` (or with no `deno` at all when it is undefined).
+async function getDependenciesWithFakeDeno({
+  repoRoot,
+  fakeDenoScript,
+}: {
+  repoRoot: string;
+  fakeDenoScript: string | undefined;
+}): Promise<{ outcome: OpOutcome; stderr: string }> {
+  const binDir = join(repoRoot, "fake-bin");
+  await Deno.mkdir(binDir);
+  if (fakeDenoScript !== undefined) {
+    const fakeDenoPath = join(binDir, "deno");
+    await Deno.writeTextFile(fakeDenoPath, fakeDenoScript);
+    await Deno.chmod(fakeDenoPath, 0o755);
+  }
+  return await runOpCapturingStderr({
+    op: "get-dependencies",
+    env: { ...getDependenciesEnv({ repoRoot, member: "a" }), PATH: binDir },
+    stdin: { candidates: ["@fixture/b"] },
+  });
+}
+
+Deno.test("get-dependencies fails, without falling back, when deno cannot be started", async () => {
+  await withTempDir(async (repoRoot) => {
+    // Given: a workspace, and a PATH with no deno on it
+    await writeWorkspaceFixture(repoRoot);
+
+    // When: dv asks which candidates a depends on
+    const { outcome, stderr } = await getDependenciesWithFakeDeno({
+      repoRoot,
+      fakeDenoScript: undefined,
+    });
+
+    // Then: the op fails with a structured error, not a warning
+    assertEquals(outcome.exitCode, 1);
+    const response = isRecord(outcome.response) ? outcome.response : {};
+    assertEquals(response.ok, false);
+    assertStringIncludes(String(response.error), "cannot run deno info");
+    assertEquals(stderr.includes("warning"), false);
+  });
+});
+
+Deno.test("get-dependencies fails, without falling back, when deno info prints non-JSON", async () => {
+  await withTempDir(async (repoRoot) => {
+    // Given: a deno that exits 0 but prints something other than JSON
+    await writeWorkspaceFixture(repoRoot);
+
+    // When: dv asks which candidates a depends on
+    const { outcome } = await getDependenciesWithFakeDeno({
+      repoRoot,
+      fakeDenoScript: "#!/bin/sh\necho 'not a module graph'\n",
+    });
+
+    // Then: the op fails with a structured error
+    assertEquals(outcome.exitCode, 1);
+    const response = isRecord(outcome.response) ? outcome.response : {};
+    assertStringIncludes(String(response.error), "printed invalid JSON");
+  });
+});
+
+Deno.test("get-dependencies fails, without falling back, when deno info lists no modules", async () => {
+  await withTempDir(async (repoRoot) => {
+    // Given: a deno whose graph JSON has an empty module list
+    await writeWorkspaceFixture(repoRoot);
+
+    // When: dv asks which candidates a depends on
+    const { outcome } = await getDependenciesWithFakeDeno({
+      repoRoot,
+      fakeDenoScript: `#!/bin/sh\necho '{"roots":[],"modules":[]}'\n`,
+    });
+
+    // Then: the op fails with a structured error
+    assertEquals(outcome.exitCode, 1);
+    const response = isRecord(outcome.response) ? outcome.response : {};
+    assertStringIncludes(String(response.error), "listed no modules");
+  });
+});
+
+Deno.test("get-dependencies falls back with a warning when deno info exits non-zero", async () => {
+  await withTempDir(async (repoRoot) => {
+    // Given: a deno whose info run fails, as on an unloadable entry point
+    await writeWorkspaceFixture(repoRoot);
+
+    // When: dv asks which candidates a depends on
+    const { outcome, stderr } = await getDependenciesWithFakeDeno({
+      repoRoot,
+      fakeDenoScript: "#!/bin/sh\necho 'error: Module not found' >&2\nexit 1\n",
+    });
+
+    // Then: the op succeeds with the (empty) import-map answer and warns
+    assertEquals(outcome, {
+      exitCode: 0,
+      response: { ok: true, dependencies: [] },
+    });
+    assertStringIncludes(stderr, "warning: @fixture/a:");
+    assertStringIncludes(stderr, "Module not found");
   });
 });
 

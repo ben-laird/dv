@@ -265,8 +265,9 @@ function rewriteSpecifierVersion({
 //    dependency. `--no-remote --no-npm --no-lock` keeps this an
 //    offline, read-only walk: registry modules are skipped (they
 //    are never workspace members) and deno.lock is never written.
-//    If the walk fails, the op warns on stderr and falls back to
-//    source 1 alone.
+//    If the package's graph can't be built, the op warns on stderr
+//    and falls back to source 1 alone; if deno itself is missing or
+//    misbehaves, the op fails.
 //
 // Only names in `candidates` are reported; external deps
 // (registry packages, std-lib) don't affect publish ordering.
@@ -313,14 +314,17 @@ async function runGetDependencies(): Promise<void> {
       for (const packageName of graphPackages.value) {
         if (candidateSet.has(packageName)) dependencies.add(packageName);
       }
-    } else {
-      // A broken graph (say, an entry point that is a gitignored
-      // generated file) degrades to the import-map answer instead of
-      // aborting the release. stderr is free-form diagnostics for dv.
+    } else if (graphPackages.error.kind === "graph-unavailable") {
+      // A graph this package can't produce (say, an entry point that
+      // is a gitignored generated file) degrades to the import-map
+      // answer instead of aborting the release. stderr is free-form
+      // diagnostics, passed through to the user.
       const packageName = Deno.env.get("DV_PACKAGE_NAME") ?? packagePath;
       console.error(
-        `warning: ${packageName}: module graph unavailable, reporting import-map dependencies only (${graphPackages.error})`,
+        `warning: ${packageName}: module graph unavailable, reporting import-map dependencies only (${graphPackages.error.reason})`,
       );
+    } else {
+      failWith(graphPackages.error.reason);
     }
   }
   console.log(
@@ -339,7 +343,7 @@ export async function packagesInModuleGraph({
   packageDir: string;
   exports: unknown;
   budgetMs?: number;
-}): Promise<Result<Set<string>>> {
+}): Promise<Result<Set<string>, GraphFailure>> {
   // One deadline for the whole walk, however many entry points the
   // package exports. When it fires, any `deno info` still running is
   // killed.
@@ -391,7 +395,7 @@ async function localModulesOf({
   entryPoint: string;
   deadline: AbortSignal;
   budgetMs: number;
-}): Promise<Result<string[]>> {
+}): Promise<Result<string[], GraphFailure>> {
   const infoRun = await runDenoBefore({
     args: [
       "info",
@@ -405,32 +409,30 @@ async function localModulesOf({
     deadline,
   });
   if (infoRun.kind === "timed-out") {
-    return {
-      ok: false,
-      error: `deno info ${entryPoint} ran past the ${budgetMs}ms budget`,
-    };
+    return graphUnavailable(
+      `deno info ${entryPoint} ran past the ${budgetMs}ms budget`,
+    );
   }
   if (infoRun.kind === "spawn-failed") {
-    return { ok: false, error: `cannot run deno info: ${infoRun.reason}` };
+    return denoInfoBroken(`cannot run deno info: ${infoRun.reason}`);
   }
   if (infoRun.code !== 0) {
-    return {
-      ok: false,
-      error: `deno info ${entryPoint} failed (exit ${infoRun.code}): ${infoRun.stderr.trim() || "<no stderr>"}`,
-    };
+    return graphUnavailable(
+      `deno info ${entryPoint} failed (exit ${infoRun.code}): ${infoRun.stderr.trim() || "<no stderr>"}`,
+    );
   }
   let graph: unknown;
   try {
     graph = JSON.parse(infoRun.stdout);
   } catch (caughtError) {
-    return {
-      ok: false,
-      error: `deno info ${entryPoint} printed invalid JSON: ${describeError(caughtError)}`,
-    };
+    return denoInfoBroken(
+      `deno info ${entryPoint} printed invalid JSON: ${describeError(caughtError)}`,
+    );
   }
   const modules = isRecord(graph) ? graph.modules : undefined;
-  if (!Array.isArray(modules)) {
-    return { ok: false, error: `deno info ${entryPoint} listed no modules` };
+  // A successful run always lists at least the entry point itself.
+  if (!Array.isArray(modules) || modules.length === 0) {
+    return denoInfoBroken(`deno info ${entryPoint} listed no modules`);
   }
   const localPaths: string[] = [];
   for (const graphModule of modules) {
@@ -443,11 +445,29 @@ async function localModulesOf({
       typeof specifier === "string" &&
       specifier.startsWith("file:")
     ) {
-      return { ok: false, error: `deno info ${entryPoint}: ${error}` };
+      return graphUnavailable(`deno info ${entryPoint}: ${error}`);
     }
     if (typeof local === "string") localPaths.push(local);
   }
   return { ok: true, value: localPaths };
+}
+
+// Why the module graph couldn't be read. `graph-unavailable` is a
+// fact about this package (an entry point won't load, the walk ran
+// out of time): the op falls back to the import map. `deno-info-broken`
+// means the tool itself misbehaved (deno missing, output that isn't
+// the expected JSON); guessing past that would hide a broken setup.
+type GraphFailure =
+  | { kind: "graph-unavailable"; reason: string }
+  | { kind: "deno-info-broken"; reason: string };
+// {}
+
+function graphUnavailable(reason: string): Result<never, GraphFailure> {
+  return { ok: false, error: { kind: "graph-unavailable", reason } };
+}
+
+function denoInfoBroken(reason: string): Result<never, GraphFailure> {
+  return { ok: false, error: { kind: "deno-info-broken", reason } };
 }
 
 type DenoRun =
@@ -779,7 +799,10 @@ async function readFileOrUndefined(path: string): Promise<string | undefined> {
 // Errors are values: fallible helpers return a Result instead of
 // throwing, and the op handlers turn an error into the contract's
 // `{ ok: false, error }` response.
-type Result<Value> = { ok: true; value: Value } | { ok: false; error: string };
+type Result<Value, Failure = string> =
+  | { ok: true; value: Value }
+  | { ok: false; error: Failure };
+// {}
 
 // Reports a contract error response and exits non-zero.
 function failWith(error: string): never {
