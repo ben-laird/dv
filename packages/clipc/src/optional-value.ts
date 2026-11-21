@@ -35,7 +35,7 @@ interface ValidateOptionalValueArgs {
 
 /**
  * Reads an attached `--x=<raw>` against its flag's spec. With `booleans`,
- * `true` and `false` become booleans. Then a declared `values` set must
+ * `true` and `false` become booleans. Then a declared `choices` set must
  * contain `raw`; without one, any string is accepted as written.
  */
 export function validateOptionalValue(
@@ -43,11 +43,11 @@ export function validateOptionalValue(
 ): OptionalValueValidation {
   const booleanValue = readBooleanSpelling(args);
   if (booleanValue !== undefined) return { ok: true, value: booleanValue };
-  const declaredValues = args.spec.values;
-  if (declaredValues === undefined || declaredValues.includes(args.raw)) {
+  const declaredChoices = args.spec.choices;
+  if (declaredChoices === undefined || declaredChoices.includes(args.raw)) {
     return { ok: true, value: args.raw };
   }
-  const allowedValues = [...booleanSpellings(args.spec), ...declaredValues];
+  const allowedValues = [...booleanSpellings(args.spec), ...declaredChoices];
   return {
     ok: false,
     issues: [{ message: `expected one of: ${allowedValues.join("|")}` }],
@@ -62,8 +62,8 @@ export function validateOptionalValue(
  */
 export function describeOptionalValue(spec: OptionalValueFlagSpec): string {
   if (spec.valueName !== undefined) return `<${spec.valueName}>`;
-  const spellings = [...booleanSpellings(spec), ...(spec.values ?? [])];
-  if (spec.values === undefined) spellings.push("<string>");
+  const spellings = [...booleanSpellings(spec), ...(spec.choices ?? [])];
+  if (spec.choices === undefined) spellings.push("<string>");
   return spellings.join("|");
 }
 

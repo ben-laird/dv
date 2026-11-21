@@ -100,7 +100,7 @@ may also carry a value, attached with `=`:
 flags: {
   askOnCommit: {
     kind: "optional-value",
-    values: ["null"],
+    choices: ["null"],
     booleans: true,
     description: "Ask before each commit (=null resets to the default)",
   },
@@ -113,7 +113,7 @@ flags: {
 // (absent)             → undefined
 ```
 
-What may follow `=` is a small vocabulary. `values` closes the set to those
+What may follow `=` is a small vocabulary. `choices` closes the set to those
 literals, and `flags.askOnCommit` is typed `boolean | "null" | undefined`;
 leave it out and any attached string is accepted, typed `string`.
 `booleans: true` also reads `=true` / `=false` as booleans, the way a boolean
@@ -134,8 +134,8 @@ itself:
   means `false` (drop the separate flag);
 - an optional-value flag named `no-<y>` beside a declared `<y>`, whose
   negation that name would shadow (rename the optional-value flag);
-- `"true"` or `"false"` in `values` together with `booleans: true`, since
-  those spellings already read as booleans (drop them from `values`).
+- `"true"` or `"false"` in `choices` together with `booleans: true`, since
+  those spellings already read as booleans (drop them from `choices`).
 
 ## A larger example
 

@@ -32,7 +32,7 @@
  * `--x null` the flag is `true` and `null` stays a positional word. What
  * `<value>` may be is a small vocabulary:
  *
- * - `values` (optional) closes the set: `--x=<value>` must be one of them,
+ * - `choices` (optional) closes the set: `--x=<value>` must be one of them,
  *   and the runner sees those literals. Without it, any attached string is
  *   accepted and the runner sees `string`.
  * - `booleans: true` also reads `--x=true` / `--x=false` as the booleans,
@@ -46,7 +46,7 @@
  * attached-value spelling. `command()` refuses, by throwing when the tree is
  * built, a separate `no-x` flag beside it (`--no-x` already means `false`),
  * an optional-value flag named `no-y` beside a declared `y` (its name would
- * shadow `y`'s negation), and `"true"`/`"false"` in `values` when
+ * shadow `y`'s negation), and `"true"`/`"false"` in `choices` when
  * `booleans: true` (those spellings already read as booleans).
  *
  * @example
@@ -54,7 +54,7 @@
  * const flags = {
  *   askOnCommit: {
  *     kind: "optional-value",
- *     values: ["null"],
+ *     choices: ["null"],
  *     booleans: true,
  *     description: "Ask before each commit; =null resets to the default",
  *   },
@@ -80,7 +80,7 @@ export type FlagSpec =
   | {
       kind: "optional-value";
       /** The closed set an attached value must come from; omit for any string. */
-      values?: readonly [string, ...string[]];
+      choices?: readonly [string, ...string[]];
       /** Read `--x=true` / `--x=false` as the booleans. */
       booleans?: true;
       alias?: never;
@@ -109,12 +109,12 @@ export type FlagsOf<TFlagMap extends Record<string, FlagSpec>> = {
 
 /**
  * The type of an `"optional-value"` flag's attached value: the union of its
- * declared `values` literals, or `string` when it declares none.
+ * declared `choices` literals, or `string` when it declares none.
  *
  * @typeParam TSpec - One flag's spec.
  */
 export type AttachedValueOf<TSpec> = TSpec extends {
-  values: readonly (infer TValue)[];
+  choices: readonly (infer TValue)[];
 }
   ? TValue
   : string;
@@ -218,7 +218,7 @@ export type FlagSpecError =
       baseFlagName: string;
     }
   | {
-      kind: "boolean-spelling-in-values";
+      kind: "boolean-spelling-in-choices";
       /** The `"optional-value"` flag with `booleans: true`. */
       flagName: string;
       /** The declared value `booleans` already reads as a boolean. */
@@ -234,7 +234,7 @@ export type FlagSpecCheck = { ok: true } | { ok: false; error: FlagSpecError };
  * declared `no-x` flag would never be set. Mirrored, an `"optional-value"`
  * flag named `no-y` claims the `--no-y` token, so it can't sit beside a
  * declared `y` of any kind. And with `booleans: true` it reads `=true` /
- * `=false` as booleans, so declaring either in `values` would never yield
+ * `=false` as booleans, so declaring either in `choices` would never yield
  * that string.
  *
  * @param flagSpecMap - The command's flag map keyed by flag name.
@@ -264,10 +264,10 @@ export function checkFlagSpecMap(
     }
     if (flagSpec.booleans !== true) continue;
     for (const value of ["true", "false"] as const) {
-      if (flagSpec.values?.includes(value)) {
+      if (flagSpec.choices?.includes(value)) {
         return {
           ok: false,
-          error: { kind: "boolean-spelling-in-values", flagName, value },
+          error: { kind: "boolean-spelling-in-choices", flagName, value },
         };
       }
     }
@@ -287,7 +287,7 @@ export function describeFlagSpecError(error: FlagSpecError): string {
       return `flag '${error.negatedFlagName}' collides with optional-value flag '${error.flagName}', which already reads '--${error.negatedFlagName}' as false; drop the separate '${error.negatedFlagName}' flag`;
     case "negated-name-collision":
       return `optional-value flag '${error.flagName}' collides with flag '${error.baseFlagName}': '--${error.flagName}' reads as the negation of '${error.baseFlagName}'; rename the optional-value flag so it doesn't start with 'no-'`;
-    case "boolean-spelling-in-values":
-      return `optional-value flag '${error.flagName}' declares '${error.value}' in values, but booleans: true already reads '--${error.flagName}=${error.value}' as a boolean; drop '${error.value}' from values`;
+    case "boolean-spelling-in-choices":
+      return `optional-value flag '${error.flagName}' declares '${error.value}' in choices, but booleans: true already reads '--${error.flagName}=${error.value}' as a boolean; drop '${error.value}' from choices`;
   }
 }

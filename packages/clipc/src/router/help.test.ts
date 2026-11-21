@@ -52,17 +52,17 @@ Deno.test("formatCommandHelp renders a value flag's valueName in place of its ki
   ]);
 });
 
-Deno.test("formatCommandHelp renders an optional-value flag's declared values as an optional attachment", () => {
-  // Given optional-value flags with one and with several declared values
+Deno.test("formatCommandHelp renders an optional-value flag's declared choices as an optional attachment", () => {
+  // Given optional-value flags with one and with several declared choices
   const flags = {
     askOnCommit: {
       kind: "optional-value",
-      values: ["null"],
+      choices: ["null"],
       description: "Ask before commit",
     },
     color: {
       kind: "optional-value",
-      values: ["always", "never"],
+      choices: ["always", "never"],
       description: "Colorize",
     },
   } satisfies Record<string, FlagSpec>;
@@ -70,7 +70,7 @@ Deno.test("formatCommandHelp renders an optional-value flag's declared values as
   // When the leaf's help is rendered
   const lines = flagLines(flags);
 
-  // Then each shows `--flag[=value]`, several values separated by `|`
+  // Then each shows `--flag[=value]`, several choices separated by `|`
   assertEquals(lines, [
     "  --askOnCommit[=null]      Ask before commit",
     "  --color[=always|never]    Colorize",
@@ -78,11 +78,11 @@ Deno.test("formatCommandHelp renders an optional-value flag's declared values as
 });
 
 Deno.test("formatCommandHelp lists the boolean spellings first when booleans is on", () => {
-  // Given maat's askOnCommit: values ["null"] plus booleans
+  // Given maat's askOnCommit: choices ["null"] plus booleans
   const flags = {
     askOnCommit: {
       kind: "optional-value",
-      values: ["null"],
+      choices: ["null"],
       booleans: true,
       description: "Ask before commit",
     },
@@ -119,7 +119,7 @@ Deno.test("formatCommandHelp renders an optional-value flag's valueName as an op
   const flags = {
     askOnCommit: {
       kind: "optional-value",
-      values: ["null"],
+      choices: ["null"],
       valueName: "reset",
       description: "Ask before commit",
     },

@@ -7,11 +7,11 @@ import {
 
 const closedSet: OptionalValueFlagSpec = {
   kind: "optional-value",
-  values: ["null"],
+  choices: ["null"],
 };
 const closedSetWithBooleans: OptionalValueFlagSpec = {
   kind: "optional-value",
-  values: ["null"],
+  choices: ["null"],
   booleans: true,
 };
 const freeString: OptionalValueFlagSpec = { kind: "optional-value" };
@@ -55,7 +55,7 @@ Deno.test("validateOptionalValue reads true and false as booleans when booleans 
   assertEquals(falseValue, { ok: true, value: false });
 });
 
-Deno.test("validateOptionalValue accepts any text when no values are declared", () => {
+Deno.test("validateOptionalValue accepts any text when no choices are declared", () => {
   // Given a free-string spec
   for (const raw of ["", "true", "a=b", "anything"]) {
     // When the text is attached
@@ -83,7 +83,7 @@ Deno.test("describeOptionalValue lets valueName replace the listing", () => {
   // Given a closed set that also names its value
   const spec: OptionalValueFlagSpec = {
     kind: "optional-value",
-    values: ["null"],
+    choices: ["null"],
     booleans: true,
     valueName: "setting",
   };

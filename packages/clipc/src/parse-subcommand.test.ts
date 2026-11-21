@@ -256,7 +256,7 @@ Deno.test("parseSubcommandArgv names the first of several unknown flags", () => 
 // An optional-value flag: maat's `--askOnCommit`, which can also reset to null.
 // `as const` keeps `"null"` literal, as the builders' `const` type params do.
 const askOnCommitFlags = {
-  askOnCommit: { kind: "optional-value", values: ["null"] },
+  askOnCommit: { kind: "optional-value", choices: ["null"] },
   title: { kind: "string" },
   json: { kind: "boolean" },
 } as const satisfies Record<string, FlagSpec>;
@@ -377,11 +377,11 @@ Deno.test("parseSubcommandArgv refuses an undeclared attached value", () => {
 
 // maat's real case: a switch that also takes `=true`, `=false`, or `=null`.
 const maatAskOnCommitFlags = {
-  askOnCommit: { kind: "optional-value", values: ["null"], booleans: true },
+  askOnCommit: { kind: "optional-value", choices: ["null"], booleans: true },
 } as const satisfies Record<string, FlagSpec>;
 
 Deno.test("parseSubcommandArgv reads maat's askOnCommit in all five spellings", () => {
-  // Given an optional-value flag with `values: ["null"]` and `booleans: true`
+  // Given an optional-value flag with `choices: ["null"]` and `booleans: true`
   const flagSpecMap = maatAskOnCommitFlags;
 
   // When each spelling is parsed
@@ -415,7 +415,7 @@ Deno.test("FlagsOf types maat's askOnCommit as boolean or null-literal", () => {
   // @ts-expect-error: the "null" literal is in the type, so boolean is too narrow
   const switchOnly: boolean | undefined = parsed.flags.askOnCommit;
   const arbitraryText: string = "other";
-  // @ts-expect-error: a free string is not one of the declared values
+  // @ts-expect-error: a free string is not one of the declared choices
   const freeText: AskOnCommit = arbitraryText;
   assertEquals([askOnCommit, switchOnly, freeText], [false, false, "other"]);
 });
@@ -443,7 +443,7 @@ Deno.test("parseSubcommandArgv lists the boolean spellings among the accepted va
   });
 });
 
-Deno.test("parseSubcommandArgv accepts any attached string when no values are declared", () => {
+Deno.test("parseSubcommandArgv accepts any attached string when no choices are declared", () => {
   // Given an optional-value flag with no closed set
   const flagSpecMap = {
     label: { kind: "optional-value" },
@@ -583,7 +583,7 @@ Deno.test("parseSubcommandArgv refuses typed tokens that spell its internal keys
 Deno.test("parseSubcommandArgv reads an optional-value flag whose name starts with no-", () => {
   // Given an optional-value flag named like a negation
   const flagSpecMap = {
-    "no-verify": { kind: "optional-value", values: ["hooks"] },
+    "no-verify": { kind: "optional-value", choices: ["hooks"] },
   } as const satisfies Record<string, FlagSpec>;
 
   // When it is written bare, with its value, and negated
@@ -603,7 +603,7 @@ Deno.test("parseSubcommandArgv reads an optional-value flag whose name starts wi
 Deno.test("parseSubcommandArgv keeps a dotted optional-value name flat", () => {
   // Given an optional-value flag whose name has a dot
   const flagSpecMap = {
-    "cache.mode": { kind: "optional-value", values: ["off"] },
+    "cache.mode": { kind: "optional-value", choices: ["off"] },
   } as const satisfies Record<string, FlagSpec>;
 
   // When it is given its value
@@ -616,13 +616,13 @@ Deno.test("parseSubcommandArgv keeps a dotted optional-value name flat", () => {
   assertEquals(parsed.flags, { "cache.mode": "off" });
 });
 
-Deno.test("parseSubcommandArgv accepts each of several declared values", () => {
-  // Given an optional-value flag with three declared values
+Deno.test("parseSubcommandArgv accepts each of several declared choices", () => {
+  // Given an optional-value flag with three declared choices
   const flagSpecMap = {
-    color: { kind: "optional-value", values: ["always", "never", "auto"] },
+    color: { kind: "optional-value", choices: ["always", "never", "auto"] },
   } satisfies Record<string, FlagSpec>;
 
-  for (const value of flagSpecMap.color.values) {
+  for (const value of flagSpecMap.color.choices) {
     // When that value is attached
     const parsed = parseOk({
       flagSpecMap,

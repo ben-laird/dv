@@ -9,7 +9,7 @@ import {
 Deno.test("checkFlagSpecMap refuses an optional-value flag beside its no- twin", () => {
   // Given maat's old shape: an optional-value flag plus a separate no- boolean
   const flagSpecMap: Record<string, FlagSpec> = {
-    ask: { kind: "optional-value", values: ["null"] },
+    ask: { kind: "optional-value", choices: ["null"] },
     "no-ask": { kind: "boolean" },
   };
 
@@ -33,10 +33,10 @@ Deno.test("checkFlagSpecMap refuses an optional-value flag beside its no- twin",
   }
 });
 
-Deno.test("checkFlagSpecMap refuses a boolean spelling declared in values beside booleans", () => {
+Deno.test("checkFlagSpecMap refuses a boolean spelling declared in choices beside booleans", () => {
   // Given an optional-value flag that reads booleans and also lists "false"
   const flagSpecMap: Record<string, FlagSpec> = {
-    ask: { kind: "optional-value", values: ["null", "false"], booleans: true },
+    ask: { kind: "optional-value", choices: ["null", "false"], booleans: true },
   };
 
   // When the map is checked
@@ -46,7 +46,7 @@ Deno.test("checkFlagSpecMap refuses a boolean spelling declared in values beside
   assertEquals(check, {
     ok: false,
     error: {
-      kind: "boolean-spelling-in-values",
+      kind: "boolean-spelling-in-choices",
       flagName: "ask",
       value: "false",
     },
@@ -54,7 +54,7 @@ Deno.test("checkFlagSpecMap refuses a boolean spelling declared in values beside
   if (!check.ok) {
     assertEquals(
       describeFlagSpecError(check.error),
-      "optional-value flag 'ask' declares 'false' in values, but booleans: true already reads '--ask=false' as a boolean; drop 'false' from values",
+      "optional-value flag 'ask' declares 'false' in choices, but booleans: true already reads '--ask=false' as a boolean; drop 'false' from choices",
     );
   }
 });
@@ -92,7 +92,7 @@ Deno.test("checkFlagSpecMap accepts no- flags that shadow nothing", () => {
   const flagSpecMap: Record<string, FlagSpec> = {
     color: { kind: "boolean" },
     "no-color": { kind: "boolean" },
-    "no-verify": { kind: "optional-value", values: ["hooks"] },
+    "no-verify": { kind: "optional-value", choices: ["hooks"] },
   };
 
   // When the map is checked
@@ -155,7 +155,7 @@ Deno.test("lowerFlagSpec returns empty arrays for an empty flag map", () => {
 Deno.test("lowerFlagSpec keeps optional-value flags out of every parseArgs bucket", () => {
   // Given an optional-value flag beside a boolean
   const flagSpecMap: Record<string, FlagSpec> = {
-    askOnCommit: { kind: "optional-value", values: ["null"] },
+    askOnCommit: { kind: "optional-value", choices: ["null"] },
     json: { kind: "boolean" },
   };
 

@@ -112,7 +112,7 @@ export interface CommandNode<Ctx = unknown> {
  * throws on it when the tree is built: an `"optional-value"` flag `x`
  * beside a declared `no-x`; an `"optional-value"` flag named `no-y` beside
  * a declared `y`; or `"true"`/`"false"` in an `"optional-value"` flag's
- * `values` when it sets `booleans: true`.
+ * `choices` when it sets `booleans: true`.
  *
  * `Ctx` is the first type parameter so callers can write
  * `command<MyCtx>({...})` and let `TFlags` infer from the literal
