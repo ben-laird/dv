@@ -27,8 +27,8 @@ A refused value is the existing `invalid-flag-value` error (exit 2) with
 the schema's messages; a `collect` flag names the element by place
 (`invalid value 'x' for '--port #2': …`), and the error context gains an
 optional `element` (counting from 1) for it. A schema that fails without
-issues reads `the value was refused`. A schema that throws or rejects is
-a new `flag-schema-failed` error with exit 1 (`the schema for '--port'
+issues reads `the value was refused`. A schema that throws, rejects, or
+returns a result the spec doesn't allow is a new `flag-schema-failed` error with exit 1 (`the schema for '--port'
 failed: <message>`, context `{ flagName, value, element?, message }`),
 caught at the edge instead of escaping as an exception. On an `optional-value` flag, `schema` and `choices` exclude each
 other; `booleans: true` composes with either.

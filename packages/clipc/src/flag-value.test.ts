@@ -229,6 +229,87 @@ Deno.test("validateFlagValue reports a schema that throws or rejects as failed, 
   });
 });
 
+Deno.test("validateFlagValue shows a fixed message for a thrown value with no text", async () => {
+  // Given schemas throwing a prototype-less object, and Errors whose message
+  // getter throws, whose message isn't a string, and whose message is empty
+  const throwingGetter = new Error("hidden");
+  Object.defineProperty(throwingGetter, "message", {
+    get: () => {
+      throw new Error("getter exploded");
+    },
+  });
+  const numericMessage = new Error("hidden");
+  Object.defineProperty(numericMessage, "message", { value: 42 });
+  const thrownValues: unknown[] = [
+    Object.create(null),
+    throwingGetter,
+    numericMessage,
+    new Error(""),
+  ];
+
+  // When each schema checks a value
+  const validations = await Promise.all(
+    thrownValues.map((thrown) => {
+      const schema = fakeSchema(() => {
+        throw thrown;
+      });
+      return validateFlagValue({ spec: { kind: "string", schema }, raw: "x" });
+    }),
+  );
+
+  // Then each is a schema failure carrying the fixed fallback text
+  const fallback = {
+    ok: false,
+    error: {
+      kind: "schema-failed",
+      message: "the schema threw a value that can't be shown",
+    },
+  } as const;
+  assertEquals(validations, [fallback, fallback, fallback, fallback]);
+});
+
+// A schema whose `validate` returns whatever `result` produces, unchecked:
+// `JSON.parse` and `Reflect.get` return `any`, so no cast is needed.
+function returning(result: () => ReturnType<typeof JSON.parse>) {
+  return fakeSchema(() => result());
+}
+
+Deno.test("validateFlagValue reports a result that breaks the spec as a schema failure", async () => {
+  // Given schemas returning null, undefined, issues that aren't a list, a
+  // null issue, and an issue whose message isn't text
+  const cases = [
+    returning(() => JSON.parse("null")),
+    returning(() => Reflect.get({}, "missing")),
+    returning(() => JSON.parse('{"issues":"bad"}')),
+    returning(() => JSON.parse('{"issues":[null]}')),
+    returning(() => JSON.parse('{"issues":[{"message":7}]}')),
+  ];
+
+  // When each schema checks a value
+  const validations = await Promise.all(
+    cases.map((schema) => {
+      return validateFlagValue({ spec: { kind: "string", schema }, raw: "x" });
+    }),
+  );
+
+  // Then none throws: each is a schema failure saying what was wrong
+  assertEquals(
+    validations.map((validation) => {
+      if (validation.ok || validation.error.kind !== "schema-failed") {
+        return "accepted or refused";
+      }
+      return validation.error.message;
+    }),
+    [
+      "the schema returned null, not a result",
+      "the schema returned undefined, not a result",
+      "the schema returned issues that aren't a list",
+      "the schema returned an issue with no text message",
+      "the schema returned an issue with no text message",
+    ],
+  );
+});
+
 Deno.test("validateFlagValue reads booleans before an optional-value flag's schema", async () => {
   // Given an optional-value flag with booleans and a digits schema
   const spec: OptionalValueFlagSpec = {

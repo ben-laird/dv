@@ -177,11 +177,14 @@ number, received NaN`. A `collect` flag names the refused element by place,
 (counting from 1; scalar flags have no `element`). Errors come in argv order. A schema that fails with no issues
 reads as `the value was refused`.
 
-A schema that throws, or whose promise rejects, is a bug in the schema rather
-than in what was typed, so it is a separate `flag-schema-failed` error with
-exit 1 and no usage hint: `the schema for '--port' failed: <message>`, with
-context `{ flagName, value, element?, message }`. clipc catches the throw at
-the edge, so it never escapes the leaf's handler as an exception.
+A schema that throws, whose promise rejects, or that returns a result the
+spec doesn't allow (`null`, or issues without text messages) is a bug in the
+schema rather than in what was typed, so it is a separate `flag-schema-failed`
+error with exit 1 and no usage hint: `the schema for '--port' failed:
+<message>`, with context `{ flagName, value, element?, message }`. A thrown
+value with no text to show reads `the schema threw a value that can't be
+shown`. clipc catches all of this at the edge, so it never escapes the leaf's
+handler as an exception.
 
 On an `optional-value` flag, `schema` and `choices` exclude each other, and
 the types enforce it. `booleans: true` composes with either: `=true` and

@@ -2,7 +2,6 @@ import type { FlagSpec } from "./flag-spec.ts";
 import type {
   StandardJSONSchemaV1Converter,
   StandardSchemaV1,
-  StandardSchemaV1Result,
 } from "./standard-schema.ts";
 
 // The value grammar of a value-carrying flag, in one place: what a raw
@@ -271,53 +270,84 @@ interface CheckWithSchemaArgs {
 
 // Awaits the schema, so a sync and an async one read the same, and keeps
 // only each issue's message: a flag value is a scalar, so paths are noise.
+// The edge around third-party code: a schema that throws or rejects, or
+// returns something the spec doesn't allow, becomes a value here. The
+// result is read inside the same guard, since its getters may throw too.
 async function checkWithSchema(
   args: CheckWithSchemaArgs,
 ): Promise<FlagValueValidation> {
-  const outcome = await runSchema(args);
-  if (!outcome.ok) {
-    return {
-      ok: false,
-      error: { kind: "schema-failed", message: outcome.reason },
-    };
+  try {
+    const result: unknown = await args.schema["~standard"].validate(args.raw);
+    return readSchemaResult(result);
+  } catch (thrown: unknown) {
+    return schemaFailed(describeThrown(thrown));
   }
-  const result = outcome.result;
-  if (result.issues === undefined) return { ok: true, value: result.value };
-  const [firstIssue, ...otherIssues] = result.issues.map((issue) => {
-    return { message: issue.message };
-  });
-  if (firstIssue === undefined) {
-    return {
-      ok: false,
-      error: { kind: "refused", issues: [{ message: SCHEMA_REFUSED_MESSAGE }] },
-    };
-  }
-  return {
-    ok: false,
-    error: { kind: "refused", issues: [firstIssue, ...otherIssues] },
-  };
 }
 
 // What a refusal says when its schema failed without naming an issue.
 const SCHEMA_REFUSED_MESSAGE = "the value was refused";
+// What a failure says when the thrown value has no text to show.
+const UNSHOWABLE_THROW_MESSAGE = "the schema threw a value that can't be shown";
 
-type SchemaRun =
-  | { ok: true; result: StandardSchemaV1Result<unknown> }
-  | { ok: false; reason: string };
+// A schema's result, read as the spec defines it, never trusted: an object
+// whose `issues` is absent (success, with `value`) or a list of issues each
+// carrying a text `message`. Anything else is the schema's failure.
+function readSchemaResult(result: unknown): FlagValueValidation {
+  if (typeof result !== "object" || result === null) {
+    return schemaFailed(`the schema returned ${String(result)}, not a result`);
+  }
+  const issues = fieldOf({ source: result, key: "issues" });
+  if (issues === undefined) {
+    return { ok: true, value: fieldOf({ source: result, key: "value" }) };
+  }
+  if (!Array.isArray(issues)) {
+    return schemaFailed("the schema returned issues that aren't a list");
+  }
+  const messages = issues.map(issueMessageOf);
+  if (!messages.every((message) => typeof message === "string")) {
+    return schemaFailed("the schema returned an issue with no text message");
+  }
+  const [firstMessage, ...otherMessages] = messages;
+  if (firstMessage === undefined) {
+    return refused([{ message: SCHEMA_REFUSED_MESSAGE }]);
+  }
+  return refused([
+    { message: firstMessage },
+    ...otherMessages.map((message) => ({ message })),
+  ]);
+}
 
-// The edge around third-party code: a schema that throws (or rejects) is
-// turned into a value here, so the throw never reaches the leaf's handler.
-async function runSchema(args: CheckWithSchemaArgs): Promise<SchemaRun> {
+// An issue's `message`, if the issue is an object that has one.
+function issueMessageOf(issue: unknown): unknown {
+  if (typeof issue !== "object" || issue === null) return undefined;
+  return fieldOf({ source: issue, key: "message" });
+}
+
+function refused(
+  issues: readonly [FlagValueIssue, ...FlagValueIssue[]],
+): FlagValueValidation {
+  return { ok: false, error: { kind: "refused", issues } };
+}
+
+function schemaFailed(message: string): FlagValueValidation {
+  return { ok: false, error: { kind: "schema-failed", message } };
+}
+
+// A thrown value as text, which may itself throw (`Object.create(null)`,
+// a throwing `message` getter), so it has its own guard. A message that
+// isn't a non-empty string reads as the fixed fallback.
+function describeThrown(thrown: unknown): string {
   try {
-    return {
-      ok: true,
-      result: await args.schema["~standard"].validate(args.raw),
-    };
-  } catch (thrown: unknown) {
-    return {
-      ok: false,
-      reason: thrown instanceof Error ? thrown.message : String(thrown),
-    };
+    let text: unknown;
+    if (thrown instanceof Error) {
+      text = thrown.message;
+    } else {
+      text = String(thrown);
+    }
+    if (typeof text === "string" && text !== "") return text;
+    return UNSHOWABLE_THROW_MESSAGE;
+  } catch {
+    return UNSHOWABLE_THROW_MESSAGE;
   }
 }
 
