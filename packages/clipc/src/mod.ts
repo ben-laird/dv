@@ -31,7 +31,6 @@ export {
   lowerFlagSpec,
 } from "./flag-spec.ts";
 export { type RenderCliErrorArgs, renderCliError } from "./render-cli-error.ts";
-
 // Router framework — the main surface consumers build CLIs against.
 export {
   type Cli,
@@ -66,3 +65,22 @@ export {
   router,
   type Step,
 } from "./router/mod.ts";
+// Standard Schema v1 types, vendored so clipc takes no dependency.
+export type {
+  InferInput,
+  InferOutput,
+  StandardJSONSchemaV1,
+  StandardJSONSchemaV1Converter,
+  StandardJSONSchemaV1Options,
+  StandardJSONSchemaV1Props,
+  StandardJSONSchemaV1Target,
+  StandardSchemaV1,
+  StandardSchemaV1FailureResult,
+  StandardSchemaV1Issue,
+  StandardSchemaV1Options,
+  StandardSchemaV1PathSegment,
+  StandardSchemaV1Props,
+  StandardSchemaV1Result,
+  StandardSchemaV1SuccessResult,
+  StandardSchemaV1Types,
+} from "./standard-schema.ts";
