@@ -4,6 +4,13 @@ All notable changes to this Package are documented in this file. The
 format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this Package adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.13.1] - 2026-11-21
+
+### Fixed
+
+- Plugin stderr from successful Ops now reaches dv's stderr, each line prefixed with the Op (and the Package, for per-Package Ops), as the plugin contract promises. Previously it was only visible under --debug, so warnings such as the Deno example's import-map fallback were silently dropped. stdout (and --json output) is unaffected.
+- dv release's human summary now counts only real publishes. A release op that answers published: false (for example a package marked "publish": false) shows as "N not published" instead of being counted as published, and one that answers skipped: true (already published) shows as "N skipped".
+
 ## [0.13.0] - 2026-11-20
 
 ### Added

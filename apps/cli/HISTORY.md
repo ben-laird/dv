@@ -5,6 +5,12 @@ one h3 subsection per Record consumed during that release, with the
 Record's body prose verbatim. For terse one-line bullets, see
 CHANGELOG.md.
 
+## [0.13.1] - 2026-11-21
+
+### Plugin stderr from successful Ops now reaches dv's stderr, each line prefixed with the Op (and the Package, for per-Package Ops), as the plugin contract promises. Previously it was only visible under --debug, so warnings such as the Deno example's import-map fallback were silently dropped. stdout (and --json output) is unaffected.
+
+### dv release's human summary now counts only real publishes. A release op that answers published: false (for example a package marked "publish": false) shows as "N not published" instead of being counted as published, and one that answers skipped: true (already published) shows as "N skipped".
+
 ## [0.13.0] - 2026-11-20
 
 ### dv migrate config now moves the config schema pointers (the `# yaml-language-server` modeline and the `$schema` key) forward to the running dv release when they name an older one, and leaves any other URL alone.
