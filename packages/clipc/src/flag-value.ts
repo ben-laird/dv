@@ -1,5 +1,8 @@
 import type { FlagSpec } from "./flag-spec.ts";
-import type { StandardSchemaV1 } from "./standard-schema.ts";
+import type {
+  StandardSchemaV1,
+  StandardSchemaV1Result,
+} from "./standard-schema.ts";
 
 // The value grammar of a value-carrying flag, in one place: what a raw
 // value typed on argv means and how usage describes it. Each rule a spec
@@ -74,9 +77,8 @@ export function describeOptionalValue(spec: OptionalValueFlagSpec): string {
 }
 
 // The one schema a spec's value goes through, if it declares a rule.
-function valueSchemaOf(
-  spec: ValueFlagSpec,
-): StandardSchemaV1<string, unknown> | undefined {
+function valueSchemaOf(spec: ValueFlagSpec): StandardSchemaV1 | undefined {
+  if (spec.schema !== undefined) return spec.schema;
   if (spec.kind !== "optional-value" || spec.choices === undefined) {
     return undefined;
   }
@@ -123,7 +125,7 @@ function choicesSchema(
 }
 
 interface CheckWithSchemaArgs {
-  schema: StandardSchemaV1<string, unknown>;
+  schema: StandardSchemaV1;
   raw: string;
 }
 
@@ -136,7 +138,14 @@ type SchemaCheck =
 async function checkWithSchema(
   args: CheckWithSchemaArgs,
 ): Promise<SchemaCheck> {
-  const result = await args.schema["~standard"].validate(args.raw);
+  const outcome = await runSchema(args);
+  if (!outcome.ok) {
+    return {
+      ok: false,
+      issues: [{ message: `the flag's schema threw: ${outcome.reason}` }],
+    };
+  }
+  const result = outcome.result;
   if (result.issues === undefined) return { ok: true, value: result.value };
   const [firstIssue, ...otherIssues] = result.issues.map((issue) => {
     return { message: issue.message };
@@ -149,6 +158,26 @@ async function checkWithSchema(
 
 // What a refusal says when its schema failed without naming an issue.
 const SCHEMA_REFUSED_MESSAGE = "the value was refused";
+
+type SchemaRun =
+  | { ok: true; result: StandardSchemaV1Result<unknown> }
+  | { ok: false; reason: string };
+
+// The edge around third-party code: a schema that throws (or rejects) is
+// turned into a value here, so the throw never reaches the leaf's handler.
+async function runSchema(args: CheckWithSchemaArgs): Promise<SchemaRun> {
+  try {
+    return {
+      ok: true,
+      result: await args.schema["~standard"].validate(args.raw),
+    };
+  } catch (thrown: unknown) {
+    return {
+      ok: false,
+      reason: thrown instanceof Error ? thrown.message : String(thrown),
+    };
+  }
+}
 
 function readBooleanSpelling(args: ValidateFlagValueArgs): boolean | undefined {
   if (args.spec.kind !== "optional-value") return undefined;

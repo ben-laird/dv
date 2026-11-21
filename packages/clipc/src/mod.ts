@@ -25,10 +25,13 @@ export {
 } from "./errors.ts";
 export {
   type AttachedValueOf,
+  type FlagSchemaInputCheck,
   type FlagSpec,
   type FlagsOf,
+  type FlagValueOf,
   type LoweredFlagSpec,
   lowerFlagSpec,
+  type SchemaInputMustAcceptString,
 } from "./flag-spec.ts";
 export { type RenderCliErrorArgs, renderCliError } from "./render-cli-error.ts";
 // Router framework — the main surface consumers build CLIs against.

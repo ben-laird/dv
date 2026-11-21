@@ -1,5 +1,5 @@
 import { CliError } from "../errors.ts";
-import type { FlagSpec, FlagsOf } from "../flag-spec.ts";
+import type { FlagSchemaInputCheck, FlagSpec, FlagsOf } from "../flag-spec.ts";
 import { isFlagToken } from "../flag-token.ts";
 import { type CommandNode, command as makeCommand } from "./command.ts";
 import { formatRouterHelp } from "./help.ts";
@@ -282,7 +282,7 @@ export function router<Ctx = unknown>(spec: RouterSpec<Ctx>): RouterNode<Ctx> {
  * ```
  */
 export function inheritedFlags<const TFlags extends Record<string, FlagSpec>>(
-  flags: TFlags,
+  flags: TFlags & FlagSchemaInputCheck<TFlags>,
 ): TFlags {
   return flags;
 }
@@ -316,7 +316,7 @@ export interface CtxBoundBuilders<Ctx> {
    */
   command: <const TFlags extends Record<string, FlagSpec>>(spec: {
     description?: string;
-    flags: TFlags;
+    flags: TFlags & FlagSchemaInputCheck<TFlags>;
     run: (req: {
       flags: FlagsOf<TFlags>;
       argv: string[];

@@ -5,6 +5,71 @@ import {
   type ParsedCommandArgv,
   parseCommandArgv,
 } from "./parse-command-argv.ts";
+import type { StandardSchemaV1 } from "./standard-schema.ts";
+
+// A hand-written schema that reads digits as a number.
+const digits: StandardSchemaV1<string, number> = {
+  "~standard": {
+    version: 1,
+    vendor: "fake",
+    validate: (value) => {
+      if (typeof value === "string" && /^\d+$/.test(value)) {
+        return { value: Number(value) };
+      }
+      return { issues: [{ message: "expected digits" }] };
+    },
+  },
+};
+
+Deno.test("parseCommandArgv reports the first refused value in argv order across flags", async () => {
+  // Given a string and a collect flag that both read digits
+  const flagSpecMap = {
+    count: { kind: "string", alias: "c", schema: digits },
+    port: { kind: "collect", schema: digits },
+  } satisfies Record<string, FlagSpec>;
+
+  // When the collect's second value and the string's value are both bad
+  const outcome = await parseCommandArgv({
+    flagSpecMap,
+    subcommandArgv: ["--port", "80", "-c", "x", "--port", "y"],
+  });
+
+  // Then the string flag, typed first, is the one reported
+  assertEquals(outcome, {
+    ok: false,
+    error: {
+      kind: "invalid-flag-value",
+      flagName: "count",
+      value: "x",
+      issues: [{ message: "expected digits" }],
+    },
+  });
+});
+
+Deno.test("parseCommandArgv names a collect flag's refused element", async () => {
+  // Given a collect flag that reads digits
+  const flagSpecMap = {
+    port: { kind: "collect", alias: "p", schema: digits },
+  } satisfies Record<string, FlagSpec>;
+
+  // When its third value, typed through the alias, is bad
+  const outcome = await parseCommandArgv({
+    flagSpecMap,
+    subcommandArgv: ["--port=1", "-p", "2", "-p", "three"],
+  });
+
+  // Then the error carries the element's place, counting from 1
+  assertEquals(outcome, {
+    ok: false,
+    error: {
+      kind: "invalid-flag-value",
+      flagName: "port",
+      value: "three",
+      element: 3,
+      issues: [{ message: "expected digits" }],
+    },
+  });
+});
 
 // Unwraps an outcome the test expects to succeed, failing loudly otherwise.
 async function parseOk<TFlagMap extends Record<string, FlagSpec>>(

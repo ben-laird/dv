@@ -23,6 +23,8 @@ export type FlagParseError =
       kind: "invalid-flag-value";
       flagName: string;
       value: string;
+      /** Which of a `collect` flag's values was refused, counting from 1. */
+      element?: number;
       /** Why the value was refused; never empty. */
       issues: readonly [FlagValueIssue, ...FlagValueIssue[]];
       /** The accepted set, when the flag declares a closed one. */

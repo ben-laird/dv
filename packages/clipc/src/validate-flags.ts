@@ -45,6 +45,9 @@ export async function validateFlagValues(
           kind: "invalid-flag-value",
           flagName: reading.flagName,
           value: reading.raw,
+          ...(reading.slot.kind === "element" && {
+            element: reading.slot.index + 1,
+          }),
           issues: validation.issues,
           ...(validation.allowedValues !== undefined && {
             allowedValues: validation.allowedValues,

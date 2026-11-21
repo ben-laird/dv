@@ -2,6 +2,7 @@ import { CliError } from "../errors.ts";
 import {
   checkFlagSpecMap,
   describeFlagSpecError,
+  type FlagSchemaInputCheck,
   type FlagSpec,
   type FlagsOf,
 } from "../flag-spec.ts";
@@ -101,11 +102,16 @@ export interface CommandNode<Ctx = unknown> {
 /**
  * Defines a leaf command in the router tree. Returns a
  * {@link CommandNode} whose handler intercepts `--help`/`-h` (before
- * any `--`), parses `spec.flags` from the incoming argv, and then invokes `spec.run`
+ * any `--`), parses `spec.flags` from the incoming argv, validates each
+ * flag value typed against its `choices` or `schema` (awaited, in argv
+ * order), and then invokes `spec.run`
  * with the typed flags, remaining positional argv, shared ctx, and
  * breadcrumb path. An undeclared flag is returned as a typed
- * `unknown-flag` error (exit 2), and an `"optional-value"` flag given an
- * undeclared value as an `invalid-flag-value` error (exit 2), not thrown.
+ * `unknown-flag` error (exit 2), and a refused value (outside `choices`,
+ * or failed or thrown by its `schema`) as an `invalid-flag-value` error
+ * (exit 2), not thrown; a `collect` flag's refused value is named by place
+ * (`--pkg #2`). A `schema` whose input can't be a string, such as
+ * `z.number()`, fails to type-check (see {@link FlagSchemaInputCheck}).
  * A flag map that contradicts itself is a bug in the CLI, so `command`
  * throws on it when the tree is built: an `"optional-value"` flag `x`
  * beside a declared `no-x`; an `"optional-value"` flag named `no-y` beside
@@ -133,7 +139,9 @@ export interface CommandNode<Ctx = unknown> {
 export function command<
   Ctx = unknown,
   const TFlags extends Record<string, FlagSpec> = Record<string, FlagSpec>,
->(spec: CommandSpec<Ctx, TFlags>): CommandNode<Ctx> {
+>(
+  spec: CommandSpec<Ctx, TFlags> & { flags: FlagSchemaInputCheck<TFlags> },
+): CommandNode<Ctx> {
   // A flag map that contradicts itself is a bug in the CLI, not in what a
   // user typed, so it panics here, when the tree is built, not per run.
   const flagSpecCheck = checkFlagSpecMap(spec.flags);
@@ -208,11 +216,15 @@ function flagParseCliError(args: FlagParseCliErrorArgs): CliError {
         exitCode: 2,
       });
     case "invalid-flag-value": {
-      const { flagName, value, issues, allowedValues } = args.flagParseError;
+      const { flagName, value, element, issues, allowedValues } =
+        args.flagParseError;
       const reasons = issues.map((issue) => issue.message).join("; ");
+      // A collect flag's refused value is named by place: `--pkg #2`.
+      const flagLabel =
+        element === undefined ? `--${flagName}` : `--${flagName} #${element}`;
       return new CliError({
         code: "invalid-flag-value",
-        message: `invalid value '${value}' for '--${flagName}': ${reasons}`,
+        message: `invalid value '${value}' for '${flagLabel}': ${reasons}`,
         hint,
         exitCode: 2,
         context: {

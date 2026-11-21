@@ -1,3 +1,9 @@
+import type {
+  InferInput,
+  InferOutput,
+  StandardSchemaV1,
+} from "./standard-schema.ts";
+
 // Per-flag spec used by every leaf command. Four kinds:
 //
 //   { kind: "boolean" }         — present-or-absent toggle. The runner
@@ -12,7 +18,8 @@
 //
 // Aliases are short letter forms (`alias: "p"` → `-p`). `description`
 // feeds the auto-generated help renderer, and a value-carrying flag's
-// `valueName` names its value there (`--pkg <name>`).
+// `valueName` names its value there (`--pkg <name>`). A value-carrying
+// flag's `schema` (a Standard Schema) validates each value and types it.
 
 /**
  * The spec for a single flag on a leaf command. The `kind` selects the runtime
@@ -27,6 +34,15 @@
  * `{ kind: "string", valueName: "path" }` renders `--out <path>` instead of
  * the default `--out <string>`.
  *
+ * A value-carrying flag may also set `schema`: any
+ * [Standard Schema](https://standardschema.dev) (Zod, Valibot, ArkType, …)
+ * whose input is a string, since argv holds only text. Each value typed is
+ * validated by it, awaited before `run`, and the runner sees its output:
+ * `{ kind: "string", schema: z.coerce.number() }` gives `number | undefined`,
+ * and on a `collect` flag each element is validated and typed. A refused
+ * value is an `invalid-flag-value` error. A schema whose input can't be a
+ * string (`z.number()`) fails to type-check at `command()`.
+ *
  * An `"optional-value"` flag is written three ways: `--x` (`true`), `--no-x`
  * (`false`), or `--x=<value>`. The value must be attached with `=`: in
  * `--x null` the flag is `true` and `null` stays a positional word. What
@@ -35,6 +51,8 @@
  * - `choices` (optional) closes the set: `--x=<value>` must be one of them,
  *   and the runner sees those literals. Without it, any attached string is
  *   accepted and the runner sees `string`.
+ * - `schema` (optional, instead of `choices`) validates the value and the
+ *   runner sees its output.
  * - `booleans: true` also reads `--x=true` / `--x=false` as the booleans,
  *   the way a boolean flag reads `--json=false`.
  *
@@ -70,18 +88,34 @@ export type FlagSpec =
       alias?: string;
       description?: string;
       valueName?: string;
+      /** Validates and maps the value; the runner sees its output. */
+      schema?: StandardSchemaV1;
     }
   | {
       kind: "collect";
       alias?: string;
       description?: string;
       valueName?: string;
+      /** Validates and maps each value; the runner sees a list of outputs. */
+      schema?: StandardSchemaV1;
     }
   | {
       kind: "optional-value";
       /** The closed set an attached value must come from; omit for any string. */
       choices?: readonly [string, ...string[]];
+      schema?: never;
       /** Read `--x=true` / `--x=false` as the booleans. */
+      booleans?: true;
+      alias?: never;
+      description?: string;
+      valueName?: string;
+    }
+  | {
+      kind: "optional-value";
+      choices?: never;
+      /** Validates and maps an attached value; the runner sees its output. */
+      schema: StandardSchemaV1;
+      /** Read `--x=true` / `--x=false` as the booleans, before the schema. */
       booleans?: true;
       alias?: never;
       description?: string;
@@ -90,8 +124,10 @@ export type FlagSpec =
 
 /**
  * Maps a flag-name → {@link FlagSpec} map to the runner's typed flag object,
- * resolving each flag's `kind` to its runtime value type. An
- * `"optional-value"` flag resolves to `boolean` or its attached value (see
+ * resolving each flag's `kind` to its runtime value type. A value-carrying
+ * flag's value is the `string` typed, or its `schema`'s output (see
+ * {@link FlagValueOf}): a `collect` flag gets a list of them, and an
+ * `"optional-value"` flag `boolean` or its attached value (see
  * {@link AttachedValueOf}). Every property is `| undefined` because an
  * omitted flag may be `undefined` regardless of kind.
  *
@@ -101,15 +137,28 @@ export type FlagsOf<TFlagMap extends Record<string, FlagSpec>> = {
   [Key in keyof TFlagMap]: TFlagMap[Key]["kind"] extends "boolean"
     ? boolean | undefined
     : TFlagMap[Key]["kind"] extends "string"
-      ? string | undefined
+      ? FlagValueOf<TFlagMap[Key]> | undefined
       : TFlagMap[Key] extends { kind: "optional-value" }
         ? boolean | AttachedValueOf<TFlagMap[Key]> | undefined
-        : string[] | undefined;
+        : FlagValueOf<TFlagMap[Key]>[] | undefined;
 };
 
 /**
+ * The type of one value of a value-carrying flag: its `schema`'s output, or
+ * the `string` typed when it declares no schema.
+ *
+ * @typeParam TSpec - One flag's spec.
+ */
+export type FlagValueOf<TSpec> = TSpec extends {
+  schema: infer TSchema extends StandardSchemaV1;
+}
+  ? InferOutput<TSchema>
+  : string;
+
+/**
  * The type of an `"optional-value"` flag's attached value: the union of its
- * declared `choices` literals, or `string` when it declares none.
+ * declared `choices` literals, its `schema`'s output, or `string` when it
+ * declares neither.
  *
  * @typeParam TSpec - One flag's spec.
  */
@@ -117,7 +166,39 @@ export type AttachedValueOf<TSpec> = TSpec extends {
   choices: readonly (infer TValue)[];
 }
   ? TValue
-  : string;
+  : FlagValueOf<TSpec>;
+
+/**
+ * What the type checker reports for a flag whose `schema` cannot read argv,
+ * which holds only text: its input type and `string` share no value.
+ */
+export type SchemaInputMustAcceptString =
+  "a flag's schema must accept a string input, since argv holds only text; use a coercing schema such as z.coerce.number()";
+
+/**
+ * A type-level check over a flag map: each flag's `schema` must read a
+ * `string` input, so `z.coerce.number()` (input `unknown`) and
+ * `z.enum(["a", "b"])` (input `"a" | "b"`) pass and `z.number()` fails.
+ * Intersected with a flag map, it maps a passing flag to `unknown` (no
+ * constraint) and a failing one to `{ schema: SchemaInputMustAcceptString }`,
+ * which no schema satisfies. `command`, `forCtx().command` and
+ * `inheritedFlags` apply it.
+ *
+ * @typeParam TFlagMap - The command's flag map keyed by flag name.
+ */
+export type FlagSchemaInputCheck<TFlagMap> = {
+  // An input reads argv text when it takes every string (`unknown`,
+  // `string | number`) or only strings (`"a" | "b"`).
+  [Key in keyof TFlagMap]: TFlagMap[Key] extends {
+    schema: infer TSchema extends StandardSchemaV1;
+  }
+    ? [string] extends [InferInput<TSchema>]
+      ? unknown
+      : [InferInput<TSchema>] extends [string]
+        ? unknown
+        : { schema: SchemaInputMustAcceptString }
+    : unknown;
+};
 
 /**
  * The lowered, `parseArgs`-shaped form of a flag map: parallel name arrays by
