@@ -63,9 +63,12 @@ clipc is five ideas. Once you have them, the whole surface follows.
   `flags` argument, so `flags.name` is a `string | undefined`, not `any` — the
   compiler enforces the contract you declared.
 - **Flag specs** (`FlagSpec`, `lowerFlagSpec`) — flags are data, not parsing
-  code. Each flag declares its `kind` (`string`, `boolean`, …) and description;
+  code. Each flag declares its `kind` (`string`, `boolean`, `collect`,
+  `optional-value`) and description;
   the framework derives parsing, `--help` text, and the static `FlagsOf<…>` type
-  from one declaration. `inheritedFlags` is a typed-identity capture: declare a
+  from one declaration. A value-carrying flag can name its value for `--help`:
+  `{ kind: "string", valueName: "path" }` shows `--out <path>` instead of the
+  default `--out <string>`. `inheritedFlags` is a typed-identity capture: declare a
   shared flag map once, then spread it into each leaf's `flags` so cross-cutting
   flags keep one source of truth without drifting per-flag kinds.
 - **Errors-as-values** (`done`, `next`, `Step`) — handlers return a result
@@ -89,6 +92,50 @@ its own. Everything after `--` is a positional word, never a switch:
 A lone `-` is a word too (by convention it often means stdin): `mycli add -`
 hands the leaf `"-"`, and `--title -` sets `title` to `"-"`, as `-t -` and
 `--title=-` do.
+
+**Switches with an optional value.** An `optional-value` flag is a switch that
+may also carry a value, attached with `=`:
+
+```typescript
+flags: {
+  askOnCommit: {
+    kind: "optional-value",
+    values: ["null"],
+    booleans: true,
+    description: "Ask before each commit (=null resets to the default)",
+  },
+}
+// --askOnCommit        → true
+// --no-askOnCommit     → false
+// --askOnCommit=true   → true
+// --askOnCommit=false  → false
+// --askOnCommit=null   → "null"
+// (absent)             → undefined
+```
+
+What may follow `=` is a small vocabulary. `values` closes the set to those
+literals, and `flags.askOnCommit` is typed `boolean | "null" | undefined`;
+leave it out and any attached string is accepted, typed `string`.
+`booleans: true` also reads `=true` / `=false` as booleans, the way a boolean
+flag reads `--json=false`. The value must be attached: `--askOnCommit null`
+switches the flag on and leaves `null` as a positional word. A value outside
+the declared set (`--askOnCommit=foo`) is refused with an `invalid-flag-value`
+error and exit 2.
+
+`--help` lists every accepted spelling: `--askOnCommit[=true|false|null]`, or
+`--label[=<string>]` for a free value. A `valueName` replaces the list
+(`--askOnCommit[=<setting>]`), which hides a closed set, so leave it unset when
+the set is short. The flag takes no short `alias`.
+
+`command()` throws when the tree is built if the declaration contradicts
+itself:
+
+- a separate `no-askOnCommit` flag beside it, since `--no-askOnCommit` already
+  means `false` (drop the separate flag);
+- an optional-value flag named `no-<y>` beside a declared `<y>`, whose
+  negation that name would shadow (rename the optional-value flag);
+- `"true"` or `"false"` in `values` together with `booleans: true`, since
+  those spellings already read as booleans (drop them from `values`).
 
 ## A larger example
 

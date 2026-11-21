@@ -1,4 +1,4 @@
-import { assertEquals, assertStringIncludes } from "@std/assert";
+import { assertEquals, assertStringIncludes, assertThrows } from "@std/assert";
 import { CliError } from "../errors.ts";
 import { command } from "./command.ts";
 import { defineCli, type OutputMode } from "./define-cli.ts";
@@ -565,6 +565,84 @@ Deno.test("leaf returns kind:error with exit 2 for an unknown flag (typed error 
   const stderrText = result.stderrLines.join("\n");
   assertStringIncludes(stderrText, "unknown-flag");
   assertStringIncludes(stderrText, "--bogus");
+});
+
+Deno.test("leaf hands run an optional-value flag typed as boolean or its declared value", async () => {
+  // Given a leaf with an optional-value flag that records what run saw
+  const seen: Array<{ askOnCommit: boolean | "null" | undefined }> = [];
+  const root = router({
+    commands: {
+      set: command({
+        flags: { askOnCommit: { kind: "optional-value", values: ["null"] } },
+        run: ({ flags }) => {
+          seen.push({ askOnCommit: flags.askOnCommit });
+          return done({ kind: "ok" });
+        },
+      }),
+    },
+  });
+
+  // When each spelling reaches the leaf
+  for (const spelling of [
+    "--askOnCommit",
+    "--no-askOnCommit",
+    "--askOnCommit=null",
+  ]) {
+    await runWithCapture({ rootRouter: root, argv: ["set", spelling] });
+  }
+
+  // Then run saw true, false, and the literal
+  assertEquals(seen, [
+    { askOnCommit: true },
+    { askOnCommit: false },
+    { askOnCommit: "null" },
+  ]);
+});
+
+Deno.test("command refuses an optional-value flag declared beside its no- twin", () => {
+  // Given a flag map with `ask` as optional-value and a separate `no-ask`
+  const declare = () => {
+    return command({
+      flags: {
+        ask: { kind: "optional-value", values: ["null"] },
+        "no-ask": { kind: "boolean" },
+      },
+      run: () => done({ kind: "ok" }),
+    });
+  };
+
+  // When the leaf is built
+  // Then it panics, naming the flag to drop
+  const panic = assertThrows(declare, Error);
+  assertStringIncludes(panic.message, "drop the separate 'no-ask' flag");
+});
+
+Deno.test("leaf returns kind:error with exit 2 for an undeclared optional value", async () => {
+  // Given a leaf with an optional-value flag declaring only `null`
+  const root = router({
+    commands: {
+      set: command({
+        flags: { askOnCommit: { kind: "optional-value", values: ["null"] } },
+        run: () => done({ kind: "ok" }),
+      }),
+    },
+  });
+
+  // When the user attaches another value
+  const result = await runWithCapture({
+    rootRouter: root,
+    argv: ["set", "--askOnCommit=foo"],
+  });
+
+  // Then the framework reports a typed invalid-flag-value error
+  assertEquals(result.exitCode, 2);
+  const stderrText = result.stderrLines.join("\n");
+  assertStringIncludes(stderrText, "invalid-flag-value");
+  assertStringIncludes(
+    stderrText,
+    "invalid value 'foo' for '--askOnCommit': expected one of: null",
+  );
+  assertStringIncludes(stderrText, "run 'test-cli set --help' for usage");
 });
 
 Deno.test("driver wraps a thrown error into kind:error with code:unknown (degraded path)", async () => {
