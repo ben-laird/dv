@@ -1,11 +1,13 @@
 import { assertEquals } from "@std/assert";
 import { z } from "zod";
 import {
-  describeOptionalValue,
+  describeFlagValue,
   type OptionalValueFlagSpec,
+  schemaChoices,
   validateFlagValue,
 } from "./flag-value.ts";
 import type {
+  StandardJSONSchemaV1,
   StandardSchemaV1,
   StandardSchemaV1Result,
 } from "./standard-schema.ts";
@@ -90,20 +92,20 @@ Deno.test("validateFlagValue accepts any text when no choices are declared", asy
   }
 });
 
-Deno.test("describeOptionalValue names every accepted spelling", () => {
+Deno.test("describeFlagValue names every accepted spelling", () => {
   // Given each shape of the vocabulary
   // When described for usage
   // Then booleans come first, then the set, with <string> for free text
-  assertEquals(describeOptionalValue(closedSet), "null");
-  assertEquals(describeOptionalValue(closedSetWithBooleans), "true|false|null");
-  assertEquals(describeOptionalValue(freeString), "<string>");
+  assertEquals(describeFlagValue(closedSet), "null");
+  assertEquals(describeFlagValue(closedSetWithBooleans), "true|false|null");
+  assertEquals(describeFlagValue(freeString), "<string>");
   assertEquals(
-    describeOptionalValue({ kind: "optional-value", booleans: true }),
+    describeFlagValue({ kind: "optional-value", booleans: true }),
     "true|false|<string>",
   );
 });
 
-Deno.test("describeOptionalValue lets valueName replace the listing", () => {
+Deno.test("describeFlagValue lets valueName replace the listing", () => {
   // Given a closed set that also names its value
   const spec: OptionalValueFlagSpec = {
     kind: "optional-value",
@@ -114,7 +116,7 @@ Deno.test("describeOptionalValue lets valueName replace the listing", () => {
 
   // When described for usage
   // Then the name stands in for the set
-  assertEquals(describeOptionalValue(spec), "<setting>");
+  assertEquals(describeFlagValue(spec), "<setting>");
 });
 
 Deno.test("validateFlagValue hands back a sync schema's output", async () => {
@@ -246,4 +248,124 @@ Deno.test("validateFlagValue reads values with real Zod schemas", async () => {
     ok: false,
     issues: [{ message: 'Invalid option: expected one of "always"|"never"' }],
   });
+});
+
+// A hand-written schema whose JSON Schema converter returns the given one.
+function withJsonSchema(
+  jsonSchema: () => Record<string, unknown>,
+): StandardSchemaV1<string, string> & StandardJSONSchemaV1<string, string> {
+  return {
+    "~standard": {
+      version: 1,
+      vendor: "fake",
+      validate: (value) => ({ value: String(value) }),
+      jsonSchema: { input: jsonSchema, output: jsonSchema },
+    },
+  };
+}
+
+Deno.test("schemaChoices reads string choices from enum, const, anyOf and oneOf", () => {
+  // Given schemas whose JSON Schemas list choices four ways
+  const fromEnum = withJsonSchema(() => ({ enum: ["a", "b"] }));
+  const fromConst = withJsonSchema(() => ({ const: "only" }));
+  const fromAnyOf = withJsonSchema(() => ({
+    anyOf: [{ const: "x" }, { const: "y" }],
+  }));
+  const fromOneOf = withJsonSchema(() => ({
+    oneOf: [{ type: "string", const: "p" }, { const: "q" }],
+  }));
+
+  // When their choices are read
+  // Then each lists its strings in order
+  assertEquals(schemaChoices(fromEnum), ["a", "b"]);
+  assertEquals(schemaChoices(fromConst), ["only"]);
+  assertEquals(schemaChoices(fromAnyOf), ["x", "y"]);
+  assertEquals(schemaChoices(fromOneOf), ["p", "q"]);
+});
+
+Deno.test("schemaChoices lists nothing it can't read as string choices", () => {
+  // Given a schema with no converter, one whose converter throws, and
+  // JSON Schemas that are open, mixed, or not all consts
+  const throwing = withJsonSchema(() => {
+    throw new Error("transforms can't be represented");
+  });
+  const open = withJsonSchema(() => ({ type: "number" }));
+  const mixed = withJsonSchema(() => ({ enum: ["a", 1] }));
+  const partial = withJsonSchema(() => ({
+    anyOf: [{ const: "a" }, { type: "string" }],
+  }));
+  const empty = withJsonSchema(() => ({ enum: [] }));
+
+  // When their choices are read
+  // Then none is listed, and the throw doesn't escape
+  assertEquals(schemaChoices(digits), undefined);
+  assertEquals(schemaChoices(throwing), undefined);
+  assertEquals(schemaChoices(open), undefined);
+  assertEquals(schemaChoices(mixed), undefined);
+  assertEquals(schemaChoices(partial), undefined);
+  assertEquals(schemaChoices(empty), undefined);
+});
+
+Deno.test("describeFlagValue picks valueName, then choices, then a schema's, then a placeholder", () => {
+  // Given a schema that lists choices and one that doesn't
+  const listed = withJsonSchema(() => ({ enum: ["always", "never"] }));
+
+  // When each kind of slot is described
+  // Then the first rule that applies wins
+  assertEquals(
+    describeFlagValue({ kind: "string", schema: listed, valueName: "when" }),
+    "<when>",
+  );
+  assertEquals(
+    describeFlagValue({ kind: "string", schema: listed }),
+    "always|never",
+  );
+  assertEquals(
+    describeFlagValue({ kind: "collect", schema: digits }),
+    "<value>",
+  );
+  assertEquals(describeFlagValue({ kind: "string" }), "<string>");
+  assertEquals(describeFlagValue({ kind: "collect" }), "<collect>");
+});
+
+Deno.test("describeFlagValue lists an optional-value schema's choices after the booleans", () => {
+  // Given optional-value flags with booleans and a listing or opaque schema
+  const listed = withJsonSchema(() => ({ enum: ["auto"] }));
+
+  // When described for usage
+  const withChoices = describeFlagValue({
+    kind: "optional-value",
+    schema: listed,
+    booleans: true,
+  });
+  const opaque = describeFlagValue({
+    kind: "optional-value",
+    schema: digits,
+    booleans: true,
+  });
+
+  // Then the booleans come first, then the choices or <value>
+  assertEquals(withChoices, "true|false|auto");
+  assertEquals(opaque, "true|false|<value>");
+});
+
+Deno.test("describeFlagValue reads choices from Zod's own JSON Schema", () => {
+  // Given Zod schemas: an enum, a literal union, and a coercing number
+  // When each is described for usage
+  // Then the enum and the union list their choices, the number a placeholder
+  assertEquals(
+    describeFlagValue({ kind: "string", schema: z.enum(["a", "b"]) }),
+    "a|b",
+  );
+  assertEquals(
+    describeFlagValue({
+      kind: "optional-value",
+      schema: z.union([z.literal("x"), z.literal("y")]),
+    }),
+    "x|y",
+  );
+  assertEquals(
+    describeFlagValue({ kind: "string", schema: z.coerce.number() }),
+    "<value>",
+  );
 });

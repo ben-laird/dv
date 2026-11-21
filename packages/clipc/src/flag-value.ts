@@ -1,5 +1,6 @@
 import type { FlagSpec } from "./flag-spec.ts";
 import type {
+  StandardJSONSchemaV1Converter,
   StandardSchemaV1,
   StandardSchemaV1Result,
 } from "./standard-schema.ts";
@@ -65,15 +66,108 @@ export async function validateFlagValue(
 }
 
 /**
- * How an `"optional-value"` flag's value reads in usage, between `[=` and
- * `]`: its `valueName` as `<name>`, or else every accepted spelling, `|`-
- * joined (`true|false|null`), with `<string>` standing for a free value.
+ * How a value-carrying flag's value reads in usage: after `--out ` for a
+ * `string` or `collect` flag, between `[=` and `]` for an
+ * `"optional-value"` one. In priority order: its `valueName` as `<name>`;
+ * its `choices`; the string choices its `schema`'s JSON Schema lists; or a
+ * placeholder, `<value>` for a schema and `<kind>` (`<string>`) without
+ * one. Choices are `|`-joined after any boolean spellings
+ * (`true|false|null`), and an optional-value placeholder follows them too.
  */
-export function describeOptionalValue(spec: OptionalValueFlagSpec): string {
+export function describeFlagValue(spec: ValueFlagSpec): string {
   if (spec.valueName !== undefined) return `<${spec.valueName}>`;
-  const spellings = [...booleanSpellings(spec), ...(spec.choices ?? [])];
-  if (spec.choices === undefined) spellings.push("<string>");
-  return spellings.join("|");
+  const spellings = booleanSpellings(spec);
+  const choices = declaredChoicesOf(spec) ?? schemaChoicesOf(spec.schema);
+  if (choices !== undefined) return [...spellings, ...choices].join("|");
+  const placeholder = spec.schema === undefined ? "<string>" : "<value>";
+  if (spec.kind === "optional-value") {
+    return [...spellings, placeholder].join("|");
+  }
+  return spec.schema === undefined ? `<${spec.kind}>` : placeholder;
+}
+
+/**
+ * The string choices a schema's input JSON Schema lists, for usage: an
+ * `enum`, a `const`, or an `anyOf` / `oneOf` of `const`s, each all strings.
+ * `undefined` when the schema offers no Standard JSON Schema converter, the
+ * converter throws, or the JSON Schema lists no such choices.
+ */
+export function schemaChoices(
+  schema: StandardSchemaV1,
+): readonly string[] | undefined {
+  const converter = jsonSchemaConverterOf(schema);
+  if (converter === undefined) return undefined;
+  const jsonSchema = convertInput(converter);
+  if (jsonSchema === undefined) return undefined;
+  return choicesInJsonSchema(jsonSchema);
+}
+
+// Only an optional-value flag declares `choices`.
+function declaredChoicesOf(spec: ValueFlagSpec): readonly string[] | undefined {
+  return spec.kind === "optional-value" ? spec.choices : undefined;
+}
+
+function schemaChoicesOf(
+  schema: StandardSchemaV1 | undefined,
+): readonly string[] | undefined {
+  return schema === undefined ? undefined : schemaChoices(schema);
+}
+
+// The Standard JSON Schema converter is a capability a schema may lack, so
+// it is read through a guard, never assumed.
+function jsonSchemaConverterOf(
+  schema: StandardSchemaV1,
+): StandardJSONSchemaV1Converter | undefined {
+  const props: object = schema["~standard"];
+  if (!("jsonSchema" in props)) return undefined;
+  return isJsonSchemaConverter(props.jsonSchema) ? props.jsonSchema : undefined;
+}
+
+function isJsonSchemaConverter(
+  value: unknown,
+): value is StandardJSONSchemaV1Converter {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "input" in value &&
+    typeof value.input === "function"
+  );
+}
+
+// The edge around third-party code: the spec lets a converter throw for a
+// type it can't express, which here just means "no choices to list".
+function convertInput(
+  converter: StandardJSONSchemaV1Converter,
+): Record<string, unknown> | undefined {
+  try {
+    return converter.input({ target: "draft-2020-12" });
+  } catch {
+    return undefined;
+  }
+}
+
+function choicesInJsonSchema(
+  jsonSchema: Record<string, unknown>,
+): readonly string[] | undefined {
+  if (typeof jsonSchema.const === "string") return [jsonSchema.const];
+  if (Array.isArray(jsonSchema.enum)) return allStrings(jsonSchema.enum);
+  const members = jsonSchema.anyOf ?? jsonSchema.oneOf;
+  if (!Array.isArray(members)) return undefined;
+  return allStrings(members.map(constOf));
+}
+
+// A JSON Schema member's `const`, if it has one.
+function constOf(member: unknown): unknown {
+  if (typeof member !== "object" || member === null) return undefined;
+  if (!("const" in member)) return undefined;
+  return member.const;
+}
+
+// The values as strings when every one is a string, else none of them.
+function allStrings(values: readonly unknown[]): readonly string[] | undefined {
+  if (values.length === 0) return undefined;
+  const strings = values.filter((value) => typeof value === "string");
+  return strings.length === values.length ? strings : undefined;
 }
 
 // The one schema a spec's value goes through, if it declares a rule.
@@ -187,6 +281,8 @@ function readBooleanSpelling(args: ValidateFlagValueArgs): boolean | undefined {
   return undefined;
 }
 
-function booleanSpellings(spec: OptionalValueFlagSpec): string[] {
+// Only an optional-value flag reads `=true` / `=false` as booleans.
+function booleanSpellings(spec: ValueFlagSpec): string[] {
+  if (spec.kind !== "optional-value") return [];
   return spec.booleans === true ? ["true", "false"] : [];
 }

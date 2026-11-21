@@ -1,5 +1,5 @@
 import type { FlagSpec } from "../flag-spec.ts";
-import { describeOptionalValue } from "../flag-value.ts";
+import { describeFlagValue } from "../flag-value.ts";
 import type { CommandNode } from "./command.ts";
 import type { RouterChild, RouterNode } from "./router.ts";
 
@@ -152,10 +152,14 @@ export interface FormatCommandHelpArgs {
  * description, and an alphabetically sorted flag list (showing each
  * flag's usage label and `-x` alias). A boolean flag shows its bare
  * name; a value-carrying flag shows `--name <value>`, where `<value>`
- * is its `valueName` or, by default, its `kind`. An `"optional-value"`
- * flag shows every accepted spelling, `--name[=true|false|null]`, with
- * `<string>` for a free value, or `--name[=<valueName>]` when it names
- * its value. A command with no
+ * is its `valueName`, its choices (`--color always|never`), or by default
+ * its `kind` (`<value>` when it has a `schema`). Choices come from
+ * `choices` or, failing that, from the `schema`'s Standard JSON Schema
+ * (an `enum`, `const`, or `anyOf` / `oneOf` of `const`s), when it offers
+ * one. An `"optional-value"` flag shows every accepted spelling,
+ * `--name[=true|false|null]`, with `<string>` for a free value (`<value>`
+ * for a schema's), or `--name[=<valueName>]` when it names its value. A
+ * command with no
  * flags shows `(no flags declared)`. When `colorEnabled` is set,
  * labels are bolded and descriptions dimmed.
  *
@@ -206,8 +210,9 @@ interface FlagUsageLabelArgs {
   flagSpec: FlagSpec;
 }
 
-// How a flag is written in usage: `--json`, `--out <path>`, and for an
-// optional attached value `--askOnCommit[=true|false|null]`.
+// How a flag is written in usage: `--json`, `--out <path>`,
+// `--color always|never`, and for an optional attached value
+// `--askOnCommit[=true|false|null]`.
 function flagUsageLabel(args: FlagUsageLabelArgs): string {
   const longForm = `--${args.flagName}`;
   switch (args.flagSpec.kind) {
@@ -215,9 +220,9 @@ function flagUsageLabel(args: FlagUsageLabelArgs): string {
       return longForm;
     case "string":
     case "collect":
-      return `${longForm} <${args.flagSpec.valueName ?? args.flagSpec.kind}>`;
+      return `${longForm} ${describeFlagValue(args.flagSpec)}`;
     case "optional-value":
-      return `${longForm}[=${describeOptionalValue(args.flagSpec)}]`;
+      return `${longForm}[=${describeFlagValue(args.flagSpec)}]`;
   }
 }
 

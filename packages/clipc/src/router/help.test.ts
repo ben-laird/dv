@@ -1,6 +1,47 @@
 import { assertEquals } from "@std/assert";
+import { z } from "zod";
 import type { FlagSpec } from "../flag-spec.ts";
+import type { StandardSchemaV1 } from "../standard-schema.ts";
 import { formatCommandHelp } from "./help.ts";
+
+Deno.test("formatCommandHelp shows a schema flag's choices, or <value> when it lists none", () => {
+  // Given schema flags: Zod enums with a JSON Schema, and a bare fake schema
+  const opaque: StandardSchemaV1<string, string> = {
+    "~standard": {
+      version: 1,
+      vendor: "fake",
+      validate: (value) => ({ value: String(value) }),
+    },
+  };
+  const flags = {
+    color: {
+      kind: "string",
+      schema: z.enum(["always", "never"]),
+      description: "Color",
+    },
+    jobs: { kind: "string", schema: z.coerce.number(), description: "Jobs" },
+    mode: {
+      kind: "optional-value",
+      schema: z.enum(["fast", "safe"]),
+      booleans: true,
+      description: "Mode",
+    },
+    tag: { kind: "collect", schema: opaque, description: "Tag" },
+  } satisfies Record<string, FlagSpec>;
+
+  // When the leaf's help is rendered
+  const lines = formatCommandHelp({ path: ["mycli", "build"], flags }).split(
+    "\n",
+  );
+
+  // Then listed choices replace the placeholder, and the rest read <value>
+  assertEquals(lines.slice(lines.indexOf("Flags:") + 1), [
+    `  --color always|never${" ".repeat(13)}Color`,
+    `  --jobs <value>${" ".repeat(19)}Jobs`,
+    "  --mode[=true|false|fast|safe]    Mode",
+    `  --tag <value>${" ".repeat(20)}Tag`,
+  ]);
+});
 
 // The flag lines of a leaf's help, without the usage header.
 function flagLines(flags: Record<string, FlagSpec>): string[] {

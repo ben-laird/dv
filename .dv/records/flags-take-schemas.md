@@ -29,3 +29,7 @@ the schema's messages; a `collect` flag names the element by place
 issues, or that throws, is reported the same way and never crashes the
 CLI. On an `optional-value` flag, `schema` and `choices` exclude each
 other; `booleans: true` composes with either.
+
+`--help` shows a schema flag's `valueName`, else the string choices its
+Standard JSON Schema lists (`--color always|never` for a Zod enum), else
+`<value>`.

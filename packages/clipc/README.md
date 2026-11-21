@@ -178,6 +178,15 @@ On an `optional-value` flag, `schema` and `choices` exclude each other, and
 the types enforce it. `booleans: true` composes with either: `=true` and
 `=false` read as booleans before the schema sees them.
 
+`--help` describes a schema flag's value in this order: its `valueName`
+(`<when>`); else the string choices the schema's
+[Standard JSON Schema](https://standardschema.dev/json-schema) input lists, as
+an `enum`, a `const`, or an `anyOf` / `oneOf` of `const`s; else `<value>`. So
+the flags above read `--jobs <value>`, `--port <value>` and
+`--color[=true|false|always|never|auto]`. clipc reads the JSON Schema only
+when the library offers one (Zod 4.2 and later, ArkType 2.1.28 and later), and
+a converter that throws just means no choices are listed.
+
 Any library that implements the spec works. `@sekhmet/schema`, for one, turns
 its schemas into Standard Schemas with `toStandard`, and the result goes
 straight into `schema`.
