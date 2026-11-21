@@ -175,8 +175,13 @@ schema's messages: `invalid value 'x' for '--jobs': Invalid input: expected
 number, received NaN`. A `collect` flag names the refused element by place,
 `--port #2`, and the error's `--json` context carries it as `element: 2`
 (counting from 1; scalar flags have no `element`). Errors come in argv order. A schema that fails with no issues
-reads as `the value was refused`. A schema that throws is reported the same
-way, as `the flag's schema threw: <message>`, and doesn't crash the CLI.
+reads as `the value was refused`.
+
+A schema that throws, or whose promise rejects, is a bug in the schema rather
+than in what was typed, so it is a separate `flag-schema-failed` error with
+exit 1 and no usage hint: `the schema for '--port' failed: <message>`, with
+context `{ flagName, value, element?, message }`. clipc catches the throw at
+the edge, so it never escapes the leaf's handler as an exception.
 
 On an `optional-value` flag, `schema` and `choices` exclude each other, and
 the types enforce it. `booleans: true` composes with either: `=true` and

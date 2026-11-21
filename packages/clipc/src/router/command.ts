@@ -107,9 +107,10 @@ export interface CommandNode<Ctx = unknown> {
  * order), and then invokes `spec.run`
  * with the typed flags, remaining positional argv, shared ctx, and
  * breadcrumb path. An undeclared flag is returned as a typed
- * `unknown-flag` error (exit 2), and a refused value (outside `choices`,
- * or failed or thrown by its `schema`) as an `invalid-flag-value` error
- * (exit 2), not thrown; a `collect` flag's refused value is named by place
+ * `unknown-flag` error (exit 2), a refused value (outside `choices`, or
+ * failed by its `schema`) as an `invalid-flag-value` error (exit 2), and a
+ * `schema` that throws or rejects as a `flag-schema-failed` error (exit 1),
+ * none of them thrown; a `collect` flag's value is named by place
  * (`--pkg #2`). A `schema` whose input can't be a string, such as
  * `z.number()`, fails to type-check (see {@link FlagSchemaInputCheck}).
  * A flag map that contradicts itself is a bug in the CLI, so `command`
@@ -202,9 +203,10 @@ interface FlagParseCliErrorArgs {
   path: string[];
 }
 
-// A flag-parse failure is the user's typing, not a bug, so it is a typed
-// error, not a throw. Exit 2 (POSIX "command-line usage error") is a
-// property of what failed, so it lives on the CliError itself.
+// A flag-parse failure is a typed error, not a throw. Exit 2 (POSIX
+// "command-line usage error") marks the user's typing; a schema that
+// failed exits 1. The code is a property of what failed, so it lives on
+// the CliError itself.
 function flagParseCliError(args: FlagParseCliErrorArgs): CliError {
   const hint = `run '${args.path.join(" ")} --help' for usage`;
   switch (args.flagParseError.kind) {
@@ -234,6 +236,22 @@ function flagParseCliError(args: FlagParseCliErrorArgs): CliError {
           ...(allowedValues !== undefined && {
             allowedValues: [...allowedValues],
           }),
+        },
+      });
+    }
+    case "flag-schema-failed": {
+      // The schema broke, not the typing: exit 1, and no usage hint.
+      const { flagName, value, element, message } = args.flagParseError;
+      const place = element === undefined ? "" : ` #${element}`;
+      return new CliError({
+        code: "flag-schema-failed",
+        message: `the schema for '--${flagName}${place}' failed: ${message}`,
+        exitCode: 1,
+        context: {
+          flagName,
+          value,
+          ...(element !== undefined && { element }),
+          message,
         },
       });
     }

@@ -59,8 +59,11 @@ Deno.test("validateFlagValue refuses an undeclared value with one issue and the 
   // Then it is refused: without booleans, `true` is just an undeclared word
   assertEquals(validation, {
     ok: false,
-    issues: [{ message: "expected one of: null" }],
-    allowedValues: ["null"],
+    error: {
+      kind: "refused",
+      issues: [{ message: "expected one of: null" }],
+      allowedValues: ["null"],
+    },
   });
 });
 
@@ -157,7 +160,10 @@ Deno.test("validateFlagValue keeps only each issue's message", async () => {
   // Then the refusal carries the message alone, and no closed set
   assertEquals(validation, {
     ok: false,
-    issues: [{ message: "expected digits" }],
+    error: {
+      kind: "refused",
+      issues: [{ message: "expected digits" }],
+    },
   });
 });
 
@@ -174,16 +180,25 @@ Deno.test("validateFlagValue gives a schema that fails without issues a fixed re
   // Then the refusal still says why, so it is never empty
   assertEquals(validation, {
     ok: false,
-    issues: [{ message: "the value was refused" }],
+    error: {
+      kind: "refused",
+      issues: [{ message: "the value was refused" }],
+    },
   });
 });
 
-Deno.test("validateFlagValue turns a schema that throws or rejects into a refusal", async () => {
-  // Given a schema that throws and one whose promise rejects
+Deno.test("validateFlagValue reports a schema that throws or rejects as failed, not refused", async () => {
+  // Given a schema that throws an Error, one whose promise rejects with an
+  // Error, and one that throws a value that isn't an Error
   const throwing = fakeSchema(() => {
     throw new Error("boom");
   });
-  const rejecting = fakeSchema(() => Promise.reject("no network"));
+  const rejecting = fakeSchema(() => {
+    return Promise.reject(new Error("no network"));
+  });
+  const throwingText = fakeSchema(() => {
+    throw "bad config";
+  });
 
   // When each checks a value
   const thrown = await validateFlagValue({
@@ -194,15 +209,23 @@ Deno.test("validateFlagValue turns a schema that throws or rejects into a refusa
     spec: { kind: "optional-value", schema: rejecting },
     raw: "x",
   });
+  const thrownText = await validateFlagValue({
+    spec: { kind: "collect", schema: throwingText },
+    raw: "x",
+  });
 
-  // Then neither escapes: each is a refusal naming what the schema said
+  // Then none escapes: each is a schema failure carrying what was thrown
   assertEquals(thrown, {
     ok: false,
-    issues: [{ message: "the flag's schema threw: boom" }],
+    error: { kind: "schema-failed", message: "boom" },
   });
   assertEquals(rejected, {
     ok: false,
-    issues: [{ message: "the flag's schema threw: no network" }],
+    error: { kind: "schema-failed", message: "no network" },
+  });
+  assertEquals(thrownText, {
+    ok: false,
+    error: { kind: "schema-failed", message: "bad config" },
   });
 });
 
@@ -241,12 +264,18 @@ Deno.test("validateFlagValue reads values with real Zod schemas", async () => {
   assertEquals(goodCount, { ok: true, value: 3 });
   assertEquals(badCount, {
     ok: false,
-    issues: [{ message: "Invalid input: expected number, received NaN" }],
+    error: {
+      kind: "refused",
+      issues: [{ message: "Invalid input: expected number, received NaN" }],
+    },
   });
   assertEquals(goodColor, { ok: true, value: "never" });
   assertEquals(badColor, {
     ok: false,
-    issues: [{ message: 'Invalid option: expected one of "always"|"never"' }],
+    error: {
+      kind: "refused",
+      issues: [{ message: 'Invalid option: expected one of "always"|"never"' }],
+    },
   });
 });
 

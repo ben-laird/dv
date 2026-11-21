@@ -25,16 +25,29 @@ export interface FlagValueIssue {
   message: string;
 }
 
-/** The outcome of {@link validateFlagValue}. */
-export type FlagValueValidation =
-  | { ok: true; value: unknown }
+/**
+ * Why a flag value was not accepted: the value was `refused` by its rule,
+ * or the flag's schema itself failed (threw or rejected), which is no fault
+ * of what was typed.
+ */
+export type FlagValueError =
   | {
-      ok: false;
+      kind: "refused";
       /** Never empty: a refusal always says why. */
       issues: readonly [FlagValueIssue, ...FlagValueIssue[]];
       /** The full accepted set, when the spec declares a closed one. */
       allowedValues?: readonly string[];
+    }
+  | {
+      kind: "schema-failed";
+      /** What the schema threw, as text. */
+      message: string;
     };
+
+/** The outcome of {@link validateFlagValue}. */
+export type FlagValueValidation =
+  | { ok: true; value: unknown }
+  | { ok: false; error: FlagValueError };
 
 interface ValidateFlagValueArgs {
   spec: ValueFlagSpec;
@@ -56,12 +69,15 @@ export async function validateFlagValue(
   const schema = valueSchemaOf(args.spec);
   if (schema === undefined) return { ok: true, value: args.raw };
   const checked = await checkWithSchema({ schema, raw: args.raw });
-  if (checked.ok) return checked;
+  if (checked.ok || checked.error.kind === "schema-failed") return checked;
   const allowedValues = allowedValuesOf(args.spec);
   return {
     ok: false,
-    issues: checked.issues,
-    ...(allowedValues !== undefined && { allowedValues }),
+    error: {
+      kind: "refused",
+      issues: checked.error.issues,
+      ...(allowedValues !== undefined && { allowedValues }),
+    },
   };
 }
 
@@ -223,20 +239,16 @@ interface CheckWithSchemaArgs {
   raw: string;
 }
 
-type SchemaCheck =
-  | { ok: true; value: unknown }
-  | { ok: false; issues: readonly [FlagValueIssue, ...FlagValueIssue[]] };
-
 // Awaits the schema, so a sync and an async one read the same, and keeps
 // only each issue's message: a flag value is a scalar, so paths are noise.
 async function checkWithSchema(
   args: CheckWithSchemaArgs,
-): Promise<SchemaCheck> {
+): Promise<FlagValueValidation> {
   const outcome = await runSchema(args);
   if (!outcome.ok) {
     return {
       ok: false,
-      issues: [{ message: `the flag's schema threw: ${outcome.reason}` }],
+      error: { kind: "schema-failed", message: outcome.reason },
     };
   }
   const result = outcome.result;
@@ -245,9 +257,15 @@ async function checkWithSchema(
     return { message: issue.message };
   });
   if (firstIssue === undefined) {
-    return { ok: false, issues: [{ message: SCHEMA_REFUSED_MESSAGE }] };
+    return {
+      ok: false,
+      error: { kind: "refused", issues: [{ message: SCHEMA_REFUSED_MESSAGE }] },
+    };
   }
-  return { ok: false, issues: [firstIssue, ...otherIssues] };
+  return {
+    ok: false,
+    error: { kind: "refused", issues: [firstIssue, ...otherIssues] },
+  };
 }
 
 // What a refusal says when its schema failed without naming an issue.

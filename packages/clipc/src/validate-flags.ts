@@ -1,21 +1,21 @@
 import type { FlagSpec } from "./flag-spec.ts";
-import { validateFlagValue } from "./flag-value.ts";
+import { type FlagValueError, validateFlagValue } from "./flag-value.ts";
 import type { FlagParseError, FlagValueReading } from "./parse-subcommand.ts";
 
 // The validation step: after the sync lexer, each raw value a flag was
 // given goes through its spec's value rule, awaited, so a sync and an
 // async schema read the same. An absent flag has no value to check.
 
-/** A refused flag value, as the validation step reports it. */
-export type InvalidFlagValueError = Extract<
+/** A flag value not accepted, as the validation step reports it. */
+export type FlagValueFailure = Extract<
   FlagParseError,
-  { kind: "invalid-flag-value" }
+  { kind: "invalid-flag-value" | "flag-schema-failed" }
 >;
 
 /** The outcome of {@link validateFlagValues}. */
 export type ValidateFlagValuesOutcome =
   | { ok: true; flags: Record<string, unknown> }
-  | { ok: false; error: InvalidFlagValueError };
+  | { ok: false; error: FlagValueFailure };
 
 interface ValidateFlagValuesArgs {
   flagSpecMap: Record<string, FlagSpec>;
@@ -41,23 +41,42 @@ export async function validateFlagValues(
     if (!validation.ok) {
       return {
         ok: false,
-        error: {
-          kind: "invalid-flag-value",
-          flagName: reading.flagName,
-          value: reading.raw,
-          ...(reading.slot.kind === "element" && {
-            element: reading.slot.index + 1,
-          }),
-          issues: validation.issues,
-          ...(validation.allowedValues !== undefined && {
-            allowedValues: validation.allowedValues,
-          }),
-        },
+        error: flagValueParseError({ reading, error: validation.error }),
       };
     }
     placeValue({ flags, reading, value: validation.value });
   }
   return { ok: true, flags };
+}
+
+interface FlagValueParseErrorArgs {
+  reading: FlagValueReading;
+  error: FlagValueError;
+}
+
+// Names the flag, the value and its place beside why it wasn't accepted.
+function flagValueParseError(args: FlagValueParseErrorArgs): FlagValueFailure {
+  const { reading, error } = args;
+  const where = {
+    flagName: reading.flagName,
+    value: reading.raw,
+    ...(reading.slot.kind === "element" && {
+      element: reading.slot.index + 1,
+    }),
+  };
+  switch (error.kind) {
+    case "refused":
+      return {
+        kind: "invalid-flag-value",
+        ...where,
+        issues: error.issues,
+        ...(error.allowedValues !== undefined && {
+          allowedValues: error.allowedValues,
+        }),
+      };
+    case "schema-failed":
+      return { kind: "flag-schema-failed", ...where, message: error.message };
+  }
 }
 
 interface PlaceValueArgs {

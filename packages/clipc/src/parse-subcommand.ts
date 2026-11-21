@@ -14,8 +14,10 @@ import type { FlagValueIssue, OptionalValueFlagSpec } from "./flag-value.ts";
 
 /**
  * Why a leaf's argv could not be parsed against its flag map. The leaf's
- * handler turns each case into a typed `CliError` with exit 2. The lexer
- * finds `unknown-flag`; the validation step finds `invalid-flag-value`.
+ * handler turns each case into a typed `CliError`: exit 2 for what the
+ * user typed, exit 1 for a schema that failed. The lexer finds
+ * `unknown-flag`; the validation step finds `invalid-flag-value` and
+ * `flag-schema-failed`.
  */
 export type FlagParseError =
   | { kind: "unknown-flag"; flagToken: string }
@@ -29,6 +31,15 @@ export type FlagParseError =
       issues: readonly [FlagValueIssue, ...FlagValueIssue[]];
       /** The accepted set, when the flag declares a closed one. */
       allowedValues?: readonly string[];
+    }
+  | {
+      kind: "flag-schema-failed";
+      flagName: string;
+      value: string;
+      /** Which of a `collect` flag's values it was checking, counting from 1. */
+      element?: number;
+      /** What the schema threw, as text. */
+      message: string;
     };
 
 /** A flag the lexer could not read at all. */

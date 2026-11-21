@@ -216,6 +216,49 @@ Deno.test("a leaf refuses a collect flag's bad element by place, with exit 2", a
   assertEquals(envelope.success && envelope.data.error.context?.element, 2);
 });
 
+Deno.test("a leaf reports a schema that throws as flag-schema-failed, with exit 1", async () => {
+  // Given a leaf whose collect flag's schema throws on its second value
+  const fragile: StandardSchemaV1<string, string> = {
+    "~standard": {
+      version: 1,
+      vendor: "fake",
+      validate: (value) => {
+        if (value === "80") return { value };
+        throw new Error("lookup table missing");
+      },
+    },
+  };
+  const leaf = command({
+    flags: { port: { kind: "collect", schema: fragile } },
+    run: () => done({ kind: "ok" }),
+  });
+
+  // When the second value reaches it
+  const response = await respond({
+    leaf,
+    argv: ["--port", "80", "--port", "443"],
+  });
+
+  // Then the failure is the schema's, not the user's: exit 1, no usage hint
+  if (response.kind !== "error") throw new Error("expected an error");
+  assertInstanceOf(response.error, CliError);
+  assertEquals(response.error.exitCode, 1);
+  assertEquals(response.error.hint, undefined);
+  assertEquals(
+    response.error.message,
+    "the schema for '--port #2' failed: lookup table missing",
+  );
+  assertEquals(response.error.kind, {
+    code: "flag-schema-failed",
+    context: {
+      flagName: "port",
+      value: "443",
+      element: 2,
+      message: "lookup table missing",
+    },
+  });
+});
+
 Deno.test("a leaf validates no flag for --help, and no absent flag", async () => {
   // Given a leaf whose schema counts the values it checks
   let checks = 0;
