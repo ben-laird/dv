@@ -41,7 +41,10 @@ import type {
  * `{ kind: "string", schema: z.coerce.number() }` gives `number | undefined`,
  * and on a `collect` flag each element is validated and typed. A refused
  * value is an `invalid-flag-value` error. A schema whose input can't be a
- * string (`z.number()`) fails to type-check at `command()`.
+ * string (`z.number()`) fails to type-check at `command()` (see
+ * {@link FlagSchemaInputCheck}). `FlagSpec` alone can't express that check,
+ * so a map written `satisfies Record<string, FlagSpec>` accepts
+ * `z.number()` until it reaches `command()`.
  *
  * An `"optional-value"` flag is written three ways: `--x` (`true`), `--no-x`
  * (`false`), or `--x=<value>`. The value must be attached with `=`: in
@@ -182,7 +185,9 @@ export type SchemaInputMustAcceptString =
  * Intersected with a flag map, it maps a passing flag to `unknown` (no
  * constraint) and a failing one to `{ schema: SchemaInputMustAcceptString }`,
  * which no schema satisfies. `command`, `forCtx().command` and
- * `inheritedFlags` apply it.
+ * `inheritedFlags` apply it. A plain `FlagSpec` annotation does not: the
+ * check needs the map's literal type, so `satisfies Record<string, FlagSpec>`
+ * lets `z.number()` through until the map reaches one of those builders.
  *
  * @typeParam TFlagMap - The command's flag map keyed by flag name.
  */

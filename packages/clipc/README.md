@@ -163,7 +163,10 @@ flags: {
 
 argv holds only text, so a schema must take a string input:
 `z.coerce.number()` and `z.enum([...])` type-check, while `z.number()` is a
-type error at `command()`. Lexing stays synchronous and validation is a
+type error at `command()`, `forCtx().command` and `inheritedFlags`. The check
+needs the flag map's literal type, so `FlagSpec` itself can't carry it: a map
+written `satisfies Record<string, FlagSpec>` accepts `z.number()` until it
+reaches one of those builders. Lexing stays synchronous and validation is a
 separate, awaited step, so sync and async schemas both work. A flag left out
 is not validated, and `--help` returns before anything is validated.
 
