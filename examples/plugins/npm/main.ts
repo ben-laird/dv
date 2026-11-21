@@ -445,7 +445,7 @@ function runRelease(): void {
   //   DV_NEW_VERSION  — the version just tagged
   //   DV_GIT_TAG      — the tag string that was minted
   //
-  // Return shape (specs/schemas/plugin-responses.json):
+  // Return shape (apps/cli/schemas/plugin-responses.json):
   //   { ok, published?, skipped?, message? }
   //
   // A real implementation might look something like:
@@ -499,7 +499,7 @@ function runRelease(): void {
 //                             entries for packages this plugin
 //                             governs that bumped this run
 //
-// Return shape (specs/schemas/plugin-responses.json):
+// Return shape (apps/cli/schemas/plugin-responses.json):
 //   { ok, unsupported?, additionalChangedFiles?, message? }
 
 interface FinalizeBumpedPackageEntry {

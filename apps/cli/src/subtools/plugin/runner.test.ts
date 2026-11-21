@@ -114,6 +114,119 @@ Deno.test("invokeOp invocation-kind: DV_OPERATION env var still rides along", as
   });
 });
 
+// A plugin that succeeds while logging to stderr, as the contract allows.
+async function withStderrLoggingPlugin(
+  testBody: (resolvedPlugin: ResolvedPlugin) => Promise<void>,
+): Promise<void> {
+  await withEchoPlugin({
+    testBody: async ({ binDirectory }) => {
+      const scriptPath = join(binDirectory, "log-to-stderr.ts");
+      await Deno.writeTextFile(
+        scriptPath,
+        `console.error("warning: first line\\n\\nsecond line");\nconsole.log(JSON.stringify({ ok: true }));\n`,
+      );
+      await testBody({
+        kind: "invocation",
+        path: "fixture-plugin",
+        executable: "deno",
+        baseArgs: ["run", "-A", scriptPath],
+      });
+    },
+  });
+}
+
+Deno.test("invokeOp forwards a successful op's stderr, prefixed with op and package", async () => {
+  await withStderrLoggingPlugin(async (resolvedPlugin) => {
+    // Given: a plugin that logs to stderr and exits 0
+    const forwarded: { prefix: string; rawStderr: string }[] = [];
+
+    // When: invokeOp runs it with a recording stderr sink
+    const { rawStdout } = await invokeOp({
+      resolvedPlugin,
+      repoRootPath: Deno.cwd(),
+      opName: "get-dependencies",
+      environmentVariables: { DV_PACKAGE_NAME: "@fixture/core" },
+      forwardStderr: (forwardedStderr) => {
+        forwarded.push(forwardedStderr);
+      },
+    });
+
+    // Then: the stderr is forwarded once, attributed to op + package,
+    // and stdout is untouched
+    assertEquals(forwarded, [
+      {
+        prefix: "[get-dependencies @fixture/core]",
+        rawStderr: "warning: first line\n\nsecond line\n",
+      },
+    ]);
+    assertEquals(rawStdout.trim(), `{"ok":true}`);
+  });
+});
+
+Deno.test("invokeOp writes forwarded stderr to dv's stderr only, one prefix per line", async () => {
+  await withStderrLoggingPlugin(async (resolvedPlugin) => {
+    // Given: console.error and console.log are recorded
+    const stderrWrites: string[] = [];
+    const stdoutWrites: string[] = [];
+    const originalError = console.error;
+    const originalLog = console.log;
+    console.error = (...parts: unknown[]) => {
+      stderrWrites.push(parts.map(String).join(" "));
+    };
+    console.log = (...parts: unknown[]) => {
+      stdoutWrites.push(parts.map(String).join(" "));
+    };
+
+    // When: invokeOp runs with the default sink
+    try {
+      await invokeOp({
+        resolvedPlugin,
+        repoRootPath: Deno.cwd(),
+        opName: "discover",
+      });
+    } finally {
+      console.error = originalError;
+      console.log = originalLog;
+    }
+
+    // Then: every stderr line is prefixed (a blank line with no
+    // trailing space), and nothing reaches stdout
+    assertEquals(stderrWrites, [
+      "[discover] warning: first line\n[discover]\n[discover] second line",
+    ]);
+    assertEquals(stdoutWrites, []);
+  });
+});
+
+Deno.test("invokeOp does not forward stderr under tracing, which already prints it", async () => {
+  await withStderrLoggingPlugin(async (resolvedPlugin) => {
+    // Given: tracing hooks are installed (the --debug path)
+    const forwarded: string[] = [];
+    const tracedStderr: string[] = [];
+
+    // When: invokeOp runs
+    await invokeOp({
+      resolvedPlugin,
+      repoRootPath: Deno.cwd(),
+      opName: "discover",
+      tracingHooks: {
+        before: () => {},
+        after: (_trace, outcome) => {
+          tracedStderr.push(outcome.rawStderr);
+        },
+        error: () => {},
+      },
+      forwardStderr: ({ rawStderr }) => {
+        forwarded.push(rawStderr);
+      },
+    });
+
+    // Then: the tracer saw the stderr and the forwarder did not
+    assertEquals(tracedStderr, ["warning: first line\n\nsecond line\n"]);
+    assertEquals(forwarded, []);
+  });
+});
+
 Deno.test("invokeOp spawns the plugin with the repo root as its working directory, whatever dv's cwd", async () => {
   // Given a repo root holding a plugin script referenced by a relative
   // path, and a dv process whose cwd is a subdirectory of that root

@@ -172,6 +172,8 @@ export async function runPluginInvoke(
     stdinPayload,
     timeoutMs: options.timeoutMs ?? DEFAULT_INVOKE_TIMEOUT_MS,
     tracingHooks,
+    // The exchange view below already shows the plugin's stderr.
+    forwardStderr: () => {},
   });
 
   const parsedResponse = conformanceCheck({
