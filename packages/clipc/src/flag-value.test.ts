@@ -312,6 +312,59 @@ Deno.test("schemaChoices reads string choices from enum, const, anyOf and oneOf"
   assertEquals(schemaChoices(fromOneOf), ["p", "q"]);
 });
 
+// A schema whose `~standard` carries an arbitrary `jsonSchema` value, as a
+// misbehaving library might: built off-literal so its shape isn't checked.
+function withRawJsonSchema(jsonSchema: unknown): StandardSchemaV1<string> {
+  const props = {
+    version: 1 as const,
+    vendor: "fake",
+    validate: (value: unknown) => ({ value: String(value) }),
+    jsonSchema,
+  };
+  return { "~standard": props };
+}
+
+Deno.test("schemaChoices survives a converter that misbehaves", async () => {
+  // Given a getter that throws, and converters returning null, a string,
+  // and a promise (one resolving, one rejecting)
+  const props = {
+    version: 1 as const,
+    vendor: "fake",
+    validate: (value: unknown) => ({ value: String(value) }),
+    get jsonSchema(): unknown {
+      throw new Error("getter exploded");
+    },
+  };
+  const throwingGetter: StandardSchemaV1<string> = { "~standard": props };
+  const returnsNull = withRawJsonSchema({ input: () => null });
+  const returnsText = withRawJsonSchema({ input: () => "enum" });
+  const returnsPromise = withRawJsonSchema({
+    input: () => Promise.resolve({ enum: ["a"] }),
+  });
+  const returnsRejection = withRawJsonSchema({
+    input: () => Promise.reject(new Error("async by mistake")),
+  });
+
+  // When their choices are read
+  const choices = [
+    throwingGetter,
+    returnsNull,
+    returnsText,
+    returnsPromise,
+    returnsRejection,
+  ].map((schema) => schemaChoices(schema));
+  await Promise.resolve();
+
+  // Then none crashes or lists choices, and the rejection stays handled
+  assertEquals(choices, [
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+  ]);
+});
+
 Deno.test("schemaChoices lists nothing it can't read as string choices", () => {
   // Given a schema with no converter, one whose converter throws, and
   // JSON Schemas that are open, mixed, or not all consts

@@ -108,17 +108,29 @@ export function describeFlagValue(spec: ValueFlagSpec): string {
 /**
  * The string choices a schema's input JSON Schema lists, for usage: an
  * `enum`, a `const`, or an `anyOf` / `oneOf` of `const`s, each all strings.
- * `undefined` when the schema offers no Standard JSON Schema converter, the
- * converter throws, or the JSON Schema lists no such choices.
+ * `undefined` when the schema offers no Standard JSON Schema converter,
+ * reading or calling it throws, it returns anything but a plain object
+ * (`null`, a string, a promise), or the JSON Schema lists no such choices.
  */
 export function schemaChoices(
   schema: StandardSchemaV1,
 ): readonly string[] | undefined {
-  const converter = jsonSchemaConverterOf(schema);
-  if (converter === undefined) return undefined;
-  const jsonSchema = convertInput(converter);
-  if (jsonSchema === undefined) return undefined;
-  return choicesInJsonSchema(jsonSchema);
+  // The edge around third-party code: a getter on the schema or its JSON
+  // Schema may throw, and the spec lets the converter throw, so every read
+  // happens inside this one guard. A throw just means no choices to list.
+  try {
+    const props: object = schema["~standard"];
+    const converter = fieldOf({ source: props, key: "jsonSchema" });
+    if (!isJsonSchemaConverter(converter)) return undefined;
+    const jsonSchema: unknown = converter.input({ target: "draft-2020-12" });
+    if (!isPlainObject(jsonSchema)) {
+      settleIfThenable(jsonSchema);
+      return undefined;
+    }
+    return choicesInJsonSchema(jsonSchema);
+  } catch {
+    return undefined;
+  }
 }
 
 // Only an optional-value flag declares `choices`.
@@ -134,14 +146,6 @@ function schemaChoicesOf(
 
 // The Standard JSON Schema converter is a capability a schema may lack, so
 // it is read through a guard, never assumed.
-function jsonSchemaConverterOf(
-  schema: StandardSchemaV1,
-): StandardJSONSchemaV1Converter | undefined {
-  const props: object = schema["~standard"];
-  if (!("jsonSchema" in props)) return undefined;
-  return isJsonSchemaConverter(props.jsonSchema) ? props.jsonSchema : undefined;
-}
-
 function isJsonSchemaConverter(
   value: unknown,
 ): value is StandardJSONSchemaV1Converter {
@@ -153,24 +157,34 @@ function isJsonSchemaConverter(
   );
 }
 
-// The edge around third-party code: the spec lets a converter throw for a
-// type it can't express, which here just means "no choices to list".
-function convertInput(
-  converter: StandardJSONSchemaV1Converter,
-): Record<string, unknown> | undefined {
-  try {
-    return converter.input({ target: "draft-2020-12" });
-  } catch {
-    return undefined;
+// A JSON Schema is a plain object; `null`, arrays, functions and promises
+// (a converter that wrongly went async) are not.
+function isPlainObject(value: unknown): value is object {
+  if (typeof value !== "object" || value === null) return false;
+  return !Array.isArray(value) && !isThenable(value);
+}
+
+function isThenable(value: object): boolean {
+  return "then" in value && typeof value.then === "function";
+}
+
+// A promise nobody awaits must not reject unhandled, so it is settled here.
+function settleIfThenable(value: unknown): void {
+  if (typeof value !== "object" || value === null || !isThenable(value)) {
+    return;
   }
+  Promise.resolve(value).catch(() => undefined);
 }
 
 function choicesInJsonSchema(
-  jsonSchema: Record<string, unknown>,
+  jsonSchema: object,
 ): readonly string[] | undefined {
-  if (typeof jsonSchema.const === "string") return [jsonSchema.const];
-  if (Array.isArray(jsonSchema.enum)) return allStrings(jsonSchema.enum);
-  const members = jsonSchema.anyOf ?? jsonSchema.oneOf;
+  const constant = fieldOf({ source: jsonSchema, key: "const" });
+  if (typeof constant === "string") return [constant];
+  const enumerated = fieldOf({ source: jsonSchema, key: "enum" });
+  if (Array.isArray(enumerated)) return allStrings(enumerated);
+  const anyOf = fieldOf({ source: jsonSchema, key: "anyOf" });
+  const members = anyOf ?? fieldOf({ source: jsonSchema, key: "oneOf" });
   if (!Array.isArray(members)) return undefined;
   return allStrings(members.map(constOf));
 }
@@ -178,8 +192,19 @@ function choicesInJsonSchema(
 // A JSON Schema member's `const`, if it has one.
 function constOf(member: unknown): unknown {
   if (typeof member !== "object" || member === null) return undefined;
-  if (!("const" in member)) return undefined;
-  return member.const;
+  return fieldOf({ source: member, key: "const" });
+}
+
+interface FieldOfArgs {
+  source: object;
+  key: string;
+}
+
+// One property of an object of unknown shape, or `undefined`.
+function fieldOf(args: FieldOfArgs): unknown {
+  if (!(args.key in args.source)) return undefined;
+  const value: unknown = Reflect.get(args.source, args.key);
+  return value;
 }
 
 // The values as strings when every one is a string, else none of them.
