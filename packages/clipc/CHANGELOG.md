@@ -4,6 +4,16 @@ All notable changes to this Package are documented in this file. The
 format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this Package adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.6.0] - 2026-11-21
+
+### Added
+
+- Validate and type flag values with a Standard Schema ([link](https://github.com/ben-laird/dv/issues/51))
+
+### Changed
+
+- **BREAKING** Rename an optional-value flag's `values` to `choices` ([link](https://github.com/ben-laird/dv/issues/51))
+
 ## [0.5.0] - 2026-11-21
 
 ### Changed
