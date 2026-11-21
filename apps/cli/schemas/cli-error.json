@@ -24,7 +24,7 @@
       "properties": {
         "code": {
           "type": "string",
-          "description": "Stable error code (e.g. 'dirty-tree')."
+          "description": "Stable error code. Open enumeration: new codes may be added in minor releases; consumers must tolerate unknown values."
         },
         "message": {
           "type": "string",

@@ -118,7 +118,7 @@ Deno.test("renderCliError JSON mode emits a `{ schema, error }` envelope matchin
   const output = renderCliError({ err, mode: "json", colorEnabled: false });
   const parsed = JSON.parse(output);
 
-  // Then the wire shape matches specs/schemas/cli-error.json — top-
+  // Then the wire shape matches apps/cli/schemas/cli-error.json — top-
   // level { schema, error }, with the error tree itself flat
   // (code/message/hint/context at top level, subErrors nested)
   assertEquals(parsed.schema, "urn:dv:schema:v1:cli-error");

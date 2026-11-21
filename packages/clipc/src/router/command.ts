@@ -1,6 +1,14 @@
 import { CliError } from "../errors.ts";
-import type { FlagSpec, FlagsOf } from "../flag-spec.ts";
-import { parseSubcommandArgv, UnknownFlagError } from "../parse-subcommand.ts";
+import {
+  checkFlagSpecMap,
+  describeFlagSpecError,
+  type FlagSpec,
+  type FlagsOf,
+} from "../flag-spec.ts";
+import {
+  type FlagParseError,
+  parseSubcommandArgv,
+} from "../parse-subcommand.ts";
 import { formatCommandHelp } from "./help.ts";
 import { requestsHelp } from "./help-request.ts";
 import { type CliHandler, type CliRequest, done } from "./types.ts";
@@ -98,7 +106,13 @@ export interface CommandNode<Ctx = unknown> {
  * any `--`), parses `spec.flags` from the incoming argv, and then invokes `spec.run`
  * with the typed flags, remaining positional argv, shared ctx, and
  * breadcrumb path. An undeclared flag is returned as a typed
- * `unknown-flag` error (exit 2), not thrown.
+ * `unknown-flag` error (exit 2), and an `"optional-value"` flag given an
+ * undeclared value as an `invalid-flag-value` error (exit 2), not thrown.
+ * A flag map that contradicts itself is a bug in the CLI, so `command`
+ * throws on it when the tree is built: an `"optional-value"` flag `x`
+ * beside a declared `no-x`; an `"optional-value"` flag named `no-y` beside
+ * a declared `y`; or `"true"`/`"false"` in an `"optional-value"` flag's
+ * `values` when it sets `booleans: true`.
  *
  * `Ctx` is the first type parameter so callers can write
  * `command<MyCtx>({...})` and let `TFlags` infer from the literal
@@ -120,8 +134,14 @@ export interface CommandNode<Ctx = unknown> {
  */
 export function command<
   Ctx = unknown,
-  TFlags extends Record<string, FlagSpec> = Record<string, FlagSpec>,
+  const TFlags extends Record<string, FlagSpec> = Record<string, FlagSpec>,
 >(spec: CommandSpec<Ctx, TFlags>): CommandNode<Ctx> {
+  // A flag map that contradicts itself is a bug in the CLI, not in what a
+  // user typed, so it panics here, when the tree is built, not per run.
+  const flagSpecCheck = checkFlagSpecMap(spec.flags);
+  if (!flagSpecCheck.ok) {
+    throw new Error(describeFlagSpecError(flagSpecCheck.error));
+  }
   const handler: CliHandler<Ctx> = async (request: CliRequest<Ctx>) => {
     // Intercept --help/-h before flag parsing so leaves don't have
     // to declare it. The framework owns this token at every node;
@@ -139,35 +159,22 @@ export function command<
         }),
       });
     }
-    let parsed: ReturnType<typeof parseSubcommandArgv>;
-    try {
-      parsed = parseSubcommandArgv({
-        flagSpecMap: spec.flags,
-        subcommandArgv: request.argv,
+    const parsed = parseSubcommandArgv({
+      flagSpecMap: spec.flags,
+      subcommandArgv: request.argv,
+    });
+    if (!parsed.ok) {
+      return done({
+        kind: "error",
+        error: flagParseCliError({
+          flagParseError: parsed.error,
+          path: request.path,
+        }),
       });
-    } catch (caughtError) {
-      if (caughtError instanceof UnknownFlagError) {
-        // Typed-error path: the user passed an undeclared flag.
-        // Returning `kind: "error"` keeps the trampoline driver
-        // out of its degraded-throw branch — this is an expected
-        // failure shape the framework knows how to render. Exit 2
-        // is a property of the error code (POSIX "command-line
-        // usage error"), so it lives on the CliError itself.
-        return done({
-          kind: "error",
-          error: new CliError({
-            code: "unknown-flag",
-            message: `unknown flag '${caughtError.flagToken}'`,
-            hint: `run '${request.path.join(" ")} --help' for usage`,
-            exitCode: 2,
-          }),
-        });
-      }
-      throw caughtError;
     }
     const result = await spec.run({
-      flags: parsed.flags as FlagsOf<TFlags>,
-      argv: parsed.argv,
+      flags: parsed.value.flags,
+      argv: parsed.value.argv,
       ctx: request.ctx,
       path: request.path,
     });
@@ -180,4 +187,43 @@ export function command<
     handler,
     flags: spec.flags,
   };
+}
+
+interface FlagParseCliErrorArgs {
+  flagParseError: FlagParseError;
+  path: string[];
+}
+
+// A flag-parse failure is the user's typing, not a bug, so it is a typed
+// error, not a throw. Exit 2 (POSIX "command-line usage error") is a
+// property of what failed, so it lives on the CliError itself.
+function flagParseCliError(args: FlagParseCliErrorArgs): CliError {
+  const hint = `run '${args.path.join(" ")} --help' for usage`;
+  switch (args.flagParseError.kind) {
+    case "unknown-flag":
+      return new CliError({
+        code: "unknown-flag",
+        message: `unknown flag '${args.flagParseError.flagToken}'`,
+        hint,
+        exitCode: 2,
+      });
+    case "invalid-flag-value": {
+      const { flagName, value, issues, allowedValues } = args.flagParseError;
+      const reasons = issues.map((issue) => issue.message).join("; ");
+      return new CliError({
+        code: "invalid-flag-value",
+        message: `invalid value '${value}' for '--${flagName}': ${reasons}`,
+        hint,
+        exitCode: 2,
+        context: {
+          flagName,
+          value,
+          issues: issues.map((issue) => ({ message: issue.message })),
+          ...(allowedValues !== undefined && {
+            allowedValues: [...allowedValues],
+          }),
+        },
+      });
+    }
+  }
 }

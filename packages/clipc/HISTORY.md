@@ -5,6 +5,57 @@ one h3 subsection per Record consumed during that release, with the
 Record's body prose verbatim. For terse one-line bullets, see
 CHANGELOG.md.
 
+## [0.5.0] - 2026-11-21
+
+### Let a value flag name its value in `--help`
+
+A `string` or `collect` flag can set `valueName` to say what its value is:
+`{ kind: "string", valueName: "path" }` renders `--out <path>` in a leaf's
+`--help` instead of `--out <string>`. Flags without it render as before.
+
+**Breaking (types):** `formatCommandHelp`'s `flags` narrowed from a loose
+`Record<string, { kind: string; description?; alias? }>` to
+`Record<string, FlagSpec>`, the type a leaf declares. A caller passing flag
+objects with a `kind` outside `FlagSpec` no longer type-checks.
+
+### Add `optional-value` flags: a switch with an optional attached value
+
+A flag declared `{ kind: "optional-value" }` reads `--x` as `true`,
+`--no-x` as `false`, and `--x=<value>` as that value. The value must be
+attached with `=`: `--x word` switches the flag on and leaves `word` as a
+positional. What may follow `=` is a small vocabulary:
+
+- `values: ["null"]` closes the set; the leaf sees those literals, and any
+  other value is refused with an `invalid-flag-value` error (exit 2) that
+  lists the accepted spellings. Without `values`, any string is accepted.
+- `booleans: true` also reads `=true` / `=false` as booleans.
+
+So `{ kind: "optional-value", values: ["null"], booleans: true }` accepts
+`--askOnCommit`, `--no-askOnCommit`, `--askOnCommit=true|false|null`, is
+typed `boolean | "null" | undefined`, and shows in `--help` as
+`--askOnCommit[=true|false|null]` (`--x[=<string>]` for a free value, or
+`--x[=<valueName>]` when it names its value). A CLI that declared such a
+flag as a `string` and re-parsed it can declare it directly instead.
+`command()` throws when the tree is built on a declaration that contradicts
+itself: a separate `no-x` flag beside an optional-value `x` (`--no-x`
+already means `false`; drop the `no-x` flag), an optional-value flag named
+`no-y` beside a declared `y` (rename it), or `"true"`/`"false"` in `values`
+with `booleans: true` (those already read as booleans; drop them from
+`values`).
+
+**Breaking (types):**
+
+- `FlagSpec` gained the `"optional-value"` arm, so an exhaustive `switch` on
+  `flagSpec.kind` no longer compiles until it handles the new kind.
+- `LoweredFlagSpec` gained a required `optionalValue: string[]`. Code that
+  builds a `LoweredFlagSpec` by hand must add it. A custom parser that feeds
+  `lowerFlagSpec`'s output to `parseArgs` silently drops optional-value
+  flags (they are in no `parseArgs` bucket) unless it reads `optionalValue`
+  and handles those spellings itself: `parseArgs` treats them as unknown.
+- `command()`'s flag map is now a `const` type parameter, like `forCtx`'s.
+  A plain `command({...})` now infers literal and `readonly` flag types,
+  which can change what an explicitly annotated variable must accept.
+
 ## [0.4.2] - 2026-11-11
 
 ### Treat a lone `-` as a word, not an unknown flag
