@@ -154,7 +154,12 @@ export function parseSubcommandArgv(
       flags[key] = value;
       continue;
     }
-    const typed = value.map((element: unknown) => String(element));
+    // parseArgs collects onto whatever the key already holds, and for a
+    // name like `valueOf` that is the inherited method; only text was typed.
+    const typed: string[] = [];
+    for (const element of value) {
+      if (typeof element === "string") typed.push(element);
+    }
     typedValues.set(key, typed);
     if (collectFlags.has(key)) {
       flags[key] = typed;
@@ -271,6 +276,7 @@ function valueSlot(args: ValueSlotArgs): FlagValueReading["slot"] {
 // these place values in argv order; parseArgs still reads the values.
 function flagMentions(args: ValueReadingsArgs): Map<string, number[]> {
   const valueFlags = new Set(args.lowered.string);
+  const alias = args.lowered.alias;
   const mentions = new Map<string, number[]>();
   const mention = (flagName: string, index: number): void => {
     const indexes = mentions.get(flagName) ?? [];
@@ -283,19 +289,31 @@ function flagMentions(args: ValueReadingsArgs): Map<string, number[]> {
     if (token.startsWith("--")) {
       const [name = ""] = token.slice(2).split("=");
       // parseArgs also reads an alias spelled long: `--n` for `-n`.
-      const flagName = args.lowered.alias[name] ?? name;
+      const flagName = ownAlias({ alias, key: name }) ?? name;
       if (valueFlags.has(flagName)) mention(flagName, index);
       continue;
     }
     const [letters = ""] = token.slice(1).split("=");
     for (const letter of letters) {
-      const flagName = args.lowered.alias[letter];
+      const flagName = ownAlias({ alias, key: letter });
       if (flagName !== undefined && valueFlags.has(flagName)) {
         mention(flagName, index);
       }
     }
   }
   return mentions;
+}
+
+interface OwnAliasArgs {
+  alias: Readonly<Record<string, string>>;
+  key: string;
+}
+
+// The flag an alias names, read as an own key, so an inherited name like
+// `valueOf` is never taken for an alias.
+function ownAlias(args: OwnAliasArgs): string | undefined {
+  if (!Object.hasOwn(args.alias, args.key)) return undefined;
+  return args.alias[args.key];
 }
 
 interface ReadOptionalValueFlagsArgs {

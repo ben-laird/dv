@@ -99,6 +99,40 @@ Deno.test("parseCommandArgv places a value typed through its alias spelled long"
   });
 });
 
+Deno.test("parseCommandArgv reads flags named like Object.prototype keys", async () => {
+  // Given a string flag named `valueOf` and a collect flag named `toString`,
+  // both reading digits
+  const flagSpecMap = {
+    valueOf: { kind: "string", schema: digits },
+    toString: { kind: "collect", schema: digits },
+  } as const satisfies Record<string, FlagSpec>;
+
+  // When each is typed, and when `--valueOf` names no alias
+  const parsed = await parseOk({
+    flagSpecMap,
+    subcommandArgv: ["--valueOf", "1", "--toString", "2", "--toString", "3"],
+  });
+  // `flags.valueOf` would read the method type, so read the own entries.
+  const flagEntries = Object.fromEntries(Object.entries(parsed.flags));
+  const refused = await parseCommandArgv({
+    flagSpecMap,
+    subcommandArgv: ["--valueOf", "x", "--bogus"],
+  });
+
+  // Then only the typed values are read, never the inherited functions,
+  // and `--valueOf` keeps its place in argv instead of reading as an alias
+  assertEquals(flagEntries, { valueOf: 1, toString: [2, 3] });
+  assertEquals(refused, {
+    ok: false,
+    error: {
+      kind: "invalid-flag-value",
+      flagName: "valueOf",
+      value: "x",
+      issues: [{ message: "expected digits" }],
+    },
+  });
+});
+
 Deno.test("parseCommandArgv leaves an absent string flag out of flags", async () => {
   // Given a string flag and a boolean
   const flagSpecMap = {
