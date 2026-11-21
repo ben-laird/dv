@@ -2,8 +2,8 @@ import { assertEquals } from "@std/assert";
 import {
   describeOptionalValue,
   type OptionalValueFlagSpec,
-  validateOptionalValue,
-} from "./optional-value.ts";
+  validateFlagValue,
+} from "./flag-value.ts";
 
 const closedSet: OptionalValueFlagSpec = {
   kind: "optional-value",
@@ -16,19 +16,19 @@ const closedSetWithBooleans: OptionalValueFlagSpec = {
 };
 const freeString: OptionalValueFlagSpec = { kind: "optional-value" };
 
-Deno.test("validateOptionalValue accepts a declared value as written", () => {
+Deno.test("validateFlagValue accepts a declared value as written", async () => {
   // Given a closed set of one value
   // When that value is attached
-  const validation = validateOptionalValue({ spec: closedSet, raw: "null" });
+  const validation = await validateFlagValue({ spec: closedSet, raw: "null" });
 
   // Then it is accepted unchanged
   assertEquals(validation, { ok: true, value: "null" });
 });
 
-Deno.test("validateOptionalValue refuses an undeclared value with one issue and the set", () => {
+Deno.test("validateFlagValue refuses an undeclared value with one issue and the set", async () => {
   // Given a closed set without booleans
   // When `true` is attached
-  const validation = validateOptionalValue({ spec: closedSet, raw: "true" });
+  const validation = await validateFlagValue({ spec: closedSet, raw: "true" });
 
   // Then it is refused: without booleans, `true` is just an undeclared word
   assertEquals(validation, {
@@ -38,14 +38,14 @@ Deno.test("validateOptionalValue refuses an undeclared value with one issue and 
   });
 });
 
-Deno.test("validateOptionalValue reads true and false as booleans when booleans is on", () => {
+Deno.test("validateFlagValue reads true and false as booleans when booleans is on", async () => {
   // Given a closed set with booleans
   // When each boolean word is attached
-  const trueValue = validateOptionalValue({
+  const trueValue = await validateFlagValue({
     spec: closedSetWithBooleans,
     raw: "true",
   });
-  const falseValue = validateOptionalValue({
+  const falseValue = await validateFlagValue({
     spec: closedSetWithBooleans,
     raw: "false",
   });
@@ -55,11 +55,11 @@ Deno.test("validateOptionalValue reads true and false as booleans when booleans 
   assertEquals(falseValue, { ok: true, value: false });
 });
 
-Deno.test("validateOptionalValue accepts any text when no choices are declared", () => {
+Deno.test("validateFlagValue accepts any text when no choices are declared", async () => {
   // Given a free-string spec
   for (const raw of ["", "true", "a=b", "anything"]) {
     // When the text is attached
-    const validation = validateOptionalValue({ spec: freeString, raw });
+    const validation = await validateFlagValue({ spec: freeString, raw });
 
     // Then it is accepted as written, never refused
     assertEquals(validation, { ok: true, value: raw });

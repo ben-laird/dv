@@ -1,5 +1,5 @@
 import type { FlagSpec } from "../flag-spec.ts";
-import { describeOptionalValue } from "../optional-value.ts";
+import { describeOptionalValue } from "../flag-value.ts";
 import type { CommandNode } from "./command.ts";
 import type { RouterChild, RouterNode } from "./router.ts";
 

@@ -5,10 +5,8 @@ import {
   type FlagSpec,
   type FlagsOf,
 } from "../flag-spec.ts";
-import {
-  type FlagParseError,
-  parseSubcommandArgv,
-} from "../parse-subcommand.ts";
+import { parseCommandArgv } from "../parse-command-argv.ts";
+import type { FlagParseError } from "../parse-subcommand.ts";
 import { formatCommandHelp } from "./help.ts";
 import { requestsHelp } from "./help-request.ts";
 import { type CliHandler, type CliRequest, done } from "./types.ts";
@@ -159,7 +157,9 @@ export function command<
         }),
       });
     }
-    const parsed = parseSubcommandArgv({
+    // Lexing is sync; each flag value is then validated, awaited, so a
+    // schema may be async. `--help` above never reaches either step.
+    const parsed = await parseCommandArgv({
       flagSpecMap: spec.flags,
       subcommandArgv: request.argv,
     });
