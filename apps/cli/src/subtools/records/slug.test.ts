@@ -17,8 +17,9 @@ Deno.test("generateSlug is deterministic when given a deterministic random sourc
   let nextIndex = 0;
   const deterministicSource: SlugRandomSource = {
     next: () => {
-      const value = fixedSequence[nextIndex % fixedSequence.length]!;
+      const value = fixedSequence[nextIndex % fixedSequence.length];
       nextIndex++;
+      if (value === undefined) throw new Error("index is modulo the length");
       return value;
     },
   };
