@@ -25,7 +25,8 @@ schemas work. Absent flags aren't validated, and `--help` returns first.
 
 A refused value is the existing `invalid-flag-value` error (exit 2) with
 the schema's messages; a `collect` flag names the element by place
-(`invalid value 'x' for '--port #2': …`). A schema that fails without
+(`invalid value 'x' for '--port #2': …`), and the error context gains an
+optional `element` (counting from 1) for it. A schema that fails without
 issues, or that throws, is reported the same way and never crashes the
 CLI. On an `optional-value` flag, `schema` and `choices` exclude each
 other; `booleans: true` composes with either.

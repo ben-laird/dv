@@ -1,7 +1,9 @@
 import { assertEquals, assertInstanceOf } from "@std/assert";
 import { z } from "zod";
+import { safeParseCliErrorEnvelope } from "../cli-error-schema.ts";
 import { CliError } from "../errors.ts";
 import type { FlagSpec, FlagsOf } from "../flag-spec.ts";
+import { renderCliError } from "../render-cli-error.ts";
 import type { StandardSchemaV1 } from "../standard-schema.ts";
 import { command } from "./command.ts";
 import { forCtx, inheritedFlags } from "./router.ts";
@@ -184,7 +186,8 @@ Deno.test("a leaf refuses a collect flag's bad element by place, with exit 2", a
     argv: ["--port", "80", "--port", "http"],
   });
 
-  // Then an invalid-flag-value error names `--port #2`, with messages only
+  // Then an invalid-flag-value error names `--port #2`, and its context
+  // (valid in the JSON envelope) carries the element counting from 1
   if (response.kind !== "error") throw new Error("expected an error");
   assertInstanceOf(response.error, CliError);
   assertEquals(response.error.exitCode, 2);
@@ -197,9 +200,20 @@ Deno.test("a leaf refuses a collect flag's bad element by place, with exit 2", a
     context: {
       flagName: "port",
       value: "http",
+      element: 2,
       issues: [{ message: "expected digits" }],
     },
   });
+  const envelope = safeParseCliErrorEnvelope(
+    JSON.parse(
+      renderCliError({
+        err: response.error,
+        mode: "json",
+        colorEnabled: false,
+      }),
+    ),
+  );
+  assertEquals(envelope.success && envelope.data.error.context?.element, 2);
 });
 
 Deno.test("a leaf validates no flag for --help, and no absent flag", async () => {

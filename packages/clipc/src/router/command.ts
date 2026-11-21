@@ -229,6 +229,7 @@ function flagParseCliError(args: FlagParseCliErrorArgs): CliError {
         context: {
           flagName,
           value,
+          ...(element !== undefined && { element }),
           issues: issues.map((issue) => ({ message: issue.message })),
           ...(allowedValues !== undefined && {
             allowedValues: [...allowedValues],

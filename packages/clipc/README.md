@@ -173,7 +173,8 @@ is not validated, and `--help` returns before anything is validated.
 A refused value is an `invalid-flag-value` error with exit 2, carrying the
 schema's messages: `invalid value 'x' for '--jobs': Invalid input: expected
 number, received NaN`. A `collect` flag names the refused element by place,
-`--port #2`. Errors come in argv order. A schema that fails with no issues
+`--port #2`, and the error's `--json` context carries it as `element: 2`
+(counting from 1; scalar flags have no `element`). Errors come in argv order. A schema that fails with no issues
 reads as `the value was refused`. A schema that throws is reported the same
 way, as `the flag's schema threw: <message>`, and doesn't crash the CLI.
 
