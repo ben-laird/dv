@@ -48,7 +48,7 @@ export type FlagLexError = Extract<FlagParseError, { kind: "unknown-flag" }>;
 /**
  * One raw value typed for a value-carrying flag, at its place in argv.
  * `slot` says where the validated value goes: it is the flag's value, one
- * element of a `collect` flag's list, or an earlier spelling of an
+ * element of a `collect` flag's list, or an earlier value of a `string` or
  * optional-value flag that a later one overrode (still checked, as typed).
  */
 export interface FlagValueReading {
@@ -115,7 +115,9 @@ export function parseSubcommandArgv(
     // readOptionalValueFlags); their real values are set below.
     string: ["_", ...lowered.string, OPTIONAL_VALUE_PLACEHOLDER_KEY],
     boolean: lowered.boolean,
-    collect: lowered.collect,
+    // Every value flag is collected, string flags too, so each value typed
+    // reaches validation; a string flag's own value is its last one.
+    collect: lowered.string,
     alias: lowered.alias,
     unknown: (token) => {
       // parseArgs calls this for positionals too, and a lone `-` is one.
@@ -142,17 +144,31 @@ export function parseSubcommandArgv(
   // `flags` only carries the declared full-name keys.
   const aliasedKeys = new Set(Object.keys(lowered.alias));
   const flags: Record<string, unknown> = {};
+  const collectFlags = new Set(lowered.collect);
+  const typedValues = new Map<string, string[]>();
   for (const [key, value] of Object.entries(parsed)) {
     if (key === "_") continue;
     if (key === OPTIONAL_VALUE_PLACEHOLDER_KEY) continue;
     if (aliasedKeys.has(key)) continue;
-    flags[key] = value;
+    if (!Array.isArray(value)) {
+      flags[key] = value;
+      continue;
+    }
+    const typed = value.map((element: unknown) => String(element));
+    typedValues.set(key, typed);
+    if (collectFlags.has(key)) {
+      flags[key] = typed;
+      continue;
+    }
+    // An absent string flag stays absent, not an empty list.
+    const lastTyped = typed.at(-1);
+    if (lastTyped !== undefined) flags[key] = lastTyped;
   }
   for (const [flagName, value] of optionalValues.values) {
     flags[flagName] = value;
   }
   const positionedValues = [
-    ...valueReadings({ flags, lowered, argv: optionalValues.argv }),
+    ...valueReadings({ typedValues, lowered, argv: optionalValues.argv }),
     ...optionalValues.readings,
   ].sort((left, right) => left.position - right.position);
 
@@ -203,42 +219,50 @@ function tokenLocator(argv: readonly string[]): (token: string) => number {
 }
 
 interface ValueReadingsArgs {
-  flags: Record<string, unknown>;
+  /** Each `string` / `collect` flag → every value typed for it, in order. */
+  typedValues: ReadonlyMap<string, readonly string[]>;
   lowered: LoweredFlagSpec;
   /** The argv parseArgs read, so positions match the optional-value ones. */
   argv: readonly string[];
 }
 
 // The raw values parseArgs read for `string` and `collect` flags, each at
-// the place it was typed: a string flag's (last) value, and a collect
-// flag's n-th element at the n-th token naming the flag.
+// the place it was typed: the n-th value at the n-th token naming the flag.
 function valueReadings(args: ValueReadingsArgs): PositionedReading[] {
   const mentions = flagMentions(args);
   const collectFlags = new Set(args.lowered.collect);
   const readings: PositionedReading[] = [];
-  for (const flagName of args.lowered.string) {
-    const value = args.flags[flagName];
+  for (const [flagName, typed] of args.typedValues) {
     const positions = mentions.get(flagName) ?? [];
-    if (collectFlags.has(flagName) && Array.isArray(value)) {
-      for (const [index, element] of value.entries()) {
-        readings.push({
-          position: positions[index] ?? args.argv.length,
-          reading: {
-            flagName,
-            raw: String(element),
-            slot: { kind: "element", index },
-          },
-        });
-      }
-      continue;
+    for (const [index, raw] of typed.entries()) {
+      readings.push({
+        position: positions[index] ?? args.argv.length,
+        reading: {
+          flagName,
+          raw,
+          slot: valueSlot({
+            index,
+            isCollect: collectFlags.has(flagName),
+            isLast: index === typed.length - 1,
+          }),
+        },
+      });
     }
-    if (typeof value !== "string") continue;
-    readings.push({
-      position: positions.at(-1) ?? args.argv.length,
-      reading: { flagName, raw: value, slot: { kind: "value" } },
-    });
   }
   return readings;
+}
+
+interface ValueSlotArgs {
+  index: number;
+  isCollect: boolean;
+  isLast: boolean;
+}
+
+// A collect flag's every value is an element; a string flag's last value
+// is its value, and each earlier one was overridden but is still checked.
+function valueSlot(args: ValueSlotArgs): FlagValueReading["slot"] {
+  if (args.isCollect) return { kind: "element", index: args.index };
+  return args.isLast ? { kind: "value" } : { kind: "overridden" };
 }
 
 // Each value-carrying flag → the argv indexes of the tokens that name it:

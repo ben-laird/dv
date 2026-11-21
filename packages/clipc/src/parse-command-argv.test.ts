@@ -46,6 +46,49 @@ Deno.test("parseCommandArgv reports the first refused value in argv order across
   });
 });
 
+Deno.test("parseCommandArgv checks every value typed for a string flag, keeping the last", async () => {
+  // Given a string flag that reads digits
+  const flagSpecMap = {
+    num: { kind: "string", alias: "n", schema: digits },
+  } satisfies Record<string, FlagSpec>;
+
+  // When a bad value is overridden by a good one, and two good ones are typed
+  const overridden = await parseCommandArgv({
+    flagSpecMap,
+    subcommandArgv: ["--num", "a", "--num", "1"],
+  });
+  const repeated = await parseOk({
+    flagSpecMap,
+    subcommandArgv: ["--num", "1", "-n", "2"],
+  });
+
+  // Then the overridden bad value is still refused, and the last good wins
+  assertEquals(overridden, {
+    ok: false,
+    error: {
+      kind: "invalid-flag-value",
+      flagName: "num",
+      value: "a",
+      issues: [{ message: "expected digits" }],
+    },
+  });
+  assertEquals(repeated.flags.num, 2);
+});
+
+Deno.test("parseCommandArgv leaves an absent string flag out of flags", async () => {
+  // Given a string flag and a boolean
+  const flagSpecMap = {
+    title: { kind: "string" },
+    json: { kind: "boolean" },
+  } satisfies Record<string, FlagSpec>;
+
+  // When only the boolean is typed
+  const parsed = await parseOk({ flagSpecMap, subcommandArgv: ["--json"] });
+
+  // Then the string flag has no key at all
+  assertEquals(Object.hasOwn(parsed.flags, "title"), false);
+});
+
 Deno.test("parseCommandArgv names a collect flag's refused element", async () => {
   // Given a collect flag that reads digits
   const flagSpecMap = {
