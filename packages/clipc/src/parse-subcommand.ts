@@ -380,8 +380,9 @@ function readOptionalValueSpelling(
 ): OptionalValueSpelling {
   if (!args.token.startsWith("--")) return { kind: "other" };
   const [name = "", ...attachedParts] = args.token.slice(2).split("=");
-  const attached =
-    attachedParts.length === 0 ? undefined : attachedParts.join("=");
+  // `--x` has no attached value; `--x=` attaches the empty string.
+  let attached: string | undefined;
+  if (attachedParts.length > 0) attached = attachedParts.join("=");
 
   const keyAfterNegation = name.startsWith("no-") ? name.slice(3) : name;
   if (

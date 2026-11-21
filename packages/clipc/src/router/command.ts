@@ -220,11 +220,10 @@ function flagParseCliError(args: FlagParseCliErrorArgs): CliError {
         args.flagParseError;
       const reasons = issues.map((issue) => issue.message).join("; ");
       // A collect flag's refused value is named by place: `--pkg #2`.
-      const flagLabel =
-        element === undefined ? `--${flagName}` : `--${flagName} #${element}`;
+      const place = element === undefined ? "" : ` #${element}`;
       return new CliError({
         code: "invalid-flag-value",
-        message: `invalid value '${value}' for '${flagLabel}': ${reasons}`,
+        message: `invalid value '${value}' for '--${flagName}${place}': ${reasons}`,
         hint,
         exitCode: 2,
         context: {
