@@ -192,7 +192,8 @@ the types enforce it. `booleans: true` composes with either: `=true` and
 [Standard JSON Schema](https://standardschema.dev/json-schema) input lists, as
 an `enum`, a `const`, or an `anyOf` / `oneOf` of `const`s; else `<value>`. So
 the flags above read `--jobs <value>`, `--port <value>` and
-`--color[=true|false|always|never|auto]`. clipc reads the JSON Schema only
+`--color[=true|false|always|never|auto]`, and a `string` flag with
+`schema: z.enum(["always", "never"])` reads `--color <always|never>`. clipc reads the JSON Schema only
 when the library offers one (Zod 4.2 and later, ArkType 2.1.28 and later), and
 a converter that throws just means no choices are listed.
 

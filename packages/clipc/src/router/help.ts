@@ -152,7 +152,7 @@ export interface FormatCommandHelpArgs {
  * description, and an alphabetically sorted flag list (showing each
  * flag's usage label and `-x` alias). A boolean flag shows its bare
  * name; a value-carrying flag shows `--name <value>`, where `<value>`
- * is its `valueName`, its choices (`--color always|never`), or by default
+ * is its `valueName`, its choices (`--color <always|never>`), or by default
  * its `kind` (`<value>` when it has a `schema`). Choices come from
  * `choices` or, failing that, from the `schema`'s Standard JSON Schema
  * (an `enum`, `const`, or `anyOf` / `oneOf` of `const`s), when it offers
@@ -211,7 +211,7 @@ interface FlagUsageLabelArgs {
 }
 
 // How a flag is written in usage: `--json`, `--out <path>`,
-// `--color always|never`, and for an optional attached value
+// `--color <always|never>`, and for an optional attached value
 // `--askOnCommit[=true|false|null]`.
 function flagUsageLabel(args: FlagUsageLabelArgs): string {
   const longForm = `--${args.flagName}`;

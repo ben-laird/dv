@@ -347,7 +347,7 @@ Deno.test("describeFlagValue picks valueName, then choices, then a schema's, the
   );
   assertEquals(
     describeFlagValue({ kind: "string", schema: listed }),
-    "always|never",
+    "<always|never>",
   );
   assertEquals(
     describeFlagValue({ kind: "collect", schema: digits }),
@@ -384,7 +384,7 @@ Deno.test("describeFlagValue reads choices from Zod's own JSON Schema", () => {
   // Then the enum and the union list their choices, the number a placeholder
   assertEquals(
     describeFlagValue({ kind: "string", schema: z.enum(["a", "b"]) }),
-    "a|b",
+    "<a|b>",
   );
   assertEquals(
     describeFlagValue({

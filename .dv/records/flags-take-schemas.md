@@ -34,5 +34,5 @@ caught at the edge instead of escaping as an exception. On an `optional-value` f
 other; `booleans: true` composes with either.
 
 `--help` shows a schema flag's `valueName`, else the string choices its
-Standard JSON Schema lists (`--color always|never` for a Zod enum), else
+Standard JSON Schema lists (`--color <always|never>` for a Zod enum), else
 `<value>`.

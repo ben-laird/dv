@@ -87,18 +87,21 @@ export async function validateFlagValue(
  * `"optional-value"` one. In priority order: its `valueName` as `<name>`;
  * its `choices`; the string choices its `schema`'s JSON Schema lists; or a
  * placeholder, `<value>` for a schema and `<kind>` (`<string>`) without
- * one. Choices are `|`-joined after any boolean spellings
- * (`true|false|null`), and an optional-value placeholder follows them too.
+ * one. Choices are `|`-joined: inside `<…>` for a `string` or `collect`
+ * flag (`<always|never>`), and after any boolean spellings for an
+ * optional-value one (`true|false|null`), where a placeholder follows them
+ * too.
  */
 export function describeFlagValue(spec: ValueFlagSpec): string {
   if (spec.valueName !== undefined) return `<${spec.valueName}>`;
-  const spellings = booleanSpellings(spec);
   const choices = declaredChoicesOf(spec) ?? schemaChoicesOf(spec.schema);
-  if (choices !== undefined) return [...spellings, ...choices].join("|");
   const placeholder = spec.schema === undefined ? "<string>" : "<value>";
   if (spec.kind === "optional-value") {
-    return [...spellings, placeholder].join("|");
+    const spellings = booleanSpellings(spec);
+    return [...spellings, ...(choices ?? [placeholder])].join("|");
   }
+  // A required value keeps its angle brackets: `--color <always|never>`.
+  if (choices !== undefined) return `<${choices.join("|")}>`;
   return spec.schema === undefined ? `<${spec.kind}>` : placeholder;
 }
 

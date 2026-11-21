@@ -36,7 +36,7 @@ Deno.test("formatCommandHelp shows a schema flag's choices, or <value> when it l
 
   // Then listed choices replace the placeholder, and the rest read <value>
   assertEquals(lines.slice(lines.indexOf("Flags:") + 1), [
-    `  --color always|never${" ".repeat(13)}Color`,
+    `  --color <always|never>${" ".repeat(11)}Color`,
     `  --jobs <value>${" ".repeat(19)}Jobs`,
     "  --mode[=true|false|fast|safe]    Mode",
     `  --tag <value>${" ".repeat(20)}Tag`,
