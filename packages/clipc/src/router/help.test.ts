@@ -1,6 +1,47 @@
 import { assertEquals } from "@std/assert";
+import { z } from "zod";
 import type { FlagSpec } from "../flag-spec.ts";
+import type { StandardSchemaV1 } from "../standard-schema.ts";
 import { formatCommandHelp } from "./help.ts";
+
+Deno.test("formatCommandHelp shows a schema flag's choices, or <value> when it lists none", () => {
+  // Given schema flags: Zod enums with a JSON Schema, and a bare fake schema
+  const opaque: StandardSchemaV1<string, string> = {
+    "~standard": {
+      version: 1,
+      vendor: "fake",
+      validate: (value) => ({ value: String(value) }),
+    },
+  };
+  const flags = {
+    color: {
+      kind: "string",
+      schema: z.enum(["always", "never"]),
+      description: "Color",
+    },
+    jobs: { kind: "string", schema: z.coerce.number(), description: "Jobs" },
+    mode: {
+      kind: "optional-value",
+      schema: z.enum(["fast", "safe"]),
+      booleans: true,
+      description: "Mode",
+    },
+    tag: { kind: "collect", schema: opaque, description: "Tag" },
+  } satisfies Record<string, FlagSpec>;
+
+  // When the leaf's help is rendered
+  const lines = formatCommandHelp({ path: ["mycli", "build"], flags }).split(
+    "\n",
+  );
+
+  // Then listed choices replace the placeholder, and the rest read <value>
+  assertEquals(lines.slice(lines.indexOf("Flags:") + 1), [
+    `  --color <always|never>${" ".repeat(11)}Color`,
+    `  --jobs <value>${" ".repeat(19)}Jobs`,
+    "  --mode[=true|false|fast|safe]    Mode",
+    `  --tag <value>${" ".repeat(20)}Tag`,
+  ]);
+});
 
 // The flag lines of a leaf's help, without the usage header.
 function flagLines(flags: Record<string, FlagSpec>): string[] {
@@ -52,17 +93,17 @@ Deno.test("formatCommandHelp renders a value flag's valueName in place of its ki
   ]);
 });
 
-Deno.test("formatCommandHelp renders an optional-value flag's declared values as an optional attachment", () => {
-  // Given optional-value flags with one and with several declared values
+Deno.test("formatCommandHelp renders an optional-value flag's declared choices as an optional attachment", () => {
+  // Given optional-value flags with one and with several declared choices
   const flags = {
     askOnCommit: {
       kind: "optional-value",
-      values: ["null"],
+      choices: ["null"],
       description: "Ask before commit",
     },
     color: {
       kind: "optional-value",
-      values: ["always", "never"],
+      choices: ["always", "never"],
       description: "Colorize",
     },
   } satisfies Record<string, FlagSpec>;
@@ -70,7 +111,7 @@ Deno.test("formatCommandHelp renders an optional-value flag's declared values as
   // When the leaf's help is rendered
   const lines = flagLines(flags);
 
-  // Then each shows `--flag[=value]`, several values separated by `|`
+  // Then each shows `--flag[=value]`, several choices separated by `|`
   assertEquals(lines, [
     "  --askOnCommit[=null]      Ask before commit",
     "  --color[=always|never]    Colorize",
@@ -78,11 +119,11 @@ Deno.test("formatCommandHelp renders an optional-value flag's declared values as
 });
 
 Deno.test("formatCommandHelp lists the boolean spellings first when booleans is on", () => {
-  // Given maat's askOnCommit: values ["null"] plus booleans
+  // Given maat's askOnCommit: choices ["null"] plus booleans
   const flags = {
     askOnCommit: {
       kind: "optional-value",
-      values: ["null"],
+      choices: ["null"],
       booleans: true,
       description: "Ask before commit",
     },
@@ -119,7 +160,7 @@ Deno.test("formatCommandHelp renders an optional-value flag's valueName as an op
   const flags = {
     askOnCommit: {
       kind: "optional-value",
-      values: ["null"],
+      choices: ["null"],
       valueName: "reset",
       description: "Ask before commit",
     },

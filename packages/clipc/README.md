@@ -64,13 +64,15 @@ clipc is five ideas. Once you have them, the whole surface follows.
   compiler enforces the contract you declared.
 - **Flag specs** (`FlagSpec`, `lowerFlagSpec`) — flags are data, not parsing
   code. Each flag declares its `kind` (`string`, `boolean`, `collect`,
-  `optional-value`) and description;
-  the framework derives parsing, `--help` text, and the static `FlagsOf<…>` type
-  from one declaration. A value-carrying flag can name its value for `--help`:
+  `optional-value`) and description; the framework derives parsing, `--help`
+  text, and the static `FlagsOf<…>` type from one declaration. A
+  value-carrying flag can name its value for `--help`:
   `{ kind: "string", valueName: "path" }` shows `--out <path>` instead of the
-  default `--out <string>`. `inheritedFlags` is a typed-identity capture: declare a
-  shared flag map once, then spread it into each leaf's `flags` so cross-cutting
-  flags keep one source of truth without drifting per-flag kinds.
+  default `--out <string>`, and can take a Standard Schema `schema` that
+  validates and types its value. `inheritedFlags` is a typed-identity
+  capture: declare a shared flag map once, then spread it into each leaf's
+  `flags` so cross-cutting flags keep one source of truth without drifting
+  per-flag kinds.
 - **Errors-as-values** (`done`, `next`, `Step`) — handlers return a result
   (`{ kind: "ok" | "error" | "help" }`) rather than throwing. `done` ends
   dispatch; `next` hands control to a child. The framework renders the outcome
@@ -100,7 +102,7 @@ may also carry a value, attached with `=`:
 flags: {
   askOnCommit: {
     kind: "optional-value",
-    values: ["null"],
+    choices: ["null"],
     booleans: true,
     description: "Ask before each commit (=null resets to the default)",
   },
@@ -113,7 +115,7 @@ flags: {
 // (absent)             → undefined
 ```
 
-What may follow `=` is a small vocabulary. `values` closes the set to those
+What may follow `=` is a small vocabulary. `choices` closes the set to those
 literals, and `flags.askOnCommit` is typed `boolean | "null" | undefined`;
 leave it out and any attached string is accepted, typed `string`.
 `booleans: true` also reads `=true` / `=false` as booleans, the way a boolean
@@ -134,8 +136,75 @@ itself:
   means `false` (drop the separate flag);
 - an optional-value flag named `no-<y>` beside a declared `<y>`, whose
   negation that name would shadow (rename the optional-value flag);
-- `"true"` or `"false"` in `values` together with `booleans: true`, since
-  those spellings already read as booleans (drop them from `values`).
+- `"true"` or `"false"` in `choices` together with `booleans: true`, since
+  those spellings already read as booleans (drop them from `choices`).
+
+**Typed values with a schema.** A `string`, `collect` or `optional-value` flag
+can take a `schema`: any [Standard Schema](https://standardschema.dev), such as
+Zod 4, Valibot or ArkType. clipc vendors the spec's types, so it takes no
+dependency. Each value typed is validated before `run`, and `run` sees the
+schema's output:
+
+```typescript
+import { z } from "zod";
+
+flags: {
+  jobs: { kind: "string", schema: z.coerce.number().int().positive() },
+  port: { kind: "collect", schema: z.coerce.number() },
+  color: {
+    kind: "optional-value",
+    schema: z.enum(["always", "never", "auto"]),
+    booleans: true,
+  },
+}
+// flags.jobs  → number | undefined
+// flags.port  → number[] | undefined (each element validated)
+// flags.color → boolean | "always" | "never" | "auto" | undefined
+```
+
+argv holds only text, so a schema must take a string input:
+`z.coerce.number()` and `z.enum([...])` type-check, while `z.number()` is a
+type error at `command()`, `forCtx().command` and `inheritedFlags`. The check
+needs the flag map's literal type, so `FlagSpec` itself can't carry it: a map
+written `satisfies Record<string, FlagSpec>` accepts `z.number()` until it
+reaches one of those builders. Lexing stays synchronous and validation is a
+separate, awaited step, so sync and async schemas both work. A flag left out
+is not validated, and `--help` returns before anything is validated.
+
+A refused value is an `invalid-flag-value` error with exit 2, carrying the
+schema's messages: `invalid value 'x' for '--jobs': Invalid input: expected
+number, received NaN`. A `collect` flag names the refused element by place,
+`--port #2`, and the error's `--json` context carries it as `element: 2`
+(counting from 1; scalar flags have no `element`). Errors come in argv order.
+A schema that fails with no issues reads as `the value was refused`.
+
+A schema that throws, whose promise rejects, or that returns a result the
+spec doesn't allow (`null`, or issues without text messages) is a bug in the
+schema rather than in what was typed, so it is a separate `flag-schema-failed`
+error with exit 1 and no usage hint: `the schema for '--port' failed:
+<message>`, with context `{ flagName, value, element?, message }`. A thrown
+value with no text to show reads `the schema threw a value that can't be
+shown`. clipc catches all of this at the edge, so it never escapes the leaf's
+handler as an exception.
+
+On an `optional-value` flag, `schema` and `choices` exclude each other, and
+the types enforce it. `booleans: true` composes with either: `=true` and
+`=false` read as booleans before the schema sees them.
+
+`--help` describes a schema flag's value in this order: its `valueName`
+(`<when>`); else the string choices the schema's
+[Standard JSON Schema](https://standardschema.dev/json-schema) input lists, as
+an `enum`, a `const`, or an `anyOf` / `oneOf` of `const`s; else `<value>`. So
+the flags above read `--jobs <value>`, `--port <value>` and
+`--color[=true|false|always|never|auto]`, and a `string` flag with
+`schema: z.enum(["always", "never"])` reads `--color <always|never>`. clipc
+reads the JSON Schema only when the library offers one (Zod 4.2 and later,
+ArkType 2.1.28 and later), and a converter that throws just means no choices
+are listed.
+
+Any library that implements the spec works. `@sekhmet/schema`, for one, turns
+its schemas into Standard Schemas with `toStandard`, and the result goes
+straight into `schema`.
 
 ## A larger example
 

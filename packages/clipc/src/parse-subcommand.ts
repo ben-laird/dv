@@ -1,15 +1,23 @@
 import { parseArgs } from "@std/cli/parse-args";
-import { type FlagSpec, type FlagsOf, lowerFlagSpec } from "./flag-spec.ts";
-import { isFlagToken } from "./flag-token.ts";
 import {
-  type FlagValueIssue,
-  type OptionalValueFlagSpec,
-  validateOptionalValue,
-} from "./optional-value.ts";
+  type FlagSpec,
+  type LoweredFlagSpec,
+  lowerFlagSpec,
+} from "./flag-spec.ts";
+import { isFlagToken } from "./flag-token.ts";
+import type { FlagValueIssue, OptionalValueFlagSpec } from "./flag-value.ts";
+
+// The lexer: splits a leaf's argv into flags and positionals, synchronously,
+// with every flag value still the raw string typed. What a value means is
+// the validation step's job (validate-flags.ts), so lexing can stay sync
+// while a schema may be async.
 
 /**
  * Why a leaf's argv could not be parsed against its flag map. The leaf's
- * handler turns each case into a typed `CliError` with exit 2.
+ * handler turns each case into a typed `CliError`: exit 2 for what the
+ * user typed, exit 1 for a schema that failed. The lexer finds
+ * `unknown-flag`; the validation step finds `invalid-flag-value` and
+ * `flag-schema-failed`.
  */
 export type FlagParseError =
   | { kind: "unknown-flag"; flagToken: string }
@@ -17,39 +25,76 @@ export type FlagParseError =
       kind: "invalid-flag-value";
       flagName: string;
       value: string;
+      /** Which of a `collect` flag's values was refused, counting from 1. */
+      element?: number;
       /** Why the value was refused; never empty. */
       issues: readonly [FlagValueIssue, ...FlagValueIssue[]];
       /** The accepted set, when the flag declares a closed one. */
       allowedValues?: readonly string[];
+    }
+  | {
+      kind: "flag-schema-failed";
+      flagName: string;
+      value: string;
+      /** Which of a `collect` flag's values it was checking, counting from 1. */
+      element?: number;
+      /** What the schema threw, as text. */
+      message: string;
     };
 
-/**
- * The outcome of {@link parseSubcommandArgv}: the parsed flags and positionals,
- * or the {@link FlagParseError} for the first bad flag in argv order.
- */
-export type ParseSubcommandArgvOutcome<
-  TFlagMap extends Record<string, FlagSpec>,
-> =
-  | { ok: true; value: ParsedSubcommandArgv<TFlagMap> }
-  | { ok: false; error: FlagParseError };
+/** A flag the lexer could not read at all. */
+export type FlagLexError = Extract<FlagParseError, { kind: "unknown-flag" }>;
 
-export interface ParseSubcommandArgvArgs<
-  TFlagMap extends Record<string, FlagSpec>,
-> {
-  flagSpecMap: TFlagMap;
+/**
+ * One raw value typed for a value-carrying flag, at its place in argv.
+ * `slot` says where the validated value goes: it is the flag's value, one
+ * element of a `collect` flag's list, or an earlier value of a `string` or
+ * optional-value flag that a later one overrode (still checked, as typed).
+ */
+export interface FlagValueReading {
+  flagName: string;
+  raw: string;
+  slot:
+    | { kind: "value" }
+    | { kind: "element"; index: number }
+    | { kind: "overridden" };
+}
+
+/**
+ * The lexed argv: flags with raw values, positionals, and every value to
+ * validate in argv order.
+ */
+export interface LexedSubcommandArgv {
+  /** Declared flag name → its raw value (`boolean`, `string` or `string[]`). */
+  flags: Record<string, unknown>;
+  /** Positional words, each exactly as typed. */
+  argv: string[];
+  /** Each value-carrying flag's raw values, in the order they were typed. */
+  values: readonly FlagValueReading[];
+}
+
+/**
+ * The outcome of {@link parseSubcommandArgv}. A failure carries the first
+ * bad flag in argv order, with the values typed before it: validating those
+ * first keeps errors reported in the order they were typed.
+ */
+export type ParseSubcommandArgvOutcome =
+  | { ok: true; value: LexedSubcommandArgv }
+  | {
+      ok: false;
+      error: FlagLexError;
+      /** The values typed before the bad flag, in argv order. */
+      values: readonly FlagValueReading[];
+    };
+
+export interface ParseSubcommandArgvArgs {
+  flagSpecMap: Record<string, FlagSpec>;
   subcommandArgv: string[];
 }
 
-export interface ParsedSubcommandArgv<
-  TFlagMap extends Record<string, FlagSpec>,
-> {
-  flags: FlagsOf<TFlagMap>;
-  argv: string[];
-}
-
-export function parseSubcommandArgv<TFlagMap extends Record<string, FlagSpec>>(
-  args: ParseSubcommandArgvArgs<TFlagMap>,
-): ParseSubcommandArgvOutcome<TFlagMap> {
+export function parseSubcommandArgv(
+  args: ParseSubcommandArgvArgs,
+): ParseSubcommandArgvOutcome {
   const lowered = lowerFlagSpec(args.flagSpecMap);
   const optionalValues = readOptionalValueFlags({
     argv: joinDashValues({
@@ -60,8 +105,9 @@ export function parseSubcommandArgv<TFlagMap extends Record<string, FlagSpec>>(
   });
   // parseArgs reports unknown flags in argv order, and each refused
   // optional-value spelling sits in argv as an unknown marker token, so
-  // `flagParseErrors` lists every failure in the order it was typed.
-  const flagParseErrors: FlagParseError[] = [];
+  // `flagLexErrors` lists every failure in the order it was typed.
+  const flagLexErrors: PositionedLexError[] = [];
+  const locateToken = tokenLocator(optionalValues.argv);
   const parsed = parseArgs(optionalValues.argv, {
     // `_` keeps every positional a string: parseArgs would otherwise turn
     // `007` into 7. The leaf knows its own types, so numbers are its call.
@@ -69,57 +115,220 @@ export function parseSubcommandArgv<TFlagMap extends Record<string, FlagSpec>>(
     // readOptionalValueFlags); their real values are set below.
     string: ["_", ...lowered.string, OPTIONAL_VALUE_PLACEHOLDER_KEY],
     boolean: lowered.boolean,
-    collect: lowered.collect,
+    // Every value flag is collected, string flags too, so each value typed
+    // reaches validation; a string flag's own value is its last one.
+    collect: lowered.string,
     alias: lowered.alias,
     unknown: (token) => {
       // parseArgs calls this for positionals too, and a lone `-` is one.
       if (isFlagToken(token)) {
-        flagParseErrors.push(
-          optionalValues.refusals.get(token) ?? {
+        flagLexErrors.push({
+          position: locateToken(token),
+          error: optionalValues.refusals.get(token) ?? {
             kind: "unknown-flag",
             flagToken: token,
           },
-        );
+        });
         return false;
       }
       return true;
     },
   });
-  const firstFlagParseError = flagParseErrors[0];
-  if (firstFlagParseError !== undefined) {
-    return { ok: false, error: firstFlagParseError };
-  }
 
   // parseArgs collects positionals into `_` and the rest of the keys
   // are declared flags. `_` is typed `(string|number)[]`, but listing it
   // under `string` above means every element is already a string.
   const argv = parsed._.map((token) => String(token));
 
-  // Strip `_`, the placeholder, and any aliased single-char keys so
-  // `flags` only carries the declared full-name keys.
-  const aliasedKeys = new Set(Object.keys(lowered.alias));
-  const flagsObject: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(parsed)) {
-    if (key === "_") continue;
-    if (key === OPTIONAL_VALUE_PLACEHOLDER_KEY) continue;
-    if (aliasedKeys.has(key)) continue;
-    flagsObject[key] = value;
+  // Read each declared flag by name, so `flags` carries only declared
+  // full-name keys: never `_`, the placeholder or an alias. parseArgs nests
+  // a dotted name (`a.b` → `{ a: { b } }`), so it is read along its path.
+  const flags: Record<string, unknown> = {};
+  const collectFlags = new Set(lowered.collect);
+  const typedValues = new Map<string, string[]>();
+  for (const key of [...lowered.boolean, ...lowered.string]) {
+    const value = readNested({ source: parsed, path: key.split(".") });
+    if (value === undefined) continue;
+    if (!Array.isArray(value)) {
+      flags[key] = value;
+      continue;
+    }
+    // parseArgs collects onto whatever the key already holds, and for a
+    // name like `valueOf` that is the inherited method; only text was typed.
+    const typed: string[] = [];
+    for (const element of value) {
+      if (typeof element === "string") typed.push(element);
+    }
+    typedValues.set(key, typed);
+    if (collectFlags.has(key)) {
+      flags[key] = typed;
+      continue;
+    }
+    // An absent string flag stays absent, not an empty list.
+    const lastTyped = typed.at(-1);
+    if (lastTyped !== undefined) flags[key] = lastTyped;
   }
   for (const [flagName, value] of optionalValues.values) {
-    flagsObject[flagName] = value;
+    flags[flagName] = value;
+  }
+  const positionedValues = [
+    ...valueReadings({ typedValues, lowered, argv: optionalValues.argv }),
+    ...optionalValues.readings,
+  ].sort((left, right) => left.position - right.position);
+
+  const firstLexError = flagLexErrors[0];
+  if (firstLexError !== undefined) {
+    const valuesBefore = positionedValues.filter((positioned) => {
+      return positioned.position < firstLexError.position;
+    });
+    return {
+      ok: false,
+      error: firstLexError.error,
+      values: readingsOf(valuesBefore),
+    };
   }
   return {
     ok: true,
-    value: { flags: asFlagsOf<TFlagMap>(flagsObject), argv },
+    value: { flags, argv, values: readingsOf(positionedValues) },
   };
 }
 
-// The one unchecked step: the record holds parseArgs' values for its
-// declared kinds plus readOptionalValueFlags' values, each keyed by flag name.
-function asFlagsOf<TFlagMap extends Record<string, FlagSpec>>(
-  flagsObject: Record<string, unknown>,
-): FlagsOf<TFlagMap> {
-  return flagsObject as FlagsOf<TFlagMap>;
+interface PositionedLexError {
+  position: number;
+  error: FlagLexError;
+}
+
+interface PositionedReading {
+  position: number;
+  reading: FlagValueReading;
+}
+
+function readingsOf(
+  positioned: readonly PositionedReading[],
+): FlagValueReading[] {
+  return positioned.map((entry) => entry.reading);
+}
+
+// parseArgs hands `unknown` the whole token it is reading, left to right,
+// so each refused token is found by scanning forward from the last one. A
+// short cluster (`-xy`) can refuse twice at one place, so the cursor stays.
+function tokenLocator(argv: readonly string[]): (token: string) => number {
+  let cursor = 0;
+  return (token) => {
+    const found = argv.indexOf(token, cursor);
+    if (found === -1) return argv.length;
+    cursor = found;
+    return found;
+  };
+}
+
+interface ValueReadingsArgs {
+  /** Each `string` / `collect` flag → every value typed for it, in order. */
+  typedValues: ReadonlyMap<string, readonly string[]>;
+  lowered: LoweredFlagSpec;
+  /** The argv parseArgs read, so positions match the optional-value ones. */
+  argv: readonly string[];
+}
+
+// The raw values parseArgs read for `string` and `collect` flags, each at
+// the place it was typed: the n-th value at the n-th token naming the flag.
+function valueReadings(args: ValueReadingsArgs): PositionedReading[] {
+  const mentions = flagMentions(args);
+  const collectFlags = new Set(args.lowered.collect);
+  const readings: PositionedReading[] = [];
+  for (const [flagName, typed] of args.typedValues) {
+    const positions = mentions.get(flagName) ?? [];
+    for (const [index, raw] of typed.entries()) {
+      readings.push({
+        position: positions[index] ?? args.argv.length,
+        reading: {
+          flagName,
+          raw,
+          slot: valueSlot({
+            index,
+            isCollect: collectFlags.has(flagName),
+            isLast: index === typed.length - 1,
+          }),
+        },
+      });
+    }
+  }
+  return readings;
+}
+
+interface ValueSlotArgs {
+  index: number;
+  isCollect: boolean;
+  isLast: boolean;
+}
+
+// A collect flag's every value is an element; a string flag's last value
+// is its value, and each earlier one was overridden but is still checked.
+function valueSlot(args: ValueSlotArgs): FlagValueReading["slot"] {
+  if (args.isCollect) return { kind: "element", index: args.index };
+  return args.isLast ? { kind: "value" } : { kind: "overridden" };
+}
+
+// Each value-carrying flag → the argv indexes of the tokens that name it:
+// `--name`, `--name=…`, its alias spelled long (`--n`), or a short cluster
+// holding its alias letter. Only
+// these place values in argv order; parseArgs still reads the values.
+function flagMentions(args: ValueReadingsArgs): Map<string, number[]> {
+  const valueFlags = new Set(args.lowered.string);
+  const alias = args.lowered.alias;
+  const mentions = new Map<string, number[]>();
+  const mention = (flagName: string, index: number): void => {
+    const indexes = mentions.get(flagName) ?? [];
+    if (indexes.at(-1) !== index) indexes.push(index);
+    mentions.set(flagName, indexes);
+  };
+  for (const [index, token] of args.argv.entries()) {
+    if (token === "--") break;
+    if (!isFlagToken(token)) continue;
+    if (token.startsWith("--")) {
+      const [name = ""] = token.slice(2).split("=");
+      // parseArgs also reads an alias spelled long: `--n` for `-n`.
+      const flagName = ownAlias({ alias, key: name }) ?? name;
+      if (valueFlags.has(flagName)) mention(flagName, index);
+      continue;
+    }
+    const [letters = ""] = token.slice(1).split("=");
+    for (const letter of letters) {
+      const flagName = ownAlias({ alias, key: letter });
+      if (flagName !== undefined && valueFlags.has(flagName)) {
+        mention(flagName, index);
+      }
+    }
+  }
+  return mentions;
+}
+
+interface ReadNestedArgs {
+  source: unknown;
+  path: readonly string[];
+}
+
+// The value at a path of own keys, or `undefined` if any step is missing.
+function readNested(args: ReadNestedArgs): unknown {
+  let current = args.source;
+  for (const key of args.path) {
+    if (typeof current !== "object" || current === null) return undefined;
+    if (!Object.hasOwn(current, key)) return undefined;
+    current = Reflect.get(current, key);
+  }
+  return current;
+}
+
+interface OwnAliasArgs {
+  alias: Readonly<Record<string, string>>;
+  key: string;
+}
+
+// The flag an alias names, read as an own key, so an inherited name like
+// `valueOf` is never taken for an alias.
+function ownAlias(args: OwnAliasArgs): string | undefined {
+  if (!Object.hasOwn(args.alias, args.key)) return undefined;
+  return args.alias[args.key];
 }
 
 interface ReadOptionalValueFlagsArgs {
@@ -133,10 +342,12 @@ interface OptionalValueReading {
    * and each refused spelling by its refusal marker.
    */
   argv: string[];
-  /** Each optional-value flag's last-written value. */
+  /** Each optional-value flag's last-written value, still raw. */
   values: Map<string, boolean | string>;
+  /** Each attached `--x=<raw>`, at its place in argv. */
+  readings: PositionedReading[];
   /** Refusal marker token → the error it stands for. */
-  refusals: Map<string, FlagParseError>;
+  refusals: Map<string, FlagLexError>;
 }
 
 // The key parseArgs sees in place of every optional-value spelling. It
@@ -172,7 +383,9 @@ function readOptionalValueFlags(
     }
   }
   const values = new Map<string, boolean | string>();
-  const refusals = new Map<string, FlagParseError>();
+  const attached: { position: number; flagName: string; raw: string }[] = [];
+  const lastSpellingAt = new Map<string, number>();
+  const refusals = new Map<string, FlagLexError>();
   const argv: string[] = [];
   for (let index = 0; index < args.argv.length; index++) {
     const token = args.argv[index] ?? "";
@@ -193,11 +406,30 @@ function readOptionalValueFlags(
       }
       case "set":
         values.set(spelling.flagName, spelling.value);
+        lastSpellingAt.set(spelling.flagName, argv.length);
+        if (typeof spelling.value === "string") {
+          attached.push({
+            position: argv.length,
+            flagName: spelling.flagName,
+            raw: spelling.value,
+          });
+        }
         argv.push(OPTIONAL_VALUE_PLACEHOLDER);
         break;
     }
   }
-  return { argv, values, refusals };
+  const readings = attached.map((spelling): PositionedReading => {
+    const isLast = lastSpellingAt.get(spelling.flagName) === spelling.position;
+    return {
+      position: spelling.position,
+      reading: {
+        flagName: spelling.flagName,
+        raw: spelling.raw,
+        slot: isLast ? { kind: "value" } : { kind: "overridden" },
+      },
+    };
+  });
+  return { argv, values, readings, refusals };
 }
 
 interface ReadOptionalValueSpellingArgs {
@@ -208,19 +440,20 @@ interface ReadOptionalValueSpellingArgs {
 type OptionalValueSpelling =
   | { kind: "other" }
   | { kind: "set"; flagName: string; value: boolean | string }
-  | { kind: "refused"; error: FlagParseError };
+  | { kind: "refused"; error: FlagLexError };
 
 // One token against the declared optional-value flags: `--x` is true,
-// `--no-x` false, `--x=<value>` whatever validateOptionalValue reads it
-// as. `--no-x=<value>` is refused here, since parseArgs would quietly
-// read it as `--x=<value>`, and so is any typed reserved key.
+// `--no-x` false, `--x=<value>` the raw value, for validation to read.
+// `--no-x=<value>` is refused here, since parseArgs would quietly read it
+// as `--x=<value>`, and so is any typed reserved key.
 function readOptionalValueSpelling(
   args: ReadOptionalValueSpellingArgs,
 ): OptionalValueSpelling {
   if (!args.token.startsWith("--")) return { kind: "other" };
   const [name = "", ...attachedParts] = args.token.slice(2).split("=");
-  const attached =
-    attachedParts.length === 0 ? undefined : attachedParts.join("=");
+  // `--x` has no attached value; `--x=` attaches the empty string.
+  let attached: string | undefined;
+  if (attachedParts.length > 0) attached = attachedParts.join("=");
 
   const keyAfterNegation = name.startsWith("no-") ? name.slice(3) : name;
   if (
@@ -233,27 +466,8 @@ function readOptionalValueSpelling(
     };
   }
 
-  const spec = args.optionalValueSpecs.get(name);
-  if (spec !== undefined) {
-    if (attached === undefined) {
-      return { kind: "set", flagName: name, value: true };
-    }
-    const validation = validateOptionalValue({ spec, raw: attached });
-    if (!validation.ok) {
-      return {
-        kind: "refused",
-        error: {
-          kind: "invalid-flag-value",
-          flagName: name,
-          value: attached,
-          issues: validation.issues,
-          ...(validation.allowedValues !== undefined && {
-            allowedValues: validation.allowedValues,
-          }),
-        },
-      };
-    }
-    return { kind: "set", flagName: name, value: validation.value };
+  if (args.optionalValueSpecs.has(name)) {
+    return { kind: "set", flagName: name, value: attached ?? true };
   }
 
   const negatedName = name.startsWith("no-") ? name.slice(3) : undefined;

@@ -573,7 +573,7 @@ Deno.test("leaf hands run an optional-value flag typed as boolean or its declare
   const root = router({
     commands: {
       set: command({
-        flags: { askOnCommit: { kind: "optional-value", values: ["null"] } },
+        flags: { askOnCommit: { kind: "optional-value", choices: ["null"] } },
         run: ({ flags }) => {
           seen.push({ askOnCommit: flags.askOnCommit });
           return done({ kind: "ok" });
@@ -604,7 +604,7 @@ Deno.test("command refuses an optional-value flag declared beside its no- twin",
   const declare = () => {
     return command({
       flags: {
-        ask: { kind: "optional-value", values: ["null"] },
+        ask: { kind: "optional-value", choices: ["null"] },
         "no-ask": { kind: "boolean" },
       },
       run: () => done({ kind: "ok" }),
@@ -622,7 +622,7 @@ Deno.test("leaf returns kind:error with exit 2 for an undeclared optional value"
   const root = router({
     commands: {
       set: command({
-        flags: { askOnCommit: { kind: "optional-value", values: ["null"] } },
+        flags: { askOnCommit: { kind: "optional-value", choices: ["null"] } },
         run: () => done({ kind: "ok" }),
       }),
     },

@@ -391,5 +391,10 @@ interface PickRandomlyArgs {
 function pickRandomly(args: PickRandomlyArgs): string {
   const { wordlist, randomSource } = args;
   const index = Math.floor(randomSource.next() * wordlist.length);
-  return wordlist[index] ?? wordlist[0]!;
+  // An out-of-range source (1, NaN) falls back to the first word.
+  const word = wordlist[index] ?? wordlist[0];
+  if (word === undefined) {
+    throw new Error("pickRandomly needs a non-empty wordlist");
+  }
+  return word;
 }

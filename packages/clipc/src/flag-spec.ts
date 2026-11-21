@@ -1,3 +1,9 @@
+import type {
+  InferInput,
+  InferOutput,
+  StandardSchemaV1,
+} from "./standard-schema.ts";
+
 // Per-flag spec used by every leaf command. Four kinds:
 //
 //   { kind: "boolean" }         — present-or-absent toggle. The runner
@@ -12,7 +18,8 @@
 //
 // Aliases are short letter forms (`alias: "p"` → `-p`). `description`
 // feeds the auto-generated help renderer, and a value-carrying flag's
-// `valueName` names its value there (`--pkg <name>`).
+// `valueName` names its value there (`--pkg <name>`). A value-carrying
+// flag's `schema` (a Standard Schema) validates each value and types it.
 
 /**
  * The spec for a single flag on a leaf command. The `kind` selects the runtime
@@ -27,14 +34,28 @@
  * `{ kind: "string", valueName: "path" }` renders `--out <path>` instead of
  * the default `--out <string>`.
  *
+ * A value-carrying flag may also set `schema`: any
+ * [Standard Schema](https://standardschema.dev) (Zod, Valibot, ArkType, …)
+ * whose input is a string, since argv holds only text. Each value typed is
+ * validated by it, awaited before `run`, and the runner sees its output:
+ * `{ kind: "string", schema: z.coerce.number() }` gives `number | undefined`,
+ * and on a `collect` flag each element is validated and typed. A refused
+ * value is an `invalid-flag-value` error. A schema whose input can't be a
+ * string (`z.number()`) fails to type-check at `command()` (see
+ * {@link FlagSchemaInputCheck}). `FlagSpec` alone can't express that check,
+ * so a map written `satisfies Record<string, FlagSpec>` accepts
+ * `z.number()` until it reaches `command()`.
+ *
  * An `"optional-value"` flag is written three ways: `--x` (`true`), `--no-x`
  * (`false`), or `--x=<value>`. The value must be attached with `=`: in
  * `--x null` the flag is `true` and `null` stays a positional word. What
  * `<value>` may be is a small vocabulary:
  *
- * - `values` (optional) closes the set: `--x=<value>` must be one of them,
+ * - `choices` (optional) closes the set: `--x=<value>` must be one of them,
  *   and the runner sees those literals. Without it, any attached string is
  *   accepted and the runner sees `string`.
+ * - `schema` (optional, instead of `choices`) validates the value and the
+ *   runner sees its output.
  * - `booleans: true` also reads `--x=true` / `--x=false` as the booleans,
  *   the way a boolean flag reads `--json=false`.
  *
@@ -46,7 +67,7 @@
  * attached-value spelling. `command()` refuses, by throwing when the tree is
  * built, a separate `no-x` flag beside it (`--no-x` already means `false`),
  * an optional-value flag named `no-y` beside a declared `y` (its name would
- * shadow `y`'s negation), and `"true"`/`"false"` in `values` when
+ * shadow `y`'s negation), and `"true"`/`"false"` in `choices` when
  * `booleans: true` (those spellings already read as booleans).
  *
  * @example
@@ -54,7 +75,7 @@
  * const flags = {
  *   askOnCommit: {
  *     kind: "optional-value",
- *     values: ["null"],
+ *     choices: ["null"],
  *     booleans: true,
  *     description: "Ask before each commit; =null resets to the default",
  *   },
@@ -64,24 +85,46 @@
  * ```
  */
 export type FlagSpec =
-  | { kind: "boolean"; alias?: string; description?: string }
+  | {
+      kind: "boolean";
+      alias?: string;
+      description?: string;
+      /** A boolean carries no value to validate. */
+      schema?: never;
+    }
   | {
       kind: "string";
       alias?: string;
       description?: string;
       valueName?: string;
+      /** Validates and maps the value; the runner sees its output. */
+      schema?: StandardSchemaV1;
     }
   | {
       kind: "collect";
       alias?: string;
       description?: string;
       valueName?: string;
+      /** Validates and maps each value; the runner sees a list of outputs. */
+      schema?: StandardSchemaV1;
     }
   | {
       kind: "optional-value";
       /** The closed set an attached value must come from; omit for any string. */
-      values?: readonly [string, ...string[]];
+      choices?: readonly [string, ...string[]];
+      schema?: never;
       /** Read `--x=true` / `--x=false` as the booleans. */
+      booleans?: true;
+      alias?: never;
+      description?: string;
+      valueName?: string;
+    }
+  | {
+      kind: "optional-value";
+      choices?: never;
+      /** Validates and maps an attached value; the runner sees its output. */
+      schema: StandardSchemaV1;
+      /** Read `--x=true` / `--x=false` as the booleans, before the schema. */
       booleans?: true;
       alias?: never;
       description?: string;
@@ -90,8 +133,10 @@ export type FlagSpec =
 
 /**
  * Maps a flag-name → {@link FlagSpec} map to the runner's typed flag object,
- * resolving each flag's `kind` to its runtime value type. An
- * `"optional-value"` flag resolves to `boolean` or its attached value (see
+ * resolving each flag's `kind` to its runtime value type. A value-carrying
+ * flag's value is the `string` typed, or its `schema`'s output (see
+ * {@link FlagValueOf}): a `collect` flag gets a list of them, and an
+ * `"optional-value"` flag `boolean` or its attached value (see
  * {@link AttachedValueOf}). Every property is `| undefined` because an
  * omitted flag may be `undefined` regardless of kind.
  *
@@ -101,23 +146,70 @@ export type FlagsOf<TFlagMap extends Record<string, FlagSpec>> = {
   [Key in keyof TFlagMap]: TFlagMap[Key]["kind"] extends "boolean"
     ? boolean | undefined
     : TFlagMap[Key]["kind"] extends "string"
-      ? string | undefined
+      ? FlagValueOf<TFlagMap[Key]> | undefined
       : TFlagMap[Key] extends { kind: "optional-value" }
         ? boolean | AttachedValueOf<TFlagMap[Key]> | undefined
-        : string[] | undefined;
+        : FlagValueOf<TFlagMap[Key]>[] | undefined;
 };
 
 /**
+ * The type of one value of a value-carrying flag: its `schema`'s output, or
+ * the `string` typed when it declares no schema.
+ *
+ * @typeParam TSpec - One flag's spec.
+ */
+export type FlagValueOf<TSpec> = TSpec extends {
+  schema: infer TSchema extends StandardSchemaV1;
+}
+  ? InferOutput<TSchema>
+  : string;
+
+/**
  * The type of an `"optional-value"` flag's attached value: the union of its
- * declared `values` literals, or `string` when it declares none.
+ * declared `choices` literals, its `schema`'s output, or `string` when it
+ * declares neither.
  *
  * @typeParam TSpec - One flag's spec.
  */
 export type AttachedValueOf<TSpec> = TSpec extends {
-  values: readonly (infer TValue)[];
+  choices: readonly (infer TValue)[];
 }
   ? TValue
-  : string;
+  : FlagValueOf<TSpec>;
+
+/**
+ * What the type checker reports for a flag whose `schema` cannot read argv,
+ * which holds only text: its input type and `string` share no value.
+ */
+export type SchemaInputMustAcceptString =
+  "a flag's schema must accept a string input, since argv holds only text; use a coercing schema such as z.coerce.number()";
+
+/**
+ * A type-level check over a flag map: each flag's `schema` must read a
+ * `string` input, so `z.coerce.number()` (input `unknown`) and
+ * `z.enum(["a", "b"])` (input `"a" | "b"`) pass and `z.number()` fails.
+ * Intersected with a flag map, it maps a passing flag to `unknown` (no
+ * constraint) and a failing one to `{ schema: SchemaInputMustAcceptString }`,
+ * which no schema satisfies. `command`, `forCtx().command` and
+ * `inheritedFlags` apply it. A plain `FlagSpec` annotation does not: the
+ * check needs the map's literal type, so `satisfies Record<string, FlagSpec>`
+ * lets `z.number()` through until the map reaches one of those builders.
+ *
+ * @typeParam TFlagMap - The command's flag map keyed by flag name.
+ */
+export type FlagSchemaInputCheck<TFlagMap> = {
+  // An input reads argv text when it takes every string (`unknown`,
+  // `string | number`) or only strings (`"a" | "b"`).
+  [Key in keyof TFlagMap]: TFlagMap[Key] extends {
+    schema: infer TSchema extends StandardSchemaV1;
+  }
+    ? [string] extends [InferInput<TSchema>]
+      ? unknown
+      : [InferInput<TSchema>] extends [string]
+        ? unknown
+        : { schema: SchemaInputMustAcceptString }
+    : unknown;
+};
 
 /**
  * The lowered, `parseArgs`-shaped form of a flag map: parallel name arrays by
@@ -218,7 +310,7 @@ export type FlagSpecError =
       baseFlagName: string;
     }
   | {
-      kind: "boolean-spelling-in-values";
+      kind: "boolean-spelling-in-choices";
       /** The `"optional-value"` flag with `booleans: true`. */
       flagName: string;
       /** The declared value `booleans` already reads as a boolean. */
@@ -234,7 +326,7 @@ export type FlagSpecCheck = { ok: true } | { ok: false; error: FlagSpecError };
  * declared `no-x` flag would never be set. Mirrored, an `"optional-value"`
  * flag named `no-y` claims the `--no-y` token, so it can't sit beside a
  * declared `y` of any kind. And with `booleans: true` it reads `=true` /
- * `=false` as booleans, so declaring either in `values` would never yield
+ * `=false` as booleans, so declaring either in `choices` would never yield
  * that string.
  *
  * @param flagSpecMap - The command's flag map keyed by flag name.
@@ -264,10 +356,10 @@ export function checkFlagSpecMap(
     }
     if (flagSpec.booleans !== true) continue;
     for (const value of ["true", "false"] as const) {
-      if (flagSpec.values?.includes(value)) {
+      if (flagSpec.choices?.includes(value)) {
         return {
           ok: false,
-          error: { kind: "boolean-spelling-in-values", flagName, value },
+          error: { kind: "boolean-spelling-in-choices", flagName, value },
         };
       }
     }
@@ -287,7 +379,7 @@ export function describeFlagSpecError(error: FlagSpecError): string {
       return `flag '${error.negatedFlagName}' collides with optional-value flag '${error.flagName}', which already reads '--${error.negatedFlagName}' as false; drop the separate '${error.negatedFlagName}' flag`;
     case "negated-name-collision":
       return `optional-value flag '${error.flagName}' collides with flag '${error.baseFlagName}': '--${error.flagName}' reads as the negation of '${error.baseFlagName}'; rename the optional-value flag so it doesn't start with 'no-'`;
-    case "boolean-spelling-in-values":
-      return `optional-value flag '${error.flagName}' declares '${error.value}' in values, but booleans: true already reads '--${error.flagName}=${error.value}' as a boolean; drop '${error.value}' from values`;
+    case "boolean-spelling-in-choices":
+      return `optional-value flag '${error.flagName}' declares '${error.value}' in choices, but booleans: true already reads '--${error.flagName}=${error.value}' as a boolean; drop '${error.value}' from choices`;
   }
 }

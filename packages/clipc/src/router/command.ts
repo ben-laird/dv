@@ -2,13 +2,12 @@ import { CliError } from "../errors.ts";
 import {
   checkFlagSpecMap,
   describeFlagSpecError,
+  type FlagSchemaInputCheck,
   type FlagSpec,
   type FlagsOf,
 } from "../flag-spec.ts";
-import {
-  type FlagParseError,
-  parseSubcommandArgv,
-} from "../parse-subcommand.ts";
+import { parseCommandArgv } from "../parse-command-argv.ts";
+import type { FlagParseError } from "../parse-subcommand.ts";
 import { formatCommandHelp } from "./help.ts";
 import { requestsHelp } from "./help-request.ts";
 import { type CliHandler, type CliRequest, done } from "./types.ts";
@@ -103,16 +102,22 @@ export interface CommandNode<Ctx = unknown> {
 /**
  * Defines a leaf command in the router tree. Returns a
  * {@link CommandNode} whose handler intercepts `--help`/`-h` (before
- * any `--`), parses `spec.flags` from the incoming argv, and then invokes `spec.run`
+ * any `--`), parses `spec.flags` from the incoming argv, validates each
+ * flag value typed against its `choices` or `schema` (awaited, in argv
+ * order), and then invokes `spec.run`
  * with the typed flags, remaining positional argv, shared ctx, and
  * breadcrumb path. An undeclared flag is returned as a typed
- * `unknown-flag` error (exit 2), and an `"optional-value"` flag given an
- * undeclared value as an `invalid-flag-value` error (exit 2), not thrown.
+ * `unknown-flag` error (exit 2), a refused value (outside `choices`, or
+ * failed by its `schema`) as an `invalid-flag-value` error (exit 2), and a
+ * `schema` that throws or rejects as a `flag-schema-failed` error (exit 1),
+ * none of them thrown; a `collect` flag's value is named by place
+ * (`--pkg #2`). A `schema` whose input can't be a string, such as
+ * `z.number()`, fails to type-check (see {@link FlagSchemaInputCheck}).
  * A flag map that contradicts itself is a bug in the CLI, so `command`
  * throws on it when the tree is built: an `"optional-value"` flag `x`
  * beside a declared `no-x`; an `"optional-value"` flag named `no-y` beside
  * a declared `y`; or `"true"`/`"false"` in an `"optional-value"` flag's
- * `values` when it sets `booleans: true`.
+ * `choices` when it sets `booleans: true`.
  *
  * `Ctx` is the first type parameter so callers can write
  * `command<MyCtx>({...})` and let `TFlags` infer from the literal
@@ -135,7 +140,9 @@ export interface CommandNode<Ctx = unknown> {
 export function command<
   Ctx = unknown,
   const TFlags extends Record<string, FlagSpec> = Record<string, FlagSpec>,
->(spec: CommandSpec<Ctx, TFlags>): CommandNode<Ctx> {
+>(
+  spec: CommandSpec<Ctx, TFlags> & { flags: FlagSchemaInputCheck<TFlags> },
+): CommandNode<Ctx> {
   // A flag map that contradicts itself is a bug in the CLI, not in what a
   // user typed, so it panics here, when the tree is built, not per run.
   const flagSpecCheck = checkFlagSpecMap(spec.flags);
@@ -159,7 +166,9 @@ export function command<
         }),
       });
     }
-    const parsed = parseSubcommandArgv({
+    // Lexing is sync; each flag value is then validated, awaited, so a
+    // schema may be async. `--help` above never reaches either step.
+    const parsed = await parseCommandArgv({
       flagSpecMap: spec.flags,
       subcommandArgv: request.argv,
     });
@@ -194,9 +203,10 @@ interface FlagParseCliErrorArgs {
   path: string[];
 }
 
-// A flag-parse failure is the user's typing, not a bug, so it is a typed
-// error, not a throw. Exit 2 (POSIX "command-line usage error") is a
-// property of what failed, so it lives on the CliError itself.
+// A flag-parse failure is a typed error, not a throw. Exit 2 (POSIX
+// "command-line usage error") marks the user's typing; a schema that
+// failed exits 1. The code is a property of what failed, so it lives on
+// the CliError itself.
 function flagParseCliError(args: FlagParseCliErrorArgs): CliError {
   const hint = `run '${args.path.join(" ")} --help' for usage`;
   switch (args.flagParseError.kind) {
@@ -208,20 +218,40 @@ function flagParseCliError(args: FlagParseCliErrorArgs): CliError {
         exitCode: 2,
       });
     case "invalid-flag-value": {
-      const { flagName, value, issues, allowedValues } = args.flagParseError;
+      const { flagName, value, element, issues, allowedValues } =
+        args.flagParseError;
       const reasons = issues.map((issue) => issue.message).join("; ");
+      // A collect flag's refused value is named by place: `--pkg #2`.
+      const place = element === undefined ? "" : ` #${element}`;
       return new CliError({
         code: "invalid-flag-value",
-        message: `invalid value '${value}' for '--${flagName}': ${reasons}`,
+        message: `invalid value '${value}' for '--${flagName}${place}': ${reasons}`,
         hint,
         exitCode: 2,
         context: {
           flagName,
           value,
+          ...(element !== undefined && { element }),
           issues: issues.map((issue) => ({ message: issue.message })),
           ...(allowedValues !== undefined && {
             allowedValues: [...allowedValues],
           }),
+        },
+      });
+    }
+    case "flag-schema-failed": {
+      // The schema broke, not the typing: exit 1, and no usage hint.
+      const { flagName, value, element, message } = args.flagParseError;
+      const place = element === undefined ? "" : ` #${element}`;
+      return new CliError({
+        code: "flag-schema-failed",
+        message: `the schema for '--${flagName}${place}' failed: ${message}`,
+        exitCode: 1,
+        context: {
+          flagName,
+          value,
+          ...(element !== undefined && { element }),
+          message,
         },
       });
     }
