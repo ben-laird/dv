@@ -266,7 +266,8 @@ function valueSlot(args: ValueSlotArgs): FlagValueReading["slot"] {
 }
 
 // Each value-carrying flag → the argv indexes of the tokens that name it:
-// `--name`, `--name=…`, or a short cluster holding its alias letter. Only
+// `--name`, `--name=…`, its alias spelled long (`--n`), or a short cluster
+// holding its alias letter. Only
 // these place values in argv order; parseArgs still reads the values.
 function flagMentions(args: ValueReadingsArgs): Map<string, number[]> {
   const valueFlags = new Set(args.lowered.string);
@@ -281,7 +282,9 @@ function flagMentions(args: ValueReadingsArgs): Map<string, number[]> {
     if (!isFlagToken(token)) continue;
     if (token.startsWith("--")) {
       const [name = ""] = token.slice(2).split("=");
-      if (valueFlags.has(name)) mention(name, index);
+      // parseArgs also reads an alias spelled long: `--n` for `-n`.
+      const flagName = args.lowered.alias[name] ?? name;
+      if (valueFlags.has(flagName)) mention(flagName, index);
       continue;
     }
     const [letters = ""] = token.slice(1).split("=");

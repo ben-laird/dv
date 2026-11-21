@@ -75,6 +75,30 @@ Deno.test("parseCommandArgv checks every value typed for a string flag, keeping 
   assertEquals(repeated.flags.num, 2);
 });
 
+Deno.test("parseCommandArgv places a value typed through its alias spelled long", async () => {
+  // Given a string flag with the alias `n`, which parseArgs also reads as `--n`
+  const flagSpecMap = {
+    num: { kind: "string", alias: "n", schema: digits },
+  } satisfies Record<string, FlagSpec>;
+
+  // When a bad value typed as `--n` comes before an unknown flag
+  const outcome = await parseCommandArgv({
+    flagSpecMap,
+    subcommandArgv: ["--n", "a", "--bogus"],
+  });
+
+  // Then the value, typed first, is the error reported
+  assertEquals(outcome, {
+    ok: false,
+    error: {
+      kind: "invalid-flag-value",
+      flagName: "num",
+      value: "a",
+      issues: [{ message: "expected digits" }],
+    },
+  });
+});
+
 Deno.test("parseCommandArgv leaves an absent string flag out of flags", async () => {
   // Given a string flag and a boolean
   const flagSpecMap = {
