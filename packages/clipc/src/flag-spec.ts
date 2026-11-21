@@ -85,7 +85,13 @@ import type {
  * ```
  */
 export type FlagSpec =
-  | { kind: "boolean"; alias?: string; description?: string }
+  | {
+      kind: "boolean";
+      alias?: string;
+      description?: string;
+      /** A boolean carries no value to validate. */
+      schema?: never;
+    }
   | {
       kind: "string";
       alias?: string;

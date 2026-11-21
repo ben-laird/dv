@@ -66,6 +66,18 @@ Deno.test("FlagsOf types each value-carrying kind by its schema's output", () =>
   assertEquals([count, ports, retry, plain], [true, true, true, true]);
 });
 
+Deno.test("a boolean flag takes no schema", () => {
+  // Given a boolean flag declaring a schema
+  const withSchema = { kind: "boolean", schema: digits } as const;
+
+  // When it is checked against FlagSpec
+  // @ts-expect-error: a boolean carries no value for a schema to read
+  const spec: FlagSpec = withSchema;
+
+  // Then the type checker refuses it (the value still exists at runtime)
+  assertEquals(spec.kind, "boolean");
+});
+
 Deno.test("an optional-value flag takes choices or a schema, never both", () => {
   // Given an optional-value flag declaring both
   const both = {
