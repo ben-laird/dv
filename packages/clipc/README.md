@@ -64,14 +64,15 @@ clipc is five ideas. Once you have them, the whole surface follows.
   compiler enforces the contract you declared.
 - **Flag specs** (`FlagSpec`, `lowerFlagSpec`) — flags are data, not parsing
   code. Each flag declares its `kind` (`string`, `boolean`, `collect`,
-  `optional-value`) and description;
-  the framework derives parsing, `--help` text, and the static `FlagsOf<…>` type
-  from one declaration. A value-carrying flag can name its value for `--help`:
+  `optional-value`) and description; the framework derives parsing, `--help`
+  text, and the static `FlagsOf<…>` type from one declaration. A
+  value-carrying flag can name its value for `--help`:
   `{ kind: "string", valueName: "path" }` shows `--out <path>` instead of the
   default `--out <string>`, and can take a Standard Schema `schema` that
-  validates and types its value. `inheritedFlags` is a typed-identity capture: declare a
-  shared flag map once, then spread it into each leaf's `flags` so cross-cutting
-  flags keep one source of truth without drifting per-flag kinds.
+  validates and types its value. `inheritedFlags` is a typed-identity
+  capture: declare a shared flag map once, then spread it into each leaf's
+  `flags` so cross-cutting flags keep one source of truth without drifting
+  per-flag kinds.
 - **Errors-as-values** (`done`, `next`, `Step`) — handlers return a result
   (`{ kind: "ok" | "error" | "help" }`) rather than throwing. `done` ends
   dispatch; `next` hands control to a child. The framework renders the outcome
@@ -174,8 +175,8 @@ A refused value is an `invalid-flag-value` error with exit 2, carrying the
 schema's messages: `invalid value 'x' for '--jobs': Invalid input: expected
 number, received NaN`. A `collect` flag names the refused element by place,
 `--port #2`, and the error's `--json` context carries it as `element: 2`
-(counting from 1; scalar flags have no `element`). Errors come in argv order. A schema that fails with no issues
-reads as `the value was refused`.
+(counting from 1; scalar flags have no `element`). Errors come in argv order.
+A schema that fails with no issues reads as `the value was refused`.
 
 A schema that throws, whose promise rejects, or that returns a result the
 spec doesn't allow (`null`, or issues without text messages) is a bug in the
@@ -196,9 +197,10 @@ the types enforce it. `booleans: true` composes with either: `=true` and
 an `enum`, a `const`, or an `anyOf` / `oneOf` of `const`s; else `<value>`. So
 the flags above read `--jobs <value>`, `--port <value>` and
 `--color[=true|false|always|never|auto]`, and a `string` flag with
-`schema: z.enum(["always", "never"])` reads `--color <always|never>`. clipc reads the JSON Schema only
-when the library offers one (Zod 4.2 and later, ArkType 2.1.28 and later), and
-a converter that throws just means no choices are listed.
+`schema: z.enum(["always", "never"])` reads `--color <always|never>`. clipc
+reads the JSON Schema only when the library offers one (Zod 4.2 and later,
+ArkType 2.1.28 and later), and a converter that throws just means no choices
+are listed.
 
 Any library that implements the spec works. `@sekhmet/schema`, for one, turns
 its schemas into Standard Schemas with `toStandard`, and the result goes
