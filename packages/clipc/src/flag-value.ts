@@ -180,7 +180,7 @@ function choicesInJsonSchema(
   jsonSchema: object,
 ): readonly string[] | undefined {
   const constant = fieldOf({ source: jsonSchema, key: "const" });
-  if (typeof constant === "string") return [constant];
+  if (typeof constant === "string") return allStrings([constant]);
   const enumerated = fieldOf({ source: jsonSchema, key: "enum" });
   if (Array.isArray(enumerated)) return allStrings(enumerated);
   const anyOf = fieldOf({ source: jsonSchema, key: "anyOf" });
@@ -207,11 +207,13 @@ function fieldOf(args: FieldOfArgs): unknown {
   return value;
 }
 
-// The values as strings when every one is a string, else none of them.
+// The values as listable choices when every one is a string, else none of
+// them. An empty string would print as nothing (`<>`), so it is skipped.
 function allStrings(values: readonly unknown[]): readonly string[] | undefined {
-  if (values.length === 0) return undefined;
   const strings = values.filter((value) => typeof value === "string");
-  return strings.length === values.length ? strings : undefined;
+  if (strings.length !== values.length) return undefined;
+  const listable = strings.filter((value) => value !== "");
+  return listable.length === 0 ? undefined : listable;
 }
 
 // The one schema a spec's value goes through, if it declares a rule.

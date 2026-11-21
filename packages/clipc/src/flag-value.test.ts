@@ -365,6 +365,21 @@ Deno.test("schemaChoices survives a converter that misbehaves", async () => {
   ]);
 });
 
+Deno.test("schemaChoices skips an empty-string choice", () => {
+  // Given a JSON Schema whose only choice is "", and one mixing "" in
+  const onlyEmpty = withJsonSchema(() => ({ const: "" }));
+  const mixedEmpty = withJsonSchema(() => ({ enum: ["", "auto"] }));
+
+  // When their choices are read
+  // Then "" is never listed: alone it leaves nothing, beside others it drops
+  assertEquals(schemaChoices(onlyEmpty), undefined);
+  assertEquals(schemaChoices(mixedEmpty), ["auto"]);
+  assertEquals(
+    describeFlagValue({ kind: "string", schema: onlyEmpty }),
+    "<value>",
+  );
+});
+
 Deno.test("schemaChoices lists nothing it can't read as string choices", () => {
   // Given a schema with no converter, one whose converter throws, and
   // JSON Schemas that are open, mixed, or not all consts
