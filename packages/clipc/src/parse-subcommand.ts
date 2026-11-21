@@ -140,16 +140,15 @@ export function parseSubcommandArgv(
   // under `string` above means every element is already a string.
   const argv = parsed._.map((token) => String(token));
 
-  // Strip `_`, the placeholder, and any aliased single-char keys so
-  // `flags` only carries the declared full-name keys.
-  const aliasedKeys = new Set(Object.keys(lowered.alias));
+  // Read each declared flag by name, so `flags` carries only declared
+  // full-name keys: never `_`, the placeholder or an alias. parseArgs nests
+  // a dotted name (`a.b` → `{ a: { b } }`), so it is read along its path.
   const flags: Record<string, unknown> = {};
   const collectFlags = new Set(lowered.collect);
   const typedValues = new Map<string, string[]>();
-  for (const [key, value] of Object.entries(parsed)) {
-    if (key === "_") continue;
-    if (key === OPTIONAL_VALUE_PLACEHOLDER_KEY) continue;
-    if (aliasedKeys.has(key)) continue;
+  for (const key of [...lowered.boolean, ...lowered.string]) {
+    const value = readNested({ source: parsed, path: key.split(".") });
+    if (value === undefined) continue;
     if (!Array.isArray(value)) {
       flags[key] = value;
       continue;
@@ -302,6 +301,22 @@ function flagMentions(args: ValueReadingsArgs): Map<string, number[]> {
     }
   }
   return mentions;
+}
+
+interface ReadNestedArgs {
+  source: unknown;
+  path: readonly string[];
+}
+
+// The value at a path of own keys, or `undefined` if any step is missing.
+function readNested(args: ReadNestedArgs): unknown {
+  let current = args.source;
+  for (const key of args.path) {
+    if (typeof current !== "object" || current === null) return undefined;
+    if (!Object.hasOwn(current, key)) return undefined;
+    current = Reflect.get(current, key);
+  }
+  return current;
 }
 
 interface OwnAliasArgs {

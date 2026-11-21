@@ -133,6 +133,40 @@ Deno.test("parseCommandArgv reads flags named like Object.prototype keys", async
   });
 });
 
+Deno.test("parseCommandArgv reads dotted string and collect names flat, and validates them", async () => {
+  // Given a dotted string flag and a dotted collect flag that read digits
+  const flagSpecMap = {
+    "cache.size": { kind: "string", schema: digits },
+    "cache.dir": { kind: "collect" },
+  } satisfies Record<string, FlagSpec>;
+
+  // When both are absent, both are typed, and the string's value is bad
+  const absent = await parseOk({ flagSpecMap, subcommandArgv: [] });
+  const present = await parseOk({
+    flagSpecMap,
+    subcommandArgv: ["--cache.size", "64", "--cache.dir", "/tmp"],
+  });
+  const refused = await parseCommandArgv({
+    flagSpecMap,
+    subcommandArgv: ["--cache.size", "big"],
+  });
+
+  // Then no nested `cache` key leaks, values sit under the full names, and
+  // the dotted value goes through its schema
+  assertEquals(Object.keys(absent.flags), ["cache.dir"]);
+  assertEquals(absent.flags["cache.dir"], []);
+  assertEquals(present.flags, { "cache.size": 64, "cache.dir": ["/tmp"] });
+  assertEquals(refused, {
+    ok: false,
+    error: {
+      kind: "invalid-flag-value",
+      flagName: "cache.size",
+      value: "big",
+      issues: [{ message: "expected digits" }],
+    },
+  });
+});
+
 Deno.test("parseCommandArgv leaves an absent string flag out of flags", async () => {
   // Given a string flag and a boolean
   const flagSpecMap = {
